@@ -2,13 +2,13 @@
 
 ## `chumicro_config`
 
+`chumicro_config` exports `RuntimeConfig`, `load_section`, `try_load_section`, and the `ConfigError` exceptions, plus `load_runtime_config()` and `config` from `chumicro_config.runtime`.  A program on a board starts with [`load_runtime_config()`](#chumicro_config.runtime.load_runtime_config).
+
 ::: chumicro_config
 
 ## `chumicro_config.runtime`
 
-The runtime-config reader (`load_runtime_config`, the lazy `config`
-singleton, and `DEFAULT_RUNTIME_CONFIG_PATH`) resolves lazily through
-the package, so its reference renders from the module itself.
+`from chumicro_config import load_runtime_config, config` imports the same objects this module defines.
 
 ::: chumicro_config.runtime
 

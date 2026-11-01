@@ -208,10 +208,13 @@ def _add_health_parsers(subparsers: argparse._SubParsersAction) -> None:
     """Register ``status`` / ``doctor`` subparsers."""
     status_parser = subparsers.add_parser(
         "status",
-        help=(
-            "Print a one-line-per-check workspace health snapshot "
-            "(workspace.yml validity, devices.yml count, "
-            "projects tree summary)."
+        help="Check the workspace's files for problems.",
+        description=(
+            "Print one line per check: workspace.yml, secrets.toml, "
+            "devices.yml, and the projects under projects/.  The exit "
+            "code is 1 when a check finds an error and 0 when it finds "
+            "only warnings.  deploy runs these same checks before it "
+            "copies anything."
         ),
     )
     _add_workspace_arg(status_parser)
@@ -219,9 +222,14 @@ def _add_health_parsers(subparsers: argparse._SubParsersAction) -> None:
 
     doctor_parser = subparsers.add_parser(
         "doctor",
-        help=(
-            "Strict sibling of `status`: adds Python version check "
-            "and a per-project AST scan for `run()`."
+        help="Run the status checks plus deeper ones on Python and ports.",
+        description=(
+            "Run every status check, then check the Python version, "
+            "that each project's app.py defines run(), "
+            "that no other program holds a registered board's serial "
+            "port, and on macOS that the system still mounts drives "
+            "such as CIRCUITPY.  The exit code is 1 when a check finds "
+            "an error."
         ),
     )
     _add_workspace_arg(doctor_parser)
@@ -230,11 +238,11 @@ def _add_health_parsers(subparsers: argparse._SubParsersAction) -> None:
         action="store_true",
         dest="fix_fskit_wedge",
         help=(
-            "macOS only.  Detect the FSKit wedge and, if present, "
-            "run the sudo killall recovery command for you (sudo "
-            "prompts for your password inline).  Refuses to run "
-            "when no wedge is detected, because running the recovery on a "
-            "healthy system damages mounted volumes."
+            "macOS only.  When macOS has stopped mounting drives such "
+            "as CIRCUITPY (its FSKit drive service hangs), run the "
+            "recovery command with sudo, which asks for your password.  "
+            "The command refuses when no hang is found, because the "
+            "same recovery on a healthy Mac breaks the mounted drives."
         ),
     )
     doctor_parser.set_defaults(func=_cmd_doctor)

@@ -1,6 +1,7 @@
-"""Tick-based scheduler for the ChuMicro libraries.
+"""``Runner`` and ``TaskHandle``: run registered jobs from one loop and sleep between them.
 
-Register work with a ``Runner``, then call ``tick()`` in a loop; ``wait()`` idles the CPU between ticks.
+Register work with a ``Runner``, then call ``tick()`` on every pass of the loop to run what
+is due, and ``wait()`` to idle the CPU until the next job is due.
 """
 
 # Eager import: on MicroPython mount-mode a lazy import becomes an mpremote RPC that adds ~1 s per test.
@@ -21,15 +22,13 @@ except ImportError:  # pragma: no cover
     _POLLERR = 0x008
     _POLLHUP = 0x010
 
-_POLL_ERROR_MASK = _POLLERR | _POLLHUP
-
 # Poll-interest bits a service returns from io_interest(); a pinned contract, so keep the numbers stable.
 IO_READ = 1
 IO_WRITE = 2
 
 
 class ReentrantTickError(RuntimeError):
-    """Raised when ``tick()`` runs while another ``tick()`` is in progress."""
+    """Raised by ``Runner.tick`` when a job calls ``tick()`` on the runner that is running it."""
 
 
 # time.sleep_ms exists on MicroPython and CircuitPython; CPython has only time.sleep, in seconds.
@@ -87,7 +86,19 @@ class _SelectPollAdapter:
 
 
 class TaskHandle:
-    """Handle returned by ``Runner.add()`` or ``add_periodic()``."""
+    """The handle ``Runner.add`` and ``Runner.add_periodic`` return for one registered job.
+
+    Keep it to change the job's period with ``set_period`` or unregister it with ``remove``,
+    from anywhere in the program, a job included.
+
+    Attributes:
+        period_ms: Milliseconds between runs, or None for a job that runs on every tick.
+            Change it with ``set_period``.  Assigning it directly leaves the next run where
+            it was.
+        run_count: Runs left before the runner removes the job, or None for no limit.
+        active: True while the job is registered, False once it has been removed.
+        service: The object passed to ``Runner.add`` as ``task``, or None for a handler.
+    """
 
     def __init__(self, check_function: object | None,
                  handler_function: object,
@@ -114,12 +125,18 @@ class TaskHandle:
         self.next_deadline = next_deadline
 
     def set_period(self, period_ms: int | None, now_ms: int | None = None) -> None:
-        """Add, change, or remove the period for this task.
+        """Give the job a new period, or take its period away.
+
+        With a period, the next run lands ``period_ms`` after ``now_ms``.  Without one, the
+        job runs on every tick.
 
         Args:
-            period_ms: New interval in milliseconds, or ``None`` to clear the period.
-            now_ms: Anchor for the next fire, typically the timestamp the enclosing
-                ``tick()`` returned; default is a fresh clock read.
+            period_ms: The new interval in milliseconds, or None to run the job on every tick.
+            now_ms: The tick to count the new period from.  Inside a job, pass the ``now_ms``
+                the job received.  Defaults to a fresh clock reading.
+
+        Raises:
+            ValueError: ``period_ms`` is 0 or less.
         """
         if period_ms is not None and period_ms <= 0:
             raise ValueError("period_ms must be greater than zero")
@@ -133,7 +150,10 @@ class TaskHandle:
             self.next_due_ms = None
 
     def remove(self) -> None:
-        """Remove this task from the runner."""
+        """Unregister the job, so later ticks skip it, and set ``active`` to False.
+
+        Calling it on a job already removed does nothing.
+        """
         self._runner._remove(self)
 
     def __repr__(self) -> str:
@@ -148,12 +168,31 @@ class TaskHandle:
 
 
 class Runner:
-    """Run tasks on a tick-based schedule.
+    """A scheduler that runs every registered job from one ``while True:`` loop.
+
+    Register work once with ``add``, ``add_periodic``, or ``add_generator``.  Then call
+    ``now_ms = runner.tick()`` and ``runner.wait(now_ms)`` on every pass of the loop.
+    ``tick`` runs whatever is due, and ``wait`` sleeps until the next job is due or a
+    watched socket is ready.  A job that raises is caught and counted, and the loop goes on.
 
     Args:
-        ticks: Optional source (``ticks_ms``, ``ticks_diff``, ``ticks_add``); default ``chumicro_timing``.
-        poller: Optional poll object (register/modify/unregister/ipoll); default ``select.poll`` adapter.
-        on_handler_error: Optional ``(handle, exception)`` callback invoked when a handler raises.
+        ticks: The clock every period and deadline is measured on: an object with
+            ``ticks_ms()``, ``ticks_add()``, and ``ticks_diff()``.  Defaults to
+            ``chumicro_timing.ticks``.  When ``wait`` has no socket to watch, a clock with a
+            ``sleep_ms()`` method does the sleeping, which is how ``FakeTicks`` from
+            ``chumicro_timing.testing`` makes a test idle instantly.
+        poller: The object ``wait`` watches sockets through, with ``register``, ``modify``,
+            ``unregister``, and ``ipoll``.  Defaults to ``select.poll()``, built on the first
+            ``wait`` that has a socket to watch.
+        on_handler_error: A function called as ``on_handler_error(task_handle, exception)``
+            each time a job raises, after the runner counts the fault.  Without one, a
+            failing job prints nothing.
+
+    Attributes:
+        handler_errors: How many exceptions the runner has caught from jobs, from
+            ``io_error`` hooks, and from ``on_handler_error`` itself.
+        last_handler_error: The most recent of those exceptions, or None while there has
+            been none.
     """
 
     def __init__(self, ticks: object | None = None,
@@ -162,9 +201,7 @@ class Runner:
         self._entries = []
         self._pending = []
         self._ticking = False
-        #: Count of handler faults isolated by tick(), including a raising on_handler_error callback.
         self.handler_errors = 0
-        #: Most recent isolated exception, or ``None`` while no handler has faulted.
         self.last_handler_error = None
         self._on_handler_error = on_handler_error
         if ticks is not None:
@@ -189,28 +226,44 @@ class Runner:
             start_after_ms: int | None = None,
             run_count: int | None = None,
             preserve_phase: bool = False) -> TaskHandle:
-        """Register a task with the runner.
+        """Register a service object or a handler function, and return its ``TaskHandle``.
+
+        Pass exactly one of ``task`` and ``handler``.  A handler runs each time its period
+        comes round, or on every tick when it has no period.  A service's ``check(now_ms)``
+        runs on that schedule instead, and its ``handle(now_ms)`` runs on the ticks where
+        ``check`` returned True.
 
         Args:
-            task: Object with ``.check(now_ms)`` and ``.handle(now_ms)``; mutually exclusive with *handler*.
-            handler: Callable ``handler(now_ms)`` fired on schedule; mutually exclusive with *task*.
-            period_ms: Optional interval in milliseconds.
-            start_after_ms: Optional initial delay before the first fire; overrides the first period.
-            run_count: Optional number of fires before auto-removing; ``None`` means unlimited.
-            preserve_phase: When ``True``, fires stay aligned under late ticks; needs *period_ms*.
+            task: A service: an object with ``check(now_ms)`` and ``handle(now_ms)``, and
+                optionally the ``io_socket``, ``io_interest``, ``io_error``, and
+                ``next_deadline`` members that ``wait`` reads.
+            handler: A function called as ``handler(now_ms)``.
+            period_ms: Milliseconds between runs, or None to run on every tick.
+            start_after_ms: Milliseconds before the first run.  Defaults to ``period_ms``.
+            run_count: How many runs before the runner removes the job, or None for no
+                limit.  For a service, each ``handle`` call is one run.
+            preserve_phase: True keeps runs on the schedule set at registration when ticks
+                come late, so two runs can land closer together than ``period_ms`` while it
+                catches up.  False, the default, counts each period from the tick that ran
+                the job.  Needs ``period_ms``.
 
         Returns:
-            A ``TaskHandle`` for runtime mutation.
+            The ``TaskHandle`` for changing or removing the job later.
+
+        Raises:
+            ValueError: Both or neither of ``task`` and ``handler`` were passed,
+                ``period_ms`` or ``run_count`` is 0 or less, or ``preserve_phase`` is True
+                with no ``period_ms``.
+            AttributeError: ``task`` has no ``check`` or no ``handle``.
         """
         service: object | None = None
         io_interest: object | None = None
         next_deadline: object | None = None
         if task is not None and handler is not None:
             raise ValueError(
-                "Pass a task object OR a handler callable, not both "
-                "(the separate check-plus-handler shape was removed; "
-                "give the object both check() and handle(), or gate "
-                "inside the handler)"
+                "Pass a task object or a handler callable, never both. "
+                "To gate a handler, give one object check() and "
+                "handle(), or test the condition inside the handler."
             )
         if task is not None:
             check_function = task.check
@@ -245,13 +298,26 @@ class Runner:
         return handle
 
     def add_generator(self, generator: object) -> "GeneratorHandle":  # noqa: F821 - GeneratorHandle is lazy-imported in the body to keep _generator off the eager import path, so the return annotation is a forward-ref string
-        """Register a generator-driven service with the runner.
+        """Register a generator task, run it up to its first pause, and return its handle.
+
+        Each ``yield`` in the generator pauses it while the other jobs run.  A bare ``yield``
+        resumes on the next tick, and ``yield from sleep_until(until_ms)`` from
+        ``chumicro_runner.generators`` resumes at a given tick.  An exception that escapes
+        the generator ends the task and is counted like any job's.
 
         Args:
-            generator: A fresh, not-yet-advanced generator; this method primes it to its first yield.
+            generator: A generator that has not started yet, such as ``blink()`` for a
+                function ``blink`` whose body contains ``yield``.
 
         Returns:
-            A ``GeneratorHandle`` carrying ``.done`` and ``.cancel()``.
+            The task's ``GeneratorHandle``.  Its ``done`` turns True once the generator
+                returns, raises, or is cancelled.  Its ``error`` holds the exception that
+                ended the generator, or None.  ``cancel()`` closes the generator and
+                unregisters it.
+
+        Raises:
+            BaseException: Whatever the generator raises before its first ``yield``.  The
+                task is already unregistered when it propagates.
         """
         # Lazy import: registering a generator is a startup call, so _generator loads then, not on a hot tick.
         from chumicro_runner._generator import (  # noqa: PLC0415
@@ -271,17 +337,23 @@ class Runner:
                      start_after_ms: int | None = None,
                      run_count: int | None = None,
                      preserve_phase: bool = False) -> TaskHandle:
-        """Register a periodic handler with no check.
+        """Register ``handler`` to run every ``period_ms`` milliseconds, and return its ``TaskHandle``.
+
+        The first run comes one period after registration, or ``start_after_ms`` after it.
 
         Args:
-            handler: Callable ``handler(now_ms)`` to fire periodically.
-            period_ms: Interval in milliseconds (required).
-            start_after_ms: Optional initial delay before the first fire.
-            run_count: Optional number of fires before auto-removing; ``None`` means unlimited.
-            preserve_phase: When ``True``, fires stay aligned under late ticks.
+            handler: A function called as ``handler(now_ms)``.
+            period_ms: Milliseconds between runs.
+            start_after_ms: Milliseconds before the first run.  Defaults to ``period_ms``.
+            run_count: How many runs before the runner removes the job, or None for no limit.
+            preserve_phase: True keeps runs on the schedule set at registration when ticks
+                come late.  ``add`` describes the trade.
 
         Returns:
-            A ``TaskHandle`` for runtime mutation.
+            The ``TaskHandle`` for changing or removing the job later.
+
+        Raises:
+            ValueError: ``period_ms`` is None or 0 or less, or ``run_count`` is 0 or less.
         """
         if period_ms is None:
             raise ValueError("period_ms is required for add_periodic")
@@ -292,13 +364,19 @@ class Runner:
         )
 
     def tick(self) -> int:
-        """Capture time, check tasks, then batch-fire due handlers.
+        """Run every job that is due now, and return the tick it ran them at.
+
+        ``tick`` reads the clock once.  It walks the jobs in registration order and calls
+        ``check(now_ms)`` on each due service, then runs every due handler and the ``handle``
+        of every service whose ``check`` returned True, in the same order.  A job that raises
+        is counted in ``handler_errors`` and passed to ``on_handler_error``, and the rest
+        still run.
 
         Returns:
-            The tick timestamp used this cycle.
+            The tick every job saw this pass, in milliseconds.  Pass it to ``wait``.
 
         Raises:
-            ReentrantTickError: A handler called ``tick()`` while this ``tick()`` was already running.
+            ReentrantTickError: A job called ``tick()`` on this runner while it was running.
         """
         if self._ticking:
             raise ReentrantTickError(
@@ -367,10 +445,16 @@ class Runner:
             self._ticking = False
 
     def wait(self, now_ms: int) -> None:
-        """Idle until a registered socket is ready or the next deadline arrives.
+        """Sleep until the next job is due or a watched socket is ready.
+
+        Call it once per pass of the loop, after ``tick``.  It is the only runner call that
+        blocks.  It returns at once when a job is already due, and also when no job has a
+        due time and no service watches a socket, which leaves a loop of every-tick jobs
+        spinning.  A socket that reports ``POLLERR``, or ``POLLHUP`` with nothing left to
+        read, is passed to its service's ``io_error(now_ms, eventmask)``.
 
         Args:
-            now_ms: Current tick, typically the value returned by the preceding ``tick()`` call.
+            now_ms: The tick the preceding ``tick()`` returned.
         """
         self._sync_poll_set(now_ms)
         timeout_ms = self._compute_timeout(now_ms)
@@ -390,7 +474,12 @@ class Runner:
                 # Unpack now, before the next iteration, in case the reused buffer rotates.
                 obj = item[0]
                 eventmask = item[1]
-                if eventmask & _POLL_ERROR_MASK:
+                # POLLHUP alongside POLLIN is a peer that sent its last bytes and
+                # closed: the reader still has data, then end-of-stream, to collect.
+                # Only POLLERR, or a hang-up with nothing left to read, is a fault.
+                if eventmask & _POLLERR or (
+                    eventmask & _POLLHUP and not eventmask & _POLLIN
+                ):
                     self._dispatch_io_error(obj, eventmask, now_ms)
         else:
             if timeout_ms is None:
@@ -399,17 +488,23 @@ class Runner:
 
     def run_until(self, predicate: object | None = None, *,
                   timeout_ms: int | None = None) -> bool:
-        """Drive ``tick()`` and ``wait()`` until *predicate* is truthy.
+        """Call ``tick`` and ``wait`` in a loop until ``predicate`` is met or ``timeout_ms`` runs out.
 
         Args:
-            predicate: A handle (exposes ``done``), a zero-arg callable checked each tick, or ``None``.
-            timeout_ms: Optional budget (ms), checked between ticks; best-effort under socket waits.
+            predicate: What to wait for.  A ``GeneratorHandle``, or any object with ``done``,
+                is met once its task finishes.  A function taking no arguments is met once it
+                returns something truthy, checked after each tick.  None waits for the
+                timeout alone, and with no timeout either the loop runs forever.
+            timeout_ms: Milliseconds to run before giving up, or None for no limit.  The
+                runner checks it after each tick, so it lands late when ``wait`` sleeps past
+                it.
 
         Returns:
-            ``True`` when *predicate* became truthy or the handle finished cleanly, ``False`` on timeout.
+            True once ``predicate`` is met, False when ``timeout_ms`` runs out first.
 
         Raises:
-            BaseException: The handle form re-raises ``handle.error`` when the awaited task died.
+            BaseException: The exception that ended the task, when ``predicate`` is a handle
+                whose ``error`` is set.
         """
         handle = None
         if predicate is not None and not callable(predicate):

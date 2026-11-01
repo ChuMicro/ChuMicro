@@ -1,71 +1,96 @@
-"""One-shot HTTP GET as a generator on a real CircuitPython / MicroPython board.
+"""Fetch a web page every 30 seconds, written as one top-to-bottom function.
 
-Brings wifi up via the local ``helpers`` module, then fetches a URL
-with a single ``response = yield from get(...)`` driven by
-``Runner.add_generator``.  The request reads top-to-bottom (connect,
-send, receive, return) with no handle to poll and no ``on_done``
-callback.
+The board joins your wifi, then fetches ``http://example.com/`` every
+30 seconds and prints the HTTP status code and how many bytes came
+back.  A fetch that fails prints the reason, and the next round tries
+again.  The loop runs until you unplug the board.
 
-Pair with ``periodic_get.py``, which drives the long-lived ``HttpClient``
-(``check`` / ``handle``) for repeated requests on one client; the
-generator form here is for a one-shot fetch.
+This does the same job as ``periodic_get.py`` in a different style.
+The fetch inside ``fetch_forever`` reads like ``adafruit_requests``
+code::
 
-Configuration
-=============
+    response = yield from get(connector, URL)
 
-Reads the deployed ``runtime_config.msgpack`` (baked from
-``secrets.toml`` + per-example ``examples/config.toml`` by the deploy
-pipeline) via the flat-key API:
+``yield from`` is the difference.  ``requests.get(url)`` holds the
+whole board until the server answers; ``yield from get(...)`` pauses
+only ``fetch_forever`` and hands the board back to the ``while True``
+loop at the bottom of the file.  When the response is in, the runner
+picks ``fetch_forever`` up again on that same line.
+``yield from sleep_until(...)`` pauses it the same way for the 30
+seconds between fetches.
 
-* WiFi (read by ``helpers.wifi_up``): ``wifi.ssid`` / ``wifi.password``.
-* App-level: ``generator_fetch.url`` (the URL to fetch).
+``fetch_forever`` has its own ``while True``: it is the job, repeated
+forever.  The loop at the bottom runs the board.  ``runner.tick()``
+gives ``fetch_forever`` a turn whenever the thing it is waiting for is
+ready, and ``runner.wait()`` rests the CPU until then.
 
-When ``runtime_config.msgpack`` isn't present, wifi creds and the URL
-fall back to the placeholder constants below (edit them first).
+Before you run it:
 
-Deploying
-=========
+1. Set ``WIFI_SSID`` and ``WIFI_PASSWORD`` below.  When you deploy with
+   ``chumicro-workspace``, the ``ssid`` and ``password`` under
+   ``[wifi]`` in your ``secrets.toml`` are used instead.
+2. Deploy it::
 
-Deploy with ``chumicro-workspace``::
+       chumicro-workspace deploy-example requests generator_fetch --device <id>
 
-    chumicro-workspace deploy-example requests generator_fetch --device <id>
-
-Example output::
+What you will see::
 
     WIFI_OK ip=10.0.0.42
-    Fetching http://example.com/
-    status=200 bytes=1256
+    Fetching http://example.com/ every 30 s
+    [1] status=200 bytes=577
+    [2] status=200 bytes=577
+    [3] status=200 bytes=577
+
+A round that fails prints the reason in place of the status, for
+example ``[4] failed: request to 'http://example.com/' timed out after
+deadline``.
 """
 
-#: Cross-runtime: wifi-up via :mod:`helpers` dispatches per
-#: ``sys.implementation.name`` (CP / MP); the generator is pure-Python.
+# Runs on CircuitPython and MicroPython boards.  helpers.wifi_up picks
+# the right wifi calls for each.
 __chumicro_runtimes__ = ("circuitpython", "micropython")
 
+from chumicro_requests import HttpError
 from chumicro_requests.generators import get
 from chumicro_runner import Runner
+from chumicro_runner.generators import sleep_until
 from chumicro_sockets.sockets_factory import connector_factory
-from helpers import runtime_config, wifi_up
+from chumicro_timing import ticks_add, ticks_ms
+from helpers import wifi_up
 
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 - replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 - replace before deploying
-TARGET_URL = "http://example.com/"
+URL = "http://example.com/"
+FETCH_EVERY_S = 30
 
-config = runtime_config()
+# Join wifi.  wifi_up waits until the board has an IP address.
 radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)
 print(f"WIFI_OK ip={ip}")
 
-target_url = config.get("generator_fetch.url", TARGET_URL)
-transport_factory = connector_factory(radio=radio)
-print(f"Fetching {target_url}")
+# connector tells get() how to open a network connection through this
+# board's wifi radio.
+connector = connector_factory(radio=radio)
+print(f"Fetching {URL} every {FETCH_EVERY_S} s")
 
 
-def fetch_once():
-    response = yield from get(transport_factory, target_url)
-    print(f"status={response.status_code} bytes={len(response.body)}")
+def fetch_forever():
+    fetch_number = 0
+    while True:
+        fetch_number += 1
+        try:
+            # Pauses here until the whole response has arrived.
+            response = yield from get(connector, URL)
+            print(f"[{fetch_number}] status={response.status_code} bytes={len(response.body)}")
+        except (HttpError, OSError) as error:
+            print(f"[{fetch_number}] failed: {error}")
+
+        # Pauses here for FETCH_EVERY_S seconds.
+        yield from sleep_until(ticks_add(ticks_ms(), FETCH_EVERY_S * 1000))
 
 
 runner = Runner()
-handle = runner.add_generator(fetch_once())
-while not handle.done:
-    now_ms = runner.tick()
-    runner.wait(now_ms)
+runner.add_generator(fetch_forever())
+
+while True:
+    now_ms = runner.tick()  # fetch_forever takes its turn if what it waits for is ready
+    runner.wait(now_ms)  # the CPU rests until data arrives or the 30 s are up

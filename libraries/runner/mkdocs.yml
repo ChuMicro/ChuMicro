@@ -1,6 +1,6 @@
 site_name: chumicro-runner
 site_description: >-
-  Tick-based task runner for CircuitPython, MicroPython, and CPython.  Run many services in one loop, no async required.
+  Run several jobs from one while True loop on CircuitPython, MicroPython, and CPython, with no time.sleep() and no async.
 site_url: https://chumicro.com/ChuMicro/runner/
 repo_url: https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner
 repo_name: Source

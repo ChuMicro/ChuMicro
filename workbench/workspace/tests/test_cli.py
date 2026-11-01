@@ -2268,20 +2268,34 @@ class TestDemo:
         assert "/main.py" in files
         body = files["/main.py"].decode("utf-8")
         assert "Hello from ChuMicro" in body
-        assert "demo complete" in body
+        assert "while True:" in body
 
-    def test_prints_execute_output_to_user(
+    def test_demo_payload_never_exits(self) -> None:
+        """The payload ends in a top-level ``while True:`` loop with no exit call."""
+        import ast
+
+        from chumicro_workspace.cli.examples import DEMO_PAYLOAD
+
+        module = ast.parse(DEMO_PAYLOAD)
+        last_statement = module.body[-1]
+        assert isinstance(last_statement, ast.While)
+        assert isinstance(last_statement.test, ast.Constant)
+        assert last_statement.test.value is True
+        assert "exit" not in DEMO_PAYLOAD
+        assert "break" not in DEMO_PAYLOAD
+
+    def test_prints_execute_output_and_watch_hint(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """The captured execute output reaches stdout so the user
-        sees the demo's prints."""
+        """The captured execute output reaches stdout, followed by the
+        ``repl --tail`` command that keeps watching the running board."""
         root = seed_workspace(tmp_path)
 
         transport = FakeTransport(
-            execute_output="Hello from ChuMicro!\ndemo complete!\n",
+            execute_output="Hello from ChuMicro!\n  tick 1\n  tick 2\n",
         )
         _install_fake_transport(monkeypatch, transport)
 
@@ -2289,7 +2303,27 @@ class TestDemo:
         assert exit_code == 0
         captured = capsys.readouterr()
         assert "Hello from ChuMicro" in captured.out
-        assert "demo complete" in captured.out
+        assert "  tick 2" in captured.out
+        assert "chumicro-workspace repl --tail 30`" in captured.out
+
+    def test_watch_hint_names_the_selected_device(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """``--device <id>`` on ``demo`` carries into the ``repl`` hint."""
+        root = seed_workspace(tmp_path)
+
+        transport = FakeTransport(execute_output="Hello from ChuMicro!\n")
+        _install_fake_transport(monkeypatch, transport)
+
+        exit_code = cli.main([
+            "demo", "--workspace-dir", str(root), "--device", "lolin-s2",
+        ])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "repl --tail 30 --device lolin-s2`" in captured.out
 
     def test_traceback_returns_exit_one(
         self,
@@ -2836,7 +2870,7 @@ class TestBootstrapWizard:
         # Stub the deploy transport so the demo step doesn't need
         # real hardware.
         transport = FakeTransport(
-            execute_output="Hello from ChuMicro!\ndemo complete!\n",
+            execute_output="Hello from ChuMicro!\n  tick 1\n",
         )
         _install_fake_transport(monkeypatch, transport)
 

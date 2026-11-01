@@ -1,76 +1,66 @@
-# mqtt_sensor_motor: a temperature-controlled fan node
+# mqtt_sensor_motor: a temperature-controlled fan over MQTT
 
-A board reads its on-chip temperature, publishes it as JSON telemetry
-over `chumicro_mqtt`, and drives a PWM "motor" (fan/pump) from speed
-commands the broker delivers. A local Mosquitto broker bridges the
-board to a CPython-side counterparty, and one command starts both
-ends, so the setup stops at `brew install mosquitto`.
+Your board reads its own chip temperature every two seconds and
+publishes it to an MQTT broker on your laptop. When a fan speed from 0
+to 100 arrives, the board drives a motor at that speed, lights its
+onboard LED while the motor runs, and publishes the speed back. A
+script on your laptop starts the broker, watches the readings, and
+sends two speeds: 75, then 0.
 
-No motor hardware is needed on the bench: the demo drives a PWM duty
-cycle on a GPIO (exactly how a real fan/pump ESC is commanded) and
-mirrors that duty onto the onboard LED, so the board visibly brightens
-and dims as the commanded speed changes.
+No motor is needed on the bench. The motor is a PWM signal on one pin,
+and the LED shows whether it is running.
 
-## Scenario
+## What you will see
 
-The board is a fan node. Every two seconds it samples temperature and
-publishes `{"celsius", "speed", "seq"}` telemetry. When a controller
-publishes a speed (`0`-`100`) to the node's `motor/set` topic, the
-board clamps it, applies it to the motor PWM, and echoes the applied
-value back on a retained `motor/state` topic, a closed command loop.
-Presence is a retained `online`/`offline` pair.
+The driver's own lines start with `driver:`. Everything the board
+prints shows up as it happens, after `board |`. Each reading appears
+twice: once as the board sends it, once as your laptop receives it.
 
-## Wiring (for a real motor)
+```
+driver: started mosquitto on 10.0.0.5:54321
+driver: targeting pi-pico-w-circuitpython-board (circuitpython @ /dev/cu.usbmodem...)
+driver: host MQTT client connected (chumicro-sensor-motor-driver)
+driver: waiting for board MQTT_CONNECTED (up to 60.0s)...
+board |   waiting for the broker...
+board | WIFI_OK ip=10.0.0.42
+board | MQTT_CONNECTED broker=10.0.0.5:54321 client_id=chumicro-sensor-motor-board
+driver: board MQTT_CONNECTED client_id=chumicro-sensor-motor-board broker=10.0.0.5:54321
+driver: HOST_RX demo/chumicro-sensor-motor-board/availability payload=online (retained)
+board |   reading 1: 23.4 C, fan at 0%
+driver: HOST_RX demo/chumicro-sensor-motor-board/telemetry payload={"celsius": 23.4, "speed": 0, "seq": 1}
+board |   reading 2: 23.5 C, fan at 0%
+driver: HOST_RX demo/chumicro-sensor-motor-board/telemetry payload={"celsius": 23.5, "speed": 0, "seq": 2}
+board |   reading 3: 23.4 C, fan at 0%
+driver: HOST_RX demo/chumicro-sensor-motor-board/telemetry payload={"celsius": 23.4, "speed": 0, "seq": 3}
+driver: telemetry 3 received, celsius + seq plausible
+driver: host published motor/set 75 to demo/chumicro-sensor-motor-board/motor/set
+board | MOTOR_APPLIED speed=75
+driver: HOST_RX demo/chumicro-sensor-motor-board/motor/state payload=75 (retained)
+driver: motor at 75 confirmed (marker + state echo)
+driver: host published motor/set 0 to demo/chumicro-sensor-motor-board/motor/set
+board | MOTOR_APPLIED speed=0
+board | DEMO_COMPLETE
+driver: HOST_RX demo/chumicro-sensor-motor-board/motor/state payload=0 (retained)
+driver: motor at 0 confirmed (state echo)
+driver: demo completed cleanly; the board keeps publishing.
+```
 
-The demo runs with nothing attached, but to drive a real load:
+On the board itself, the LED lights for the speed 75 and goes dark for
+0.
 
-- **Motor signal** → **GPIO16** (Pico W header `GP16`, Lolin S2 mini
-  header `IO16` / `D4`). Wire this to the PWM/signal input of a motor
-  driver or ESC, never straight to a motor. A ~1 kHz PWM duty of
-  0-100% comes out here.
-- **Motor power** → the driver/ESC's own supply and ground, with its
-  ground tied to the board's ground. The GPIO carries signal only.
-- **Onboard LED** mirrors the duty automatically (brightness = speed on
-  the Lolin S2 mini; on/off on the Pico W, whose LED lives on the wifi
-  coprocessor and can't PWM), a wiring-free speed indicator.
+The driver stops there and takes its broker with it. The board carries
+on and prints `waiting for the broker...` every two seconds until a
+broker answers again. To watch it after the driver exits, run
+`chumicro-workspace repl --tail 60 --device <id>`.
 
-## Topics
+## What you need
 
-All under `demo/<client_id>/`, where `<client_id>` is baked in by the
-driver (`chumicro-sensor-motor-board`).
-
-| Topic | Direction | QoS | Retained | Payload |
-|---|---|---|---|---|
-| `…/availability` | board → broker | 1 | yes | `online` / `offline` (also the Last Will) |
-| `…/telemetry` | board → broker | 1 | no | `{"celsius": 22.9, "speed": 75, "seq": 4}` |
-| `…/motor/set` | broker → board | 1 | no | integer speed `0`-`100` |
-| `…/motor/state` | board → broker | 1 | yes | applied speed, echoed back |
-
-## What it shows: library behavior the demo leans on
-
-The board code is short because it reimplements none of this:
-
-- **Pre-connect queue.** Telemetry calls `publish()` with no CONNECTED
-  guard. Samples produced before the broker session is up buffer in the
-  client's bounded pre-connect queue and flush on CONNACK (the default
-  `when_disconnected="queue"` policy).  The cadence never state-checks.
-- **Declarative subscribe.** The `motor/set` subscription is declared
-  once at startup with `subscribe()`, before `connect()`, not inside
-  `on_connect`. The client records it in its desired set, sends it on
-  the first CONNACK, and replays it on every self-heal reconnect, so
-  there is no reconnect bookkeeping. (`on_connect` keeps only the
-  retained `online` publish, which is genuinely connect-time.)
-- **Availability via Last Will.** A retained `offline` will the broker
-  publishes if the board drops uncleanly, paired with a retained
-  `online` on connect. A clean shutdown suppresses the will, so the
-  shutdown path publishes `offline` explicitly.
-- **Wifi-drop self-heal.** The wifi callback holds mqtt while the link
-  is down (`mqtt.hold()`) and reconnects the moment it returns
-  (`mqtt.connect()`); the socket-factory transport rebuilds the
-  connection.
-- **Runner composition.** `WifiService` and `MQTTClient` added with
-  `runner.add(...)`, telemetry paced by `runner.add_periodic(...)`, all
-  in one cooperative loop.
+- A board registered with `chumicro-workspace add-device`. The pin
+  choices below suit a Pi Pico W or a Lolin S2 mini.
+- `secrets.toml` at the repo root with `wifi.ssid` and `wifi.password`.
+- A wifi network that your board and your laptop both join.
+- `mosquitto` on your PATH (`brew install mosquitto` or
+  `apt install mosquitto`). The driver starts and stops it for you.
 
 ## Run it
 
@@ -78,58 +68,71 @@ The board code is short because it reimplements none of this:
 .venv/bin/python demos/mqtt_sensor_motor/driver.py
 ```
 
-Defaults: targets the first CircuitPython device in `devices.yml`.
+The driver picks the first CircuitPython board in `devices.yml`. Pass
+`--device <id>` for a specific board or `--runtime micropython` for the
+first MicroPython one. `--help` lists the timeouts, which matter on a
+slow first wifi join.
 
-Override:
+## How it works
 
-- `--device <id>`: a specific device id from `devices.yml`.
-- `--runtime micropython`: pick the first MicroPython device.
-- `--connect-timeout-s <n>`: how long to wait for the board's
-  `MQTT_CONNECTED` marker (default 60 s; ESP32-S2 cold-boot + wifi can
-  be slow).
-- `--telemetry-timeout-s <n>`: how long to wait for the first three
-  telemetry receipts (default 30 s).
+[`app.py`](app.py) is the whole board program. The block at the top is
+the only part that differs between boards: it picks the temperature
+sensor, the motor pin, and the LED. Everything after it is the same on
+every board:
 
-## Expected output
+- **Readings.** `runner.add_periodic(...)` calls `publish_reading`
+  every two seconds. It publishes while the broker is connected and
+  prints `waiting for the broker...` while it is not.
+- **Speed commands.** The board subscribes to its `motor/set` topic
+  once, at startup, and the client renews that subscription on every
+  reconnect. `on_motor_command` clamps the speed to 0-100, applies it,
+  and publishes it back on `motor/state`.
+- **Online and offline.** `set_will(...)` leaves a retained `offline`
+  with the broker, published if the board drops off the network.
+  `on_connect` publishes the matching `online`.
+- **Wifi drops.** When wifi goes down, the board stops dialing the
+  broker (`mqtt.hold()`), and it reconnects the moment wifi returns
+  (`mqtt.connect()`).
+- **The loop.** `wifi` and `mqtt` are registered with one `Runner`, and
+  the program ends in the same `while True:` loop every board program
+  runs.
 
-```
-driver: started mosquitto on 10.0.0.5:54321
-driver: targeting pi-pico-w-circuitpython-board (circuitpython @ /dev/cu.usbmodem...)
-driver: host MQTT client connected (chumicro-sensor-motor-driver)
-driver: waiting for board MQTT_CONNECTED (up to 60.0s)...
-driver: board MQTT_CONNECTED client_id=chumicro-sensor-motor-board broker=10.0.0.5:54321
-driver: HOST_RX demo/chumicro-sensor-motor-board/availability payload=online (retained)
-driver: HOST_RX demo/chumicro-sensor-motor-board/telemetry payload={"celsius": 22.9, "speed": 0, "seq": 1}
-driver: HOST_RX demo/chumicro-sensor-motor-board/telemetry payload={"celsius": 23.1, "speed": 0, "seq": 2}
-driver: HOST_RX demo/chumicro-sensor-motor-board/telemetry payload={"celsius": 23.0, "speed": 0, "seq": 3}
-driver: telemetry 3 received, celsius + seq plausible
-driver: host published motor/set 75 to demo/chumicro-sensor-motor-board/motor/set
-driver: HOST_RX demo/chumicro-sensor-motor-board/motor/state payload=75 (retained)
-driver: motor at 75 confirmed (marker + state echo)
-driver: host published motor/set 0 to demo/chumicro-sensor-motor-board/motor/set
-driver: HOST_RX demo/chumicro-sensor-motor-board/motor/state payload=0 (retained)
-driver: motor at 0 confirmed (state echo)
-driver: HOST_RX demo/chumicro-sensor-motor-board/availability payload=offline (retained)
-driver: demo completed cleanly.
-```
+[`driver.py`](driver.py) starts Mosquitto on your laptop's network
+address, deploys `app.py` with that address baked into the board's
+config, and runs its own MQTT client as the controller.
 
-## Sensor source per board
+All topics sit under `demo/chumicro-sensor-motor-board/`:
 
-The on-chip temperature source is the only sensor difference across the
-sweep boards; the board prints a `SENSOR_SOURCE` marker naming which it
-used:
+| Topic | Who publishes | Retained | Payload |
+|---|---|---|---|
+| `availability` | board (and the broker, for the `offline` will) | yes | `online` or `offline` |
+| `telemetry` | board, every two seconds | no | `{"celsius": 22.9, "speed": 75, "seq": 4}` |
+| `motor/set` | your laptop | no | a whole number from `0` to `100` |
+| `motor/state` | board, after each command | yes | the speed it applied |
 
-| Board | Runtime | Source |
+## Temperature source per board
+
+| Board | Runtime | Temperature |
 |---|---|---|
-| Pi Pico W | CircuitPython | `microcontroller.cpu.temperature` (real) |
-| Pi Pico W | MicroPython | `machine.ADC(4)`, Pico formula (real) |
-| Lolin S2 mini | CircuitPython | `microcontroller.cpu.temperature` (real) |
-| Lolin S2 mini | MicroPython | synthetic wave (no CPU temp sensor) |
+| Pi Pico W | CircuitPython | `microcontroller.cpu.temperature` |
+| Pi Pico W | MicroPython | `machine.ADC(4)`, the chip's built-in sensor |
+| Lolin S2 mini | CircuitPython | `microcontroller.cpu.temperature` |
+| Lolin S2 mini | MicroPython | a made-up wave between 17 and 33 C |
 
-## What it requires
+## Wiring a real motor
 
-- A board registered in `devices.yml`.
-- `secrets.toml` at the repo root with `wifi.ssid` + `wifi.password`.
-- A reachable wifi network the board can join.
-- `mosquitto` on PATH (`brew install mosquitto` /
-  `apt install mosquitto`).
+The demo runs with nothing attached. To drive a real fan or pump:
+
+- **Signal:** GPIO16 (`GP16` on a Pico W, `IO16` on a Lolin S2 mini)
+  to the PWM input of a motor driver board or ESC. Never wire a motor
+  straight to a pin.
+- **Power:** the motor driver gets its own supply, with its ground tied
+  to the board's ground. The pin carries a 1 kHz signal only.
+
+## Try next
+
+- Change `READING_EVERY_MS` in `app.py` and run the demo again.
+- Wire a real fan through a motor driver board and watch it spin up to
+  75% and stop.
+- Start with [`mqtt_pub_sub`](../mqtt_pub_sub/) if MQTT is new to you:
+  it is the same pattern without the sensor and the motor.

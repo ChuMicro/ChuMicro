@@ -2,119 +2,121 @@
 
 ## Overview
 
-`chumicro-compat` provides lightweight reimplementations of CPython standard-library features that are missing or incomplete on MicroPython and CircuitPython.  It allows library authors to use familiar Python patterns across all three runtimes without depending on modules that don't exist on microcontrollers.
+`chumicro-compat` adds standard-library features that CircuitPython and MicroPython leave out, under the same names on all three runtimes.  It holds one: `functools.partial`, imported from `chumicro_compat.functools`.
 
-On CPython, the real C implementations are re-exported for zero overhead.  On MicroPython and CircuitPython, pure-Python polyfills provide the same API.
+`partial(func, first_argument)` returns a new function with `first_argument` already filled in.  Calling the new function calls `func` with the filled-in arguments first, followed by the arguments given at the call.
 
-## functools.partial
+## Getting started
 
-`functools.partial` freezes some arguments to a callable, producing a new callable with fewer parameters.  CPython includes it in the standard library, but MicroPython and CircuitPython do not.
-
-### Basic usage
+Make one function per LED, then fade both pretend LEDs up and down forever:
 
 ```python
+import time
+
 from chumicro_compat.functools import partial
 
-def set_led(pin: int, brightness: int) -> None:
-    """Set an LED pin to a brightness level.
 
-    Args:
-        pin: GPIO pin number.
-        brightness: Brightness percentage (0–100).
-    """
-    print(f"pin {pin} → {brightness}%")
+def set_led(pin, brightness, label="LED"):
+    print(f"{label} on pin {pin}: {brightness}%")
 
-# Freeze the pin number.  Now set_status_led only needs brightness.
-set_status_led = partial(set_led, 13)
-set_status_led(50)   # pin 13 → 50%
-set_status_led(100)  # pin 13 → 100%
+
+# set_status_led(50) now runs set_led(13, 50, label="status LED").
+set_status_led = partial(set_led, 13, label="status LED")
+set_power_led = partial(set_led, 2, label="power LED")
+leds = [set_status_led, set_power_led]
+
+brightness = 0
+step = 25
+while True:
+    for set_brightness in leds:
+        set_brightness(brightness)
+
+    brightness += step
+    if brightness == 0 or brightness == 100:
+        step = -step
+
+    time.sleep(0.5)
 ```
 
-### Freezing keyword arguments
+The first pass prints:
 
-Keyword arguments can be frozen and overridden at call time:
+```
+status LED on pin 13: 0%
+power LED on pin 2: 0%
+```
+
+## Keyword arguments
+
+`partial` fills in keyword arguments the same way.  A keyword given at the call replaces the filled-in one for that call only:
 
 ```python
 from chumicro_compat.functools import partial
 
-def connect(host: str, port: int = 80, timeout: int = 5) -> None:
-    """Simulate a connection.
 
-    Args:
-        host: Server hostname.
-        port: TCP port number.
-        timeout: Connection timeout in seconds.
-    """
+def connect(host, port=80, timeout=5):
     print(f"connecting to {host}:{port} (timeout={timeout}s)")
 
-# Freeze host and port; timeout can still be overridden.
+
 connect_api = partial(connect, "api.example.com", port=443)
-connect_api()              # timeout=5 (default)
-connect_api(timeout=10)    # timeout=10 (overridden)
+connect_api()              # connecting to api.example.com:443 (timeout=5s)
+connect_api(timeout=10)    # connecting to api.example.com:443 (timeout=10s)
 ```
 
-### Wiring callbacks with frozen context
+## Callbacks that carry their own context
 
-A common embedded pattern is binding a hardware pin or device reference into a callback so the handler doesn't need global state:
+A button handler or a scheduler calls its callback with the event alone, such as a time or a value.  `partial` fills in the pin number ahead of time, so each callback knows its own pin without a global variable:
 
 ```python
 from chumicro_compat.functools import partial
 
-def on_button_press(pin_number: int, event_ms: int) -> None:
-    """Handle a button press event.
 
-    Args:
-        pin_number: GPIO pin the button is connected to.
-        event_ms: Timestamp of the press in milliseconds.
-    """
+def on_button_press(pin_number, event_ms):
     print(f"button on pin {pin_number} pressed at {event_ms} ms")
 
-# Wire pin 0 into the callback.  The runner passes event_ms at call time.
-handler = partial(on_button_press, 0)
-handler(12345)  # button on pin 0 pressed at 12345 ms
+
+handle_button_0 = partial(on_button_press, 0)
+handle_button_4 = partial(on_button_press, 4)
+
+handle_button_0(1000)   # button on pin 0 pressed at 1000 ms
+handle_button_4(2500)   # button on pin 4 pressed at 2500 ms
 ```
 
-### Inspecting a partial object
+## Looking inside a partial
 
-The public attributes match CPython's `functools.partial`:
+A partial keeps the wrapped function in `func`, the filled-in positional arguments in `args`, and the filled-in keywords in `keywords`.  CPython's `functools.partial` has the same three attributes:
 
 ```python
 from chumicro_compat.functools import partial
+
 
 def connect(host, port, *, tls=False):
     return f"{host}:{port} tls={tls}"
 
-p = partial(connect, "broker.local", tls=True)
-print(p.func)       # <function connect ...>
-print(p.args)        # ('broker.local',)
-print(p.keywords)    # {'tls': True}
-print(p(1883))       # broker.local:1883 tls=True
+
+broker = partial(connect, "broker.local", tls=True)
+print(broker.func)       # <function connect ...>
+print(broker.args)       # ('broker.local',)
+print(broker.keywords)   # {'tls': True}
+print(broker(1883))      # broker.local:1883 tls=True
 ```
 
-> The example uses a pure-Python function so it runs identically on
-> every runtime.  Passing a keyword to a C builtin like `int(x, base=16)`
-> works on CPython but raises `TypeError` on MicroPython / CircuitPython,
-> whose builtins take those arguments positionally only.
+A partial over a function written in Python works on every runtime.  A partial that passes a keyword to a built-in, such as `partial(int, base=16)`, works on CPython only.  MicroPython and CircuitPython built-ins take those arguments by position, so calling that partial raises `TypeError` there.
 
 ## Platform notes
 
-| Runtime | Implementation |
+| Runtime | What `chumicro_compat.functools.partial` is |
 |---|---|
-| CPython | Re-exports `functools.partial` (C implementation, zero overhead) |
-| MicroPython | Pure-Python polyfill |
-| CircuitPython | Pure-Python polyfill |
+| CPython | The standard library's `functools.partial` |
+| MicroPython | A small pure-Python version |
+| CircuitPython | A small pure-Python version |
 
-The public API is identical across all runtimes.  Code that imports `partial` from `chumicro_compat.functools` will work on any supported runtime without changes.
+Calling a partial, its `func`, `args`, and `keywords` attributes, and its `repr()` behave the same on all three runtimes.
 
 ## Examples
 
-The [examples](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat/examples) directory contains complete runnable scripts:
-
 | Example | What it shows |
 |---|---|
-| `partial_basic.py` | Freeze one positional argument to a function |
-| `partial_keyword_override.py` | Freeze keyword args, override at call time |
-| `partial_callback.py` | Wire a callback with frozen context (embedded pattern) |
+| [`partial_basic.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/compat/examples/partial_basic.py) | Fills in a pin and a label with `partial`, replaces the label in one call, keeps the new functions in a list of callbacks, and fades two pretend LEDs forever.  Runs on CPython, MicroPython, and CircuitPython with no wiring. |
 
 ---
 

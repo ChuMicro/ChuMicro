@@ -2,73 +2,49 @@
 
 <img src="../support/docs/chumicro_tip.png" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Small, focused libraries for microcontrollers and laptops.  Every library installs independently and depends on as little as possible.  The ones with ongoing work to do (WiFi, the network protocols, anything that waits on I/O) share one cooperative-loop contract so [`runner`](runner/) can drive them in a single loop; the rest (like `msgpack` and `compat`) are plain importable code.
+These are small Python libraries for CircuitPython and MicroPython boards, each one installed by itself.  Every one also runs on your laptop's Python, so board code runs its tests at your desk.  The libraries that wait on something, such as WiFi, a server, or a button press, do their waiting a small step at a time inside your `while True:` loop.  [`runner`](runner/) gives each of them its turn in that loop.  The rest, such as `msgpack` and `compat`, are plain code you import and call.
 
 <br clear="left">
 
-> Looking for the project README?  → [`/README.md`](../README.md) covers what ChuMicro is, worked examples, install, and next steps.
->
-> Looking for host-side tools?  → [`/workbench/`](../workbench/) has the laptop tools for deploy, REPL, and project workspaces.
+A first project starts with [`timing`](timing/) for a loop that never sleeps.  [`buttons`](buttons/) and [`knobs`](knobs/) add input.  [`runner`](runner/) comes in once the loop has more than a couple of jobs or talks to a network.  The [project README](../README.md#three-steps-one-idea-each) walks that path one step at a time.  [Coming from Arduino](../docs/coming-from-arduino.md) maps `setup()`, `loop()`, and `time.sleep()` onto it.  The laptop tools that put these libraries on a board live in [`workbench/`](../workbench/).
 
-## What's in the box?
+## Pick a library
 
-| Library | What it does |
-|---|---|
-| **[timing](timing/)** | Timers that don't freeze your code.  Your loop keeps running while the clock runs down; no `time.sleep()` locking everything up. |
-| **[runner](runner/)** | The task scheduler.  Register your services, call `runner.tick()` in your loop, everyone gets a turn.  No async needed. |
-| **[buttons](buttons/)** | Debounced buttons, switches, and key matrices.  Presses are captured beneath your loop, so a tap lands even when the loop is busy elsewhere. |
-| **[knobs](knobs/)** | Rotary encoders and analog knobs.  Quadrature is counted outside your loop, and ADC readings are held still by a median, smoothing, and a deadband. |
-| **[compat](compat/)** | Standard-library features that CircuitPython and MicroPython are missing (like `functools.partial`). |
-| **[msgpack](msgpack/)** | Compact binary serialization, smaller than JSON for typical payloads.  Good for settings and sensor data.  Wire-compatible with PyPI `msgpack(use_single_float=True)`. |
-| **[config](config/)** | Type-checked runtime config with a shared dotted-key shape (`wifi.ssid`, `mqtt.broker.host`); each library reads its settings via `<Name>Config.from_config(...)`. |
-| **[kvstore](kvstore/)** | Tiny persistent key-value store for counters, timestamps, and tokens.  Picks the right backend (NVM / NVS / LittleFS) for your board. |
-| **[wifi](wifi/)** | One WiFi service across CircuitPython and MicroPython, ESP32 and Pi Pico W alike.  State machine, reconnect supervisor, no firmware-level surprises. |
-| **[sockets](sockets/)** | TCP, TLS, and UDP sockets that behave the same on CircuitPython, MicroPython, and CPython, smoothing over each runtime's own socket quirks.  The layer under the network libraries here, and usable directly. |
-| **[ntp](ntp/)** | Sets the board's clock from the network without blocking the loop.  Pure Python; close enough to UTC for TLS certificate checks. |
-| **[requests](requests/)** | Non-blocking HTTP/1.1 client.  The LED keeps blinking through a TLS handshake, a timeout, or a stalled peer. |
-| **[http_server](http_server/)** | Non-blocking HTTP/1.1 server.  `@server.route` decorator with method dispatch and path params; each connection advances one chunk per tick.  TLS where the runtime supports it; the guide has the current support table. |
-| **[mqtt](mqtt/)** | Non-blocking MQTT 3.1.1 client (QoS 0 and 1).  Runner-shaped, no threads or async.  Concurrent QoS 1 publishes, configurable oversized-message policy, last will and retain. |
-| **[websockets](websockets/)** | Non-blocking WebSocket client and server.  RFC 6455 framing and masking, runner-shaped, plays alongside [`http_server`](http_server/) for combined HTTP/WS deployments. |
+| Library | Use it when you need | What you get |
+|---|---|---|
+| **[timing](timing/)** | Something to happen every N milliseconds, or a time limit, without `time.sleep()` | `Rate` ("is it time yet?"), `Deadline` ("has the time run out?"), and tick math that survives the counter wrapping round. |
+| **[runner](runner/)** | Several jobs in one loop, or any of the network libraries | A `Runner` that gives every service and timer its turn on `tick()` and rests the CPU on `wait()`.  Jobs that run in sequence can be written as generators. |
+| **[buttons](buttons/)** | A button, switch, or key matrix that never misses a press | Debounced presses, long presses, auto-repeat, and click counts, captured in the background so a tap lands even while the loop is busy. |
+| **[knobs](knobs/)** | A rotary encoder or a potentiometer that reads cleanly | Encoder steps counted outside your loop so a fast spin arrives whole, and analog readings that hold still instead of jittering. |
+| **[wifi](wifi/)** | WiFi that joins, retries, and reconnects by itself | One `WifiService` for both runtimes, ESP32 and Pico W alike, with callbacks when the link comes and goes. |
+| **[requests](requests/)** | To fetch a URL or call a web API | A non-blocking HTTP/1.1 client.  Your LED keeps blinking while the server answers, while the body downloads, and through a timeout. |
+| **[http_server](http_server/)** | To serve web pages or an API from the board | An HTTP/1.1 server with `@server.route` handlers and path parameters.  The guide lists which runtimes serve TLS. |
+| **[mqtt](mqtt/)** | To talk to an MQTT broker, the message hub most home-automation setups use | An MQTT 3.1.1 client with QoS 0 and 1, last will, retain, and TLS.  It stays connected while the loop does everything else. |
+| **[websockets](websockets/)** | A live two-way connection to a browser or a server | WebSocket client and server, plain and TLS, that can share a board with `http_server`. |
+| **[sockets](sockets/)** | A raw TCP, TLS, or UDP connection | Sockets that behave the same on CircuitPython, MicroPython, and your laptop.  The layer underneath the network libraries above. |
+| **[ntp](ntp/)** | Your board needs the real time of day | The time from an NTP server, close enough to UTC for TLS certificate checks and honest log timestamps. |
+| **[config](config/)** | Settings your program reads on the board at startup | Typed settings with one dotted-key naming scheme (`wifi.ssid`, `mqtt.broker.host`) that every library reads through its `<Name>Config.from_config(...)`. |
+| **[kvstore](kvstore/)** | A value that survives a reboot | A small key-value store for counters, timestamps, and tokens.  It picks the storage your board has: NVM, NVS, or a file. |
+| **[msgpack](msgpack/)** | To send or store data more compactly than JSON | Binary serialization that reads and writes the same bytes as PyPI's `msgpack` with `use_single_float=True`. |
+| **[compat](compat/)** | A standard-library piece your board's Python lacks | Small stand-ins, such as `functools.partial`, so one file of code runs everywhere. |
 
-
-Hardware-validated on the project bench: RP2040 (Raspberry Pi Pico W, both runtimes) and ESP32 boards from the classic, S2, and S3 families.  ESP32-C3 / C6 and RP2350 are supported architectures that haven't had bench time yet.  Boards beyond these (STM32, nRF52840, and anything else running CircuitPython or MicroPython with at least 256 KB of RAM and 2 MB physical / ~800 KB usable flash) should work but haven't been validated.
+[Board support](https://chumicro.com/ChuMicro/guides/install/#board-support) lists the boards these libraries have run on.
 
 ## Install
 
-See [the install guide](https://chumicro.com/ChuMicro/guides/install/) for the full install matrix: CircuitPython via circup, MicroPython via mip, CPython via pip, the experimental channel, and pre-compiled `.mpy` bundles.
-
-Each library's own README has a one-line install command for that library.
+[The install guide](https://chumicro.com/ChuMicro/guides/install/) covers circup on CircuitPython, mip on MicroPython, pip on your laptop, the experimental channel, and pre-compiled `.mpy` packages.  Each library's own README has a one-line install command for that library.
 
 ## Dependencies
 
-The stack runs roughly bottom-up:
+The libraries stack from the bottom up:
 
-- **Primitives:** `timing`, `runner`.  Depended on by most others.
+- **Timing and scheduling:** `timing`, `runner`.  Most of the others build on these.
 - **Physical input:** `buttons`, `knobs`.
-- **Persistence and serialization:** `msgpack`, `config`, `kvstore`.
-- **Networking transport and protocols:** `wifi` (link), `sockets` (TCP / TLS / UDP), then the app protocols `ntp`, `requests`, `http_server`, `websockets`, and `mqtt`.
+- **Settings, storage, and serialization:** `msgpack`, `config`, `kvstore`.
+- **Networking:** `wifi` joins the network.  `sockets` opens TCP, TLS, and UDP connections over it.  `ntp`, `requests`, `http_server`, `websockets`, and `mqtt` speak their protocols over those sockets.
 
 ![ChuMicro library dependency graph](../support/docs/dependency-graph.svg)
 
-Solid arrows are hard dependencies; `pip install chumicro-mqtt` brings its dependencies along automatically.  Dashed arrows show how apps typically wire the pieces together at construction time: every networked service registers with `chumicro-runner` and most accept a clock as a parameter, so the libraries don't `import` each other; your app connects them.
+Solid arrows are hard dependencies: `pip install chumicro-mqtt` brings its dependencies along.  Dashed arrows are connections your program makes when it creates the objects.  Your program registers each networked service with a `Runner` and hands most libraries a clock.  The libraries at the two ends of a dashed arrow never import each other.
 
-The SVG is regenerated from each library's pyproject.toml by [`scripts/render_dep_graph.py`](../scripts/render_dep_graph.py).
-
-## Pick by problem
-
-- **"I need timers that don't freeze my loop"** → [timing](timing/)
-- **"I have multiple things happening in my loop"** → [runner](runner/) (includes timing)
-- **"I need a button that doesn't miss presses"** → [buttons](buttons/)
-- **"I need a rotary encoder or a potentiometer read cleanly"** → [knobs](knobs/)
-- **"I need to store settings or send data compactly"** → [msgpack](msgpack/)
-- **"I need to read deploy-time config on the device"** → [config](config/) (with [msgpack](msgpack/))
-- **"I need to persist a counter across reboots"** → [kvstore](kvstore/)
-- **"I need WiFi that auto-reconnects without surprises"** → [wifi](wifi/)
-- **"I need a TCP / TLS / UDP socket that works on CP and MP"** → [sockets](sockets/)
-- **"I need to set the device clock from an NTP server"** → [ntp](ntp/)
-- **"I need to fetch a URL without blocking my loop"** → [requests](requests/)
-- **"I need to expose HTTP routes on the device"** → [http_server](http_server/)
-- **"I need an MQTT client that doesn't freeze my loop"** → [mqtt](mqtt/)
-- **"I need a WebSocket client or server"** → [websockets](websockets/)
-- **"I want my app to react when WiFi connects or drops"** → [wifi](wifi/)'s guide covers state-change callbacks and signals
-- **"`functools.partial` doesn't exist on my board"** → [compat](compat/)
+[`scripts/render_dep_graph.py`](../scripts/render_dep_graph.py) draws the graph from each library's `pyproject.toml`.

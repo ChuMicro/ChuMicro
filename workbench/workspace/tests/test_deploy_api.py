@@ -309,6 +309,36 @@ class TestDeployedProjectMarkerWaits:
             output = session.wait_for_completion(timeout_s=2.0)
             assert "DEMO_COMPLETE" in output
 
+    def test_on_line_receives_every_board_line(
+        self, tmp_path: Path, patched_transport_and_registry,
+    ) -> None:
+        """``on_line`` passed to deploy_project sees each printed line in order."""
+        root = _make_workspace(tmp_path)
+        project = _make_project(root)
+        entry = _fake_entry()
+        fake = FakeTransport(
+            mode="flash",
+            execute_output="WIFI_OK ip=10.0.0.9\n  sent 3\nDEMO_COMPLETE\n",
+        )
+        patched_transport_and_registry(entry, transport=fake)
+        seen: list[str] = []
+
+        with deploy_api.deploy_project(
+            project_dir=project, device_id=entry.identifier,
+            deploy_mode="flash", workspace_root=root, on_line=seen.append,
+        ) as session:
+            session.wait_for("DEMO_COMPLETE", timeout_s=2.0)
+            session.wait_for_completion(timeout_s=2.0)
+
+        assert seen == ["WIFI_OK ip=10.0.0.9", "  sent 3", "DEMO_COMPLETE"]
+
+    def test_echo_board_line_prefixes_board(
+        self, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """``echo_board_line`` prints the line behind a ``board |`` prefix."""
+        deploy_api.echo_board_line("  fetched 512 bytes")
+        assert capsys.readouterr().out == "board |   fetched 512 bytes\n"
+
     def test_wait_for_times_out_on_silent_board(
         self, tmp_path: Path, patched_transport_and_registry,
     ) -> None:

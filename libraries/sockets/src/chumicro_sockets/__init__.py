@@ -1,6 +1,11 @@
-"""Cross-runtime TCP, TLS, and UDP sockets for CircuitPython, MicroPython, and CPython.
+"""``chumicro_sockets`` opens TCP, TLS, and UDP sockets the same way on CircuitPython,
+MicroPython, and CPython.
 
-The public factories are ``connector``, ``listener``, and ``udp_socket``.
+``connector`` dials a server one step per ``tick`` call, ``listener`` opens a
+listening socket for a server, and ``udp_socket`` opens a datagram socket.  The
+``ssl_context_*`` functions build the ``context=`` those calls take for TLS.
+On CircuitPython the socket calls take ``radio=wifi.radio``.  MicroPython and
+CPython ignore ``radio``.
 """
 
 import gc
@@ -8,7 +13,11 @@ import sys
 
 
 class UnsupportedSSLConfigError(RuntimeError):
-    """Raised when the requested TLS configuration is not supported on this runtime."""
+    """``UnsupportedSSLConfigError`` reports a TLS setup the running runtime cannot build.
+
+    CircuitPython raises it from ``ssl_context_with_cert_and_key``, which needs
+    file paths there, and from ``listener(tls=True)`` on a Pico W or Pico 2 W.
+    """
 
 
 __all__ = [
@@ -51,17 +60,39 @@ def connector(
     context: object | None = None,
     radio: object | None = None,
 ) -> object:
-    """Return a non-blocking, tick-driven TCP or TLS connector.
+    """Return a ``SocketConnector`` that opens a TCP or TLS connection to ``host`` one step per ``tick`` call.
+
+    The main loop calls ``connector.tick(now_ms)``, or a ``Runner`` does after
+    ``runner.add(connector)``, until ``connector.state`` reads ``"ready"`` or
+    ``"failed"``.  At ``"ready"``, ``connector.socket`` holds the connected
+    non-blocking socket, and the caller closes it when done.  At
+    ``"failed"``, ``connector.last_error`` holds the exception.
+    ``connector.cancel()`` abandons a connect in progress and closes its
+    socket.  ``chumicro_sockets.generators.connect`` drives the same steps
+    inside a generator.
+
+    The first ``tick`` looks up ``host`` and holds the main loop until the
+    lookup returns, on every runtime.  On CircuitPython the second ``tick``
+    holds the loop for the whole TCP connect and TLS handshake.  On
+    MicroPython the TLS handshake holds the loop.  The connector sets no time
+    limit of its own.
 
     Args:
-        host: DNS name or IP literal; also the TLS ``server_hostname`` when ``tls=True``.
-        port: Remote port.
+        host: Server name or IP address.  With ``tls=True`` it is also the
+            name checked against the server's certificate.
+        port: Server port, such as ``80`` or ``443``.
         tls: ``True`` wraps the connection in TLS.
-        context: SSLContext for the ``tls=True`` path; ``None`` uses the runtime default trust store.
-        radio: CP-only radio object (pass ``wifi.radio`` on CP boards); ignored elsewhere.
+        context: ``ssl.SSLContext`` for the TLS handshake, from one of the
+            ``ssl_context_*`` functions, or ``None`` to verify the server
+            against the runtime's default certificate store.  That store is
+            the firmware's on CircuitPython, the bundle shipped with this
+            library on MicroPython, and the operating system's on CPython.
+        radio: The CircuitPython radio, ``wifi.radio``, needed there on the
+            first socket call.  MicroPython and CPython ignore it.
 
     Returns:
-        A ``SocketConnector`` in the ``"awaiting_dns"`` state.
+        A ``SocketConnector`` in the ``"awaiting_dns"`` state.  It touches the
+            network on its first ``tick``.
     """
     return _get_adapter().connector(host, port, tls=tls, context=context, radio=radio)
 
@@ -75,24 +106,35 @@ def listener(
     backlog: int = 4,
     radio: object | None = None,
 ) -> object:
-    """Open a non-blocking TCP or TLS listening socket.
+    """Open a non-blocking TCP or TLS socket that listens on ``host`` and ``port``.
+
+    ``accept()`` on the returned socket takes the next waiting client and
+    returns ``(client_socket, address)``.  It raises ``OSError`` with
+    ``EAGAIN`` when no client is waiting.  With ``tls=True`` on MicroPython
+    and CPython, ``accept()`` holds the main loop for the client's TLS
+    handshake.
 
     Args:
-        host: Address to bind. ``"0.0.0.0"`` accepts on every interface.
-        port: TCP port to bind.
-        tls: ``True`` TLS-wraps every accepted client.
-        context: Server-side ``ssl.SSLContext``; required when ``tls=True``, ignored otherwise.
-        backlog: Depth of the pending-connection queue.
-        radio: CP-only radio object (pass ``wifi.radio`` on CP boards); ignored elsewhere.
+        host: Local address to listen on.  ``"0.0.0.0"`` listens on every
+            interface.
+        port: TCP port to listen on.
+        tls: ``True`` wraps every accepted client in TLS.
+        context: Server-side ``ssl.SSLContext`` from
+            ``ssl_context_with_cert_and_key_paths`` or
+            ``ssl_context_with_cert_and_key``.  Required with ``tls=True``.
+        backlog: Number of waiting clients the network stack queues before it
+            refuses more.
+        radio: The CircuitPython radio, ``wifi.radio``, needed there on the
+            first socket call.  MicroPython and CPython ignore it.
 
     Returns:
-        A listening socket exposing ``accept()`` / ``close()`` / ``setblocking()``.
+        The listening socket, with ``accept()``, ``close()``, and ``setblocking()``.
 
     Raises:
         ValueError: ``tls=True`` was passed without a ``context``.
-        OSError: Bind or listen failed (port in use, permission denied).
-        UnsupportedSSLConfigError: ``tls=True`` on CP-rp2 boards.
-        TypeError: The CircuitPython runtime was invoked with ``radio=None``.
+        OSError: Binding or listening failed, such as when the port is in use.
+        UnsupportedSSLConfigError: ``tls=True`` on CircuitPython on a Pico W or Pico 2 W.
+        TypeError: The first socket call on CircuitPython got no ``radio``.
     """
     if tls and context is None:
         raise ValueError(
@@ -108,14 +150,21 @@ def ssl_context_with_cert_and_key(
     cert_pem: str | bytes,
     key_pem: str | bytes,
 ) -> object:
-    """Build a server-side SSLContext from in-memory cert and key bytes.
+    """Build a server-side ``ssl.SSLContext`` from a certificate and private key held in memory.
+
+    ``listener(tls=True, context=...)`` takes the result.  CircuitPython loads
+    a certificate only from files, so this function raises there.
+    ``ssl_context_with_cert_and_key_paths`` works on every runtime.
 
     Args:
-        cert_pem: PEM-encoded server certificate (or chain).
-        key_pem: PEM-encoded private key matching the certificate.
+        cert_pem: PEM text of the server certificate, or of a certificate chain.
+        key_pem: PEM text of the private key that matches ``cert_pem``.
 
     Returns:
-        A configured :class:`ssl.SSLContext`.
+        The ``ssl.SSLContext``.
+
+    Raises:
+        UnsupportedSSLConfigError: Called on CircuitPython.
     """
     return _get_adapter().ssl_context_with_cert_and_key(cert_pem, key_pem)
 
@@ -124,14 +173,20 @@ def ssl_context_with_cert_and_key_paths(
     cert_path: str,
     key_path: str,
 ) -> object:
-    """Build a server-side SSLContext from cert and key files on flash.
+    """Build a server-side ``ssl.SSLContext`` from certificate and key files on the board.
+
+    ``listener(tls=True, context=...)`` takes the result.  It works on every
+    runtime.  On MicroPython it reads both files into memory first.
 
     Args:
-        cert_path: On-device path to the certificate PEM file.
-        key_path: On-device path to the private-key PEM file.
+        cert_path: Path to the PEM certificate file, such as ``"/cert.pem"``.
+        key_path: Path to the PEM private-key file.
 
     Returns:
-        A configured :class:`ssl.SSLContext`.
+        The ``ssl.SSLContext``.
+
+    Raises:
+        OSError: A file is missing or unreadable.
     """
     adapter = _get_adapter()
     if hasattr(adapter, "ssl_context_with_cert_and_key_paths"):
@@ -154,19 +209,27 @@ def udp_socket(
     radio: object | None = None,
     broadcast: bool = False,
 ):
-    """Open a UDP datagram socket bound to (bind_host, bind_port).
+    """Open a UDP socket bound to ``bind_host`` and ``bind_port``, and return it.
+
+    ``sendto(data, host, port)`` sends one datagram and takes the host and
+    port as two arguments.  ``recvfrom_into(buffer, nbytes=0)`` receives one
+    and returns ``(count, address)``.  The socket starts in blocking mode,
+    where ``recvfrom_into`` holds the main loop until a datagram arrives.
+    After ``setblocking(False)`` it raises ``OSError`` with ``EAGAIN``
+    instead.
 
     Args:
-        bind_host: Local address to bind. ``"0.0.0.0"`` binds every interface.
-        bind_port: Local port. ``0`` requests an ephemeral port.
-        radio: CP-only radio object (pass ``wifi.radio`` on CP boards); ignored elsewhere.
-        broadcast: Set ``SO_BROADCAST`` so ``sendto`` to a broadcast address succeeds.
-
-    Returns: A bound UDP socket.
+        bind_host: Local address to bind.  ``"0.0.0.0"`` binds every interface.
+        bind_port: Local port.  ``0`` picks a free port.
+        radio: The CircuitPython radio, ``wifi.radio``, needed there on the
+            first socket call.  MicroPython and CPython ignore it.
+        broadcast: ``True`` allows ``sendto`` to a broadcast address such as
+            ``"255.255.255.255"``.  A CircuitPython or MicroPython build
+            without the option ignores it.
 
     Raises:
-        OSError: Bind failed (port in use, permission denied).
-        TypeError: The CircuitPython runtime was invoked with ``radio=None``.
+        OSError: Binding failed, such as when the port is in use.
+        TypeError: The first socket call on CircuitPython got no ``radio``.
     """
     return _get_adapter().udp_socket(
         bind_host=bind_host,
@@ -177,37 +240,48 @@ def udp_socket(
 
 
 def ssl_context_with_ca(ca_pem: str | bytes) -> object:
-    """Build an SSLContext that trusts the CA(s) in *ca_pem*.
+    """Build a client ``ssl.SSLContext`` that trusts the certificate authorities in ``ca_pem``.
+
+    ``connector(tls=True, context=...)`` takes the result, to reach a server
+    whose certificate a private or self-signed authority issued.
 
     Args:
-        ca_pem: CA bundle; PEM on every runtime, DER (``bytes``) on MicroPython and CPython only.
+        ca_pem: One or more CA certificates.  PEM text works on every runtime.
+            DER ``bytes`` work on MicroPython and CPython.
 
     Returns:
-        A configured :class:`ssl.SSLContext`.
+        The ``ssl.SSLContext``.
 
     Raises:
-        ValueError: The input is not an accepted format for the runtime.
+        ValueError: ``ca_pem`` holds neither PEM nor DER.  CircuitPython also
+            raises it for DER.
     """
     return _get_adapter().ssl_context_with_ca(ca_pem)
 
 
 def ssl_context_no_verify() -> object:
-    """Return an SSLContext that skips certificate verification.
+    """Return a client ``ssl.SSLContext`` that accepts any server certificate.
+
+    The connection stays encrypted, and any server can pose as the ``host``
+    it dials.
 
     Returns:
-        A configured :class:`ssl.SSLContext` with verification disabled.
+        The ``ssl.SSLContext``.
     """
     return _get_adapter().ssl_context_no_verify()
 
 
 def set_default_ca_bundle(pem_bytes: bytes | str | None) -> None:
-    """Replace or revert the CA bundle used by ``connector(tls=True, context=None)``.
+    """Replace the certificate authorities that ``connector(tls=True, context=None)`` trusts on MicroPython.
 
-    MicroPython only: a no-op on CircuitPython (firmware trust store) and
-    CPython (operating-system trust store).
+    On MicroPython this library ships a bundle of root certificates, and
+    ``None`` restores it.  The change applies to every TLS handshake that
+    starts after the call.  CircuitPython uses the firmware's store and
+    CPython the operating system's, so the call does nothing there.
 
     Args:
-        pem_bytes: PEM-encoded CA bundle as bytes or str, or ``None`` to revert to the shipped bundle.
+        pem_bytes: CA certificates as PEM text or DER bytes, or ``None`` for
+            the shipped bundle.
     """
     adapter = _get_adapter()
     if hasattr(adapter, "set_default_ca_bundle"):

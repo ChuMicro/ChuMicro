@@ -35,7 +35,7 @@
 #   automatically — that would defeat the ratchet) when a cut round lands.
 
 [buttons]
-stripped = 26330
+stripped = 26393
 mpy = 9340
 
 [compat]
@@ -51,7 +51,7 @@ stripped = 48608
 mpy = 19405
 
 [knobs]
-stripped = 10671
+stripped = 10701
 mpy = 5095
 
 [kvstore]
@@ -88,7 +88,7 @@ stripped = 4738
 mpy = 2595
 
 [websockets]
-stripped = 78568
+stripped = 78955
 mpy = 30892
 
 [wifi]

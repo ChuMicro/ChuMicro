@@ -1,12 +1,10 @@
 # Standalone integration: adopt one library
 
-You do not have to adopt the whole ChuMicro stack.  Each networked library is built to drop into an existing codebase that already has its own transport and its own clock: you bring those, the library brings the protocol.  This page is the recipe for that path: which siblings a library actually pulls, how to supply your own transport and ticks, and how to drive the library from whatever loop you already have.
+Each networked ChuMicro library drops into an existing codebase that already has its own transport and its own clock: the codebase brings those, and the library brings the protocol. [Slimming your deploy](slimming-your-deploy.md) then strips the default `chumicro_sockets` wiring off the board.
 
-It is the companion to [Slimming your deploy](slimming-your-deploy.md): that page strips the default `chumicro_sockets` wiring off the *device*; this page shows how to write the *code* that no longer needs it.
+## What each library imports
 
-## The claim, measured
-
-**Every networked library imports zero ChuMicro siblings at import time.**  `import chumicro_mqtt` pulls no `chumicro_sockets`, no `chumicro_timing`, no `chumicro_config`: nothing but itself.  You can check it yourself:
+**Importing a networked library imports no other ChuMicro library.** `import chumicro_mqtt` loads `chumicro_mqtt` alone, without `chumicro_sockets`, `chumicro_timing`, or `chumicro_config`. This check proves it:
 
 ```python
 import sys
@@ -17,7 +15,7 @@ siblings = [m for m in sys.modules
 assert siblings == []          # nothing else came along
 ```
 
-Siblings arrive only when you *ask* for them: by using the default transport factory, or by letting the default `ticks=` fall back to `chumicro_timing`.  Supply your own for both and the closure stays empty:
+Another ChuMicro library loads only through a default: the default transport factory, or the default `ticks=` clock from `chumicro_timing`. Supply both yourself, and the closure stays empty:
 
 | Library | bare `import` | your transport **+** `ticks=` | your transport, default ticks |
 |---|:--:|:--:|:--:|
@@ -28,24 +26,22 @@ Siblings arrive only when you *ask* for them: by using the default transport fac
 | `chumicro_http_server` | `{}` | `{}` | `{chumicro_timing}` |
 | `chumicro_sockets` | `{}` | `{}` | `{}` (pure leaf) |
 
-The one sibling in the third column is deliberate: skip `ticks=` and you inherit the tiny `chumicro_timing` leaf as your clock.  That is the ergonomic default, not a bug: most adopters want it.  Reach for `ticks=` only when you already have a monotonic clock and want the empty closure.
+Leaving out `ticks=` brings in `chumicro_timing`, a small library with no dependencies, as the clock. Most adopters want that default. Pass `ticks=` when you already have a monotonic clock and want the empty closure.
 
-Contrast the ergonomic entry point.  `MQTTClient.from_config(...)` wires the default `chumicro_sockets` transport *and* reads config, so its deploy closure is the full declared set: `{chumicro_config, chumicro_sockets, chumicro_timing}` for mqtt (the other four land `{chumicro_sockets, chumicro_timing}`, plus `chumicro_config` where the factory reads keys).  That is the default gravity well.  The recipe below is how you opt out of it, one constructor argument at a time.
+`MQTTClient.from_config(...)` wires the default `chumicro_sockets` transport and reads config, so its deploy closure is the full declared set: `chumicro_config`, `chumicro_sockets`, and `chumicro_timing`. The other four libraries' `from_config` closures hold `chumicro_sockets` and `chumicro_timing`, plus `chumicro_config` where the factory reads config keys. Each constructor argument in the recipe below drops one of those.
 
-(The measured on-device cost of keeping these injection seams, across flash, heap, and hot-path frames, is in the [DI cost measurement](https://github.com/ChuMicro/ChuMicro/blob/main/plans/reviews/2026-07-03-di-cost-measurement.md); it is sub-1% of a 264 KB / ~800 KB board.)
+The [DI cost measurement](https://github.com/ChuMicro/ChuMicro/blob/main/plans/reviews/2026-07-03-di-cost-measurement.md) puts the on-device cost of these injection seams, across flash, heap, and hot-path frames, below 1% of a board with 264 KB of RAM and about 800 KB of usable flash.
 
 ## Recipe: adopt mqtt, websockets, or requests standalone
 
-Three moves: bring your transport, bring your ticks, drive the tick loop.
-
 ### 1. Bring your own transport
 
-Every networked client takes its transport through the constructor instead of importing `chumicro_sockets` itself.  Two forms:
+Every networked client takes its transport through the constructor, in one of these forms:
 
-* **`socket=<a connected socket>`**: you already own a connected, non-blocking socket.  The library takes ownership and drives I/O on it.  Simplest for one-shot scripts and desktop code.
-* **`transport_factory=<callable>`**: you hand over a factory the library calls to build (and, after a drop, *re*build) its own non-blocking connect state machine.  This is the form that gets you self-heal reconnect.
+* **`socket=<a connected socket>`** hands over a connected, non-blocking socket. The library takes ownership and drives I/O on it. This form suits one-shot scripts and desktop code.
+* **`transport_factory=<callable>`** hands over a factory the library calls to build its own non-blocking connect state machine, and to rebuild it after a drop. This form gives the client automatic reconnects.
 
-The factory's shape depends on the transport role (the two arities are fixed by [Decision 0115](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0115-shared-sockets-factories.md)):
+The factory's signature depends on the library ([Decision 0115](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0115-shared-sockets-factories.md)):
 
 | Library | `transport_factory` signature | returns |
 |---|---|---|
@@ -53,11 +49,11 @@ The factory's shape depends on the transport role (the two arities are fixed by 
 | `chumicro_requests`, `chumicro_websockets` | `(host: str, port: int, use_tls: bool) -> connector` (per-call) | a connect state machine |
 | `chumicro_http_server` | `() -> listener` (zero-arg) | a listening socket |
 
-Whatever your factory returns must expose the `chumicro_sockets` connector surface (`check` / `handle` / `state` / `socket` / `io_*`): the same shape [`chumicro_sockets.connector(...)`](#recipe-adopt-sockets-alone-the-leaf) returns.  If instead you pass a ready `socket=`, it only needs the four-method socket contract (`recv_into` / `send` / `close` / `setblocking`) documented in each library's guide under *Bring your own transport*.  There are no `isinstance` checks against ChuMicro types: the contract is the methods, so a stdlib `socket.socket`, an upstream-library wrapper, or a hand-rolled fake all work.
+A factory's return value exposes the same members as the object [`chumicro_sockets.connector(...)`](#recipe-adopt-sockets-alone-the-leaf) returns: `check`, `handle`, `state`, `socket`, and the `io_*` attributes. A ready `socket=` needs only `recv_into`, `send`, `close`, and `setblocking`, as each library's guide documents under *Bring your own transport*. The libraries check methods, never types, so a standard-library `socket.socket`, another library's wrapper, or a hand-rolled fake all work.
 
 ### 2. Bring your own ticks
 
-Pass `ticks=<yours>`, any object with three wrap-safe methods.  This is what lets the library share your existing clock instead of importing `chumicro_timing`:
+Pass `ticks=` any object with three wrap-safe methods, and the library shares your clock instead of importing `chumicro_timing`:
 
 ```python
 import time
@@ -80,11 +76,9 @@ class Ticks:
         return end - start
 ```
 
-Skip `ticks=` entirely and the library imports `chumicro_timing`'s wrap-safe `ticks` submodule for you, the deliberate default in the closure table above.
-
 ### 3. Drive it: runner-less, or with `chumicro_runner`
 
-A ChuMicro client makes progress only when you tick it.  You do **not** need `chumicro_runner` for that.  Its `check(now_ms)` / `handle(now_ms)` methods are the whole contract, and you can call them from any loop you already have:
+A ChuMicro client makes progress only when something ticks it, and any loop can. Its `check(now_ms)` and `handle(now_ms)` methods are the whole contract, so `chumicro_runner` is optional:
 
 ```python
 from chumicro_mqtt import MQTTClient
@@ -104,9 +98,9 @@ while True:
     # ... tick your own tasks here too ...
 ```
 
-`handle()` always does a non-blocking recv and bails on `EAGAIN`, so this loop never blocks; a slow broker just means more passes.  Call `mqtt.publish(...)` / `mqtt.subscribe(...)` from anywhere in the loop: publishes issued before the connection is up buffer in a small queue and flush on connect (the default `when_disconnected="queue"` policy).
+`handle()` does a non-blocking receive and returns on `EAGAIN`, so this loop never blocks, and a slow broker just means more passes. Call `mqtt.publish(...)` or `mqtt.subscribe(...)` anywhere in the loop. A publish issued before the connection is up waits in a small queue and goes out on connect, under the default `when_disconnected="queue"` policy.
 
-If you'd rather not hand-write the dispatch, adopt `chumicro_runner` too.  Register the client once; the runner calls `check`/`handle` for you and `wait()` parks the CPU between events (it reads each service's `io_interest` / `io_socket` to poll the right sockets):
+`chumicro_runner` writes that dispatch for you. Register the client once, and the runner calls `check` and `handle`. `runner.wait()` parks the CPU between events, reading each service's `io_interest` and `io_socket` to poll the right sockets:
 
 ```python
 from chumicro_runner import Runner
@@ -120,13 +114,13 @@ while True:
     runner.wait(now)                           # sleep until a socket is ready / a deadline hits
 ```
 
-`chumicro_runner` also imports zero networked siblings: adding it costs only `chumicro_timing` (its clock), the same leaf `ticks=` already accounts for.
+`chumicro_runner` imports no networking library. It brings only `chumicro_timing`, its clock.
 
-`chumicro_websockets` and `chumicro_requests` follow the identical three-move shape; only the `transport_factory` arity differs (per-call `(host, port, use_tls)`, per the table in step 1).
+`chumicro_websockets` and `chumicro_requests` follow the same steps, with the per-call `transport_factory` signature from step 1.
 
 ### The generator helpers, without the runner
 
-The sequential helpers (`chumicro_sockets.generators`, `MQTTClient.next_message`, `chumicro_requests.generators`) suspend by yielding a **wait**, and `runner.add_generator` is one driver for those rather than the only one.  No wait compares times itself: it publishes `next_deadline` and *you* compare, which is what keeps a sleep measured in your clock's units rather than a clock the library reached for.  `io_socket` / `io_interest` exist only so a scheduler can sleep instead of spin, and this loop ignores both:
+The sequential helpers, `chumicro_sockets.generators`, `MQTTClient.next_message`, and `chumicro_requests.generators`, suspend by yielding a *wait*. `runner.add_generator` drives them, and so can your own loop. A wait never compares times itself: it publishes `next_deadline`, and the driver compares in its own clock. `io_socket` and `io_interest` exist so a scheduler can sleep instead of spinning, and this loop ignores both:
 
 ```python
 def should_resume(wait, now_ms, ticks):
@@ -153,11 +147,11 @@ def drive(generator, ticks):
                 return
 ```
 
-The socket helpers retry on `EAGAIN` and re-suspend, so an early resume costs one wasted pass.  What you give up is the sleep: `Runner.wait()` parks the CPU on `ipoll` until a socket is ready or a deadline lands, while this loop spins.  On mains power that difference is invisible; on a battery it is most of your runtime budget, which is the case for adopting `chumicro_runner` once the rest of the integration is working.
+The socket helpers retry on `EAGAIN` and suspend again, so an early resume costs one wasted pass. This loop spins, where `Runner.wait()` parks the CPU on `ipoll` until a socket is ready or a deadline lands. On mains power the difference is invisible. On a battery the spinning eats most of the runtime budget, so adopt `chumicro_runner` once the rest of the integration works.
 
 ## Recipe: adopt sockets alone (the leaf)
 
-`chumicro_sockets` has no ChuMicro dependencies at all: its `pyproject.toml` declares none, and importing it pulls nothing.  Adopt it directly when you want one cross-runtime TCP / TLS / UDP primitive and nothing else.  The three entry points are `connector()`, `listener()`, and `udp_socket()`:
+`chumicro_sockets` depends on no other ChuMicro library: its `pyproject.toml` declares none, and importing it loads nothing else. Adopt it alone for one cross-runtime TCP, TLS, or UDP primitive. Its entry points are `connector()`, `listener()`, and `udp_socket()`:
 
 ```python
 from chumicro_sockets import connector
@@ -166,21 +160,25 @@ from chumicro_sockets import connector
 # On CircuitPython, pass radio=wifi.radio; MicroPython / CPython ignore it.
 conn = connector("example.com", 443, tls=True)
 
-while conn.check(now):                          # now = your own ticks_ms()
+while True:
+    now = ticks.ticks_ms()                      # your own clock, read every pass
+    if not conn.check(now):                     # False once "ready" or "failed"
+        break
     conn.handle(now)                            # advance one connect phase
-    if conn.state == "failed":
-        raise RuntimeError(conn.last_error)
+    # ... tick your own tasks here too ...
 
+if conn.state == "failed":
+    raise RuntimeError(conn.last_error)
 sock = conn.socket                              # ready: send/recv on it directly
 ```
 
-`listener(host, port, tls=...)` returns a non-blocking listening socket for a server; `udp_socket(...)` returns a UDP socket (what `chumicro_ntp` builds on).  Because it is a leaf, `chumicro_sockets` is the one library you never reach the "empty closure" question about: there is nothing under it to strip.
+`listener(host, port, tls=...)` returns a non-blocking listening socket for a server. `udp_socket(...)` returns a UDP socket, which `chumicro_ntp` builds on. With no ChuMicro library under it, `chumicro_sockets` has nothing to strip.
 
-## What the fakes buy you: host tests with no hardware
+## Host tests with no hardware
 
-Every networked library ships a `testing.py` of fakes that ride the same injection seams.  They are marked `__chumicro_test_support__` so the deployer never flashes them: they exist purely so *you* can unit-test your integration on a laptop, against no broker and no board.  `chumicro_sockets.testing.FakeSocket` scripts socket bytes; `chumicro_timing.testing.FakeTicks` is a manually-advanced clock; each protocol library adds canned wire bytes and construction helpers.
+Every networked library ships a `testing.py` of fakes that plug into the same constructor arguments. The marker `__chumicro_test_support__` keeps the deployer from copying them to a board. They let a laptop unit-test your integration with no broker and no board. `chumicro_sockets.testing.FakeSocket` scripts socket bytes, `chumicro_timing.testing.FakeTicks` is a clock you advance by hand, and each protocol library adds canned wire bytes and construction helpers.
 
-Here is a complete, copy-paste-runnable host test.  It drives an `MQTTClient` to `CONNECTED`, publishes, and delivers an inbound message, entirely in memory:
+This host test drives an `MQTTClient` to `CONNECTED`, publishes, and delivers an inbound message, all in memory:
 
 ```python
 from chumicro_mqtt import ProtocolState
@@ -211,16 +209,16 @@ def test_publishes_and_receives():
     assert received == [("cmd/led", b"on")]
 ```
 
-`new_client(sock, ticks)` is the `testing.py` shortcut for "an `MQTTClient` wired to this fake socket and clock with sane test defaults"; `drive(client, ticks, count)` ticks it `count` times.  The same pattern (a fake transport plus `FakeTicks`) is how you test *your* code that uses these libraries, with the runner-less loop from the recipe standing in for the real one.
+`new_client(sock, ticks)` builds an `MQTTClient` wired to the fake socket and clock, with test defaults. `drive(client, ticks, count)` ticks it `count` times. Your own code that uses these libraries tests the same way: a fake transport, `FakeTicks`, and the runner-less loop from the recipe.
 
-## Boundary facts an adopter needs
+## Limits at the boundary
 
-**`async` / `await` is banned *inside* the libraries, but not in your app.**  ChuMicro libraries never `await`; they make progress through `check`/`handle` ticks so many of them can share one loop without a scheduler.  That is a rule about the library internals, not about you.  Your application can be an `asyncio` program, a thread, or a bare `while True:` loop.  You just have to tick the client from wherever your loop lives (`await`-ing between ticks is fine; call `client.handle(now)` on each pass).  The workspace deployer does enforce the rule at its own boundary: a project whose `app.py` defines `async def run()` is refused with a pointer to the tick pattern, because the on-device boot shim calls `run()` synchronously.
+**Your application can use `async`, even though the libraries never do.** The libraries make progress through `check` and `handle` ticks, so many of them share one loop with no scheduler. An application can be an `asyncio` program, a thread, or a bare `while True:` loop, as long as it ticks the client on each pass, with `await` between ticks if it likes. The workspace deployer refuses a project whose `app.py` defines `async def run()`, because the on-device boot shim calls `run()` as a plain function ([Deploy refused](../troubleshooting/deploy-refused-importerror.md#defines-async-def-run-in-apppy-which-chumicro-cant-run)).
 
-**If the ~3 KB of dependency-injection ceremony ever costs you, there is a recorded escape.**  Keeping these constructor seams costs a few KB of flash and one extra frame per connect (details in the [DI cost measurement](https://github.com/ChuMicro/ChuMicro/blob/main/plans/reviews/2026-07-03-di-cost-measurement.md)).  If a materially smaller target class ever makes that matter, deploy-time static resolution (rewriting the injection to direct calls in the deploy artifact while keeping every source seam) is recorded in §5 of that report as the pre-approved (currently unscheduled) fallback, and noted as such in the [design workstream](https://github.com/ChuMicro/ChuMicro/blob/main/plans/workstreams/core-design-realignment.md).  You do not need it today; it exists so a future flash scare does not re-litigate the seams themselves.
+**A fallback exists for a board too small for the seams.** The constructor seams cost about 3 KB of flash and one extra frame per connect. For a much smaller class of board, §5 of the [DI cost measurement](https://github.com/ChuMicro/ChuMicro/blob/main/plans/reviews/2026-07-03-di-cost-measurement.md) approves deploy-time static resolution: the deployer rewrites the injection into direct calls in what it ships, and the source keeps every seam. Every board this project targets has room for the seams.
 
 ## See also
 
 * [Slimming your deploy](slimming-your-deploy.md): once your code brings its own transport, strip the default `chumicro_sockets` wiring off the device with `__chumicro_skip_factories__`.
 * Each networked library's guide has a **Bring your own transport** section with the exact socket-method contract for that library: [mqtt](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt/docs/guide.md), [websockets](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets/docs/guide.md), [requests](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests/docs/guide.md), [ntp](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/ntp/docs/guide.md), [http_server](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server/docs/guide.md).
-* [The dependency graph](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/README.md#dependencies): solid arrows are strict `pyproject.toml` deps; dashed arrows are the injection seams this recipe unplugs.
+* [The dependency graph](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/README.md#dependencies): solid arrows are strict `pyproject.toml` dependencies. Dashed arrows are the injection seams this recipe unplugs.

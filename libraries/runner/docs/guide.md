@@ -2,195 +2,369 @@
 
 ## Overview
 
-`chumicro-runner` provides a standard pattern for active components in the ChuMicro ecosystem.  Instead of each library inventing its own `poll()` / callback API, every active component implements two methods:
+`chumicro-runner` runs several jobs from one `while True:` loop, each at its own pace, with no `time.sleep()`.  A program registers each job with a `Runner` once.  Inside the loop, `runner.tick()` runs the jobs that are due, and `runner.wait()` sleeps the board until the next one is due.  Every networked ChuMicro library registers as a job the same way, so wifi, MQTT, and an LED share one loop.  A slow server holds up only its own job.
 
-```python
-def check(self, now_ms: int) -> bool:
-    """Check whether the handler should fire.
-
-    Args:
-        now_ms: Current tick timestamp in milliseconds.
-
-    Returns:
-        True if the handler should fire this tick.
-    """
-
-def handle(self, now_ms: int) -> None:
-    """React to the condition detected by check().
-
-    Args:
-        now_ms: Current tick timestamp in milliseconds.
-    """
-```
-
-A shared `Runner` captures time once per tick, checks each service, and batch-fires all due handlers.  This replaces ad-hoc polling loops with a single standard contract.
-
-## The pattern
-
-1. **Services** implement `check(now_ms) -> bool`: they check a condition and return whether the handler should fire.
-2. **Handlers** implement `handle(now_ms)`: they react when the service says "go".
-3. **Runner** ties it together: capture time → check all services → batch-fire all due handlers.
-
-Services are objects with `.check()` and `.handle()` methods, or plain handler callables that fire every tick or on a period: one shape per registration, never both.
+A **job** is anything registered with the runner: a timed job, a service, or a generator task.  A **tick** is one call to `runner.tick()`, which reads the clock once and runs every job that is due.  `tick()` hands that reading, **`now_ms`**, to every job it runs and returns it to the loop, so everything in one tick agrees on the time.  A job's **period** is how often it runs, given as `period_ms`.
 
 ## Getting started
 
+This CircuitPython program blinks an LED and checks a button, the way most board tutorials start:
+
 ```python
+import time
+
+import board
+import digitalio
+
+led = digitalio.DigitalInOut(board.LED)
+led.direction = digitalio.Direction.OUTPUT
+button = digitalio.DigitalInOut(board.BUTTON)   # or the pin your button is wired to
+button.pull = digitalio.Pull.UP                 # reads False while the button is held
+
+while True:
+    led.value = not led.value
+    time.sleep(0.5)
+    if not button.value:
+        print("pressed")
+```
+
+The board spends nearly all its time inside `time.sleep(0.5)`.  It looks at the button for an instant twice a second, so a tap that starts and ends during a sleep never reaches the program.  A shorter sleep speeds up the blink as well.  Each new job brings another sleep that holds up every other job.
+
+The runner version keeps the `while True:` loop and takes the sleeps out of the jobs:
+
+```python
+import board
+import digitalio
 from chumicro_runner import Runner
 
-class TemperatureSensor:
-    """Alert when temperature exceeds a threshold.
+led = digitalio.DigitalInOut(board.LED)
+led.direction = digitalio.Direction.OUTPUT
+button = digitalio.DigitalInOut(board.BUTTON)
+button.pull = digitalio.Pull.UP
+was_pressed = False
 
-    Args:
-        threshold: Temperature in °C that triggers an alert.
-    """
+def blink(now_ms):
+    led.value = not led.value
 
-    def __init__(self, threshold: float = 30.0) -> None:
-        self._threshold = threshold
-        self._last_reading = 0.0
+def watch_button(now_ms):
+    global was_pressed
+    pressed = not button.value
+    if pressed and not was_pressed:   # print once per press, not once per read
+        print("pressed")
+    was_pressed = pressed
 
-    def read_temperature(self) -> float:
-        """Read from hardware: fast I2C or ADC operation."""
-        # On a real board: return self._i2c_device.temperature
-        return self._last_reading
-
-    def check(self, now_ms: int) -> bool:
-        """Return True when the reading exceeds the threshold.
-
-        Args:
-            now_ms: Current tick timestamp (unused here).
-
-        Returns:
-            True if the last reading exceeds the threshold.
-        """
-        self._last_reading = self.read_temperature()
-        return self._last_reading > self._threshold
-
-    def handle(self, now_ms: int) -> None:
-        """Print an alert with the current reading.
-
-        Args:
-            now_ms: Current tick timestamp.
-        """
-        print(f"ALERT: {self._last_reading}°C exceeds {self._threshold}°C")
-
-sensor = TemperatureSensor(threshold=30.0)
 runner = Runner()
-runner.add(sensor, period_ms=5000)
+runner.add_periodic(blink, period_ms=500)         # every half second
+runner.add_periodic(watch_button, period_ms=20)   # fifty times a second
 
 while True:
+    now_ms = runner.tick()   # run every job that is due right now
+    runner.wait(now_ms)      # sleep until the next job is due
+```
+
+Each job is a function that does one quick step and returns, so no job holds up another.  `tick()` calls `blink` every 500 ms and `watch_button` every 20 ms.  Between those moments, `wait()` sleeps the board.  The button gets read every 20 ms whatever the LED is doing.
+
+Without `wait()`, the loop never sleeps.  It spins the CPU flat out to find nothing due, and on battery that spinning drains the power.  With `wait()`, the loop goes round only when a job is due.
+
+[`circuitpython_button_led.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner/examples/circuitpython_button_led.py) and [`micropython_button_led.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner/examples/micropython_button_led.py) are complete versions of this program.  [`periodic_blink.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner/examples/periodic_blink.py) runs the blink half on a computer.
+
+## Timed jobs
+
+`runner.add_periodic(function, period_ms=...)` calls a function every `period_ms` milliseconds.  The function takes one argument, `now_ms`, and returns quickly.  A slow function holds up every other job in the same tick.
+
+```python
+def log_status(now_ms):
+    print("still running")
+
+runner.add_periodic(log_status, period_ms=10_000)   # every 10 s
+```
+
+The first run comes one period after registration.
+
+```python
+# Wait 2 s, then run every 5 s.
+runner.add_periodic(read_sensor, period_ms=5000, start_after_ms=2000)
+
+# Run 3 times, 1 s apart, then remove the job.
+runner.add_periodic(calibrate, period_ms=1000, run_count=3)
+```
+
+### Changing a job while it runs
+
+`add_periodic` returns a `TaskHandle`.  The handle changes the job later from anywhere, inside another job included:
+
+```python
+log_job = runner.add_periodic(log_status, period_ms=10_000)
+
+log_job.set_period(1000)    # log every second instead
+log_job.remove()            # stop logging altogether
+```
+
+Inside a job, `log_job.set_period(1000, now_ms)` passes the tick's time as well, so the new period counts from this tick.  `log_job.period_ms`, `log_job.run_count`, and `log_job.active` report the job's current period, the runs it has left (`None` for unlimited), and whether it is still registered.  Assigning `period_ms` directly leaves the next run at its old time, so a period change goes through `set_period()`.  [`runtime_control.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner/examples/runtime_control.py) uses all three: a faster period, a removed job, and a job with `run_count=1`.
+
+### Keeping a steady rhythm
+
+By default, the runner schedules a job's next run one period after the tick that ran it.  Runs never come closer together than `period_ms`.  Lateness carries forward instead: when a slow job holds every tick up by 80 ms, a 1 s job settles near one run every 1.08 s.
+
+`preserve_phase=True` keeps a job on its original schedule.  It suits work where the long-run rate matters more than the gap, such as sampling, metering, or telemetry.  After a stall longer than one period, the runner skips the missed runs instead of firing them all at once.
+
+```python
+runner.add_periodic(sample_adc, period_ms=100, preserve_phase=True)   # holds 10 per second
+```
+
+A late run catches back up to the schedule, so two runs can land closer together than `period_ms`.  Anything that needs a minimum gap, such as a debounce or a rate limit, keeps the default.
+
+### Jobs with no period
+
+`runner.add(handler=function)` registers a function with no period.  It runs on every tick, which means every pass of the loop.  `wait()` wakes the loop only when a timed job is due, a service's deadline arrives, or a socket is ready.  A job with no period therefore runs exactly as often as something else wakes the loop.  With nothing else registered, `wait()` has nothing to wait for.  It returns at once, and the loop spins.
+
+[`basic_handler.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner/examples/basic_handler.py) counts its passes this way and shows the loop going round about once a second.  Anything that reads hardware, like a button or a sensor, needs its own `period_ms` so it runs on time.
+
+## Services
+
+A timed job runs on a schedule.  A service decides for itself whether it has work.  It is an object with two methods the runner calls:
+
+- `check(now_ms)` looks at the world and returns `True` when there is something to do.
+- `handle(now_ms)` does it.  The runner calls it only on the ticks where `check()` returned `True`.
+
+```python
+class TemperatureAlarm:
+    """Print a warning whenever the temperature is above limit_c."""
+
+    def __init__(self, sensor, limit_c):
+        self.sensor = sensor
+        self.limit_c = limit_c
+        self.reading = 0.0
+
+    def check(self, now_ms):
+        self.reading = self.sensor.temperature
+        return self.reading > self.limit_c
+
+    def handle(self, now_ms):
+        print("too hot:", self.reading)
+
+
+runner.add(TemperatureAlarm(sensor, limit_c=30), period_ms=5000)   # check every 5 s
+```
+
+`runner.add(service, period_ms=...)` calls `check()` once per period.  Without a period, it calls `check()` on every tick, with the same caveat as [jobs with no period](#jobs-with-no-period).  `add` also takes `start_after_ms`, `run_count` (counting runs of `handle()`), and `preserve_phase`.  It returns a `TaskHandle`.
+
+Every network library in ChuMicro is a service, so `runner.add(wifi)` or `runner.add(mqtt_client)` is all the wiring each one needs.  The socket-owning ones add members that let `wait()` watch their sockets ([Network services](#network-services)).
+
+### Order within a tick
+
+A tick works through the jobs twice, in registration order.  The first pass skips any job whose period has not come round and calls `check()` on each service that is due.  The second pass runs every due job, plus the `handle()` of each service whose `check()` said yes.  No `handle()` runs until every `check()` has, so every service decides on the same state of the world.
+
+## Generator tasks
+
+Some work is a sequence of steps with waits between them, such as connect, send, and wait for the reply.  Written as a service, a sequence turns into a state variable and a chain of `if`s.  A generator task writes the steps top to bottom instead, like a `time.sleep()` program:
+
+```python
+from chumicro_runner.generators import sleep_until
+from chumicro_timing import ticks_add, ticks_ms
+
+
+def pause(duration_ms):
+    yield from sleep_until(ticks_add(ticks_ms(), duration_ms))
+
+
+def heartbeat_blink():
+    while True:
+        led.value = True
+        yield from pause(200)
+        led.value = False
+        yield from pause(200)
+        led.value = True
+        yield from pause(200)
+        led.value = False
+        yield from pause(1400)
+
+
+runner.add_generator(heartbeat_blink())
+```
+
+A function with `yield` in it is a generator.  Calling `heartbeat_blink()` runs none of its body.  It builds an object the runner can step through.  Each `yield from pause(...)` hands the loop back to the runner, which runs the other jobs and resumes the task on the next line once the pause is over.  `yield from pause(200)` is this task's `time.sleep(0.2)`.  The other jobs keep running while it waits.
+
+`sleep_until(until_ms)` takes an absolute time on the `chumicro_timing` clock, which is why `pause()` adds the duration to `ticks_ms()`.  A bare `yield` gives the other jobs a turn.  The task then resumes on the next pass of the loop, whenever something else wakes it.
+
+`add_generator` runs the task up to its first pause before it returns, so an exception raised before that pause comes out of `add_generator` itself.  [`generator_basic.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner/examples/generator_basic.py) runs this pattern beside a timed job.
+
+### Task handles
+
+`add_generator` returns a `GeneratorHandle`.
+
+- `handle.done` turns `True` once the function returns, raises, or is cancelled.
+- `handle.error` holds the exception it raised, or `None`.
+- `handle.cancel()` stops it early.  Python raises `GeneratorExit` at the paused line, so any `finally` block in the function runs its cleanup.
+
+An exception that escapes the function ends that task.  The loop carries on, and the runner counts the exception like any other job's ([When a job raises](#when-a-job-raises)).
+
+Some tasks run once and finish, such as fetching settings at startup before the rest of the program begins.  A loop that waits on one checks `handle.done` right after `tick()`, before `wait()`.  A finished task re-arms no wake-up, so `wait()` would sleep until some other job is due.
+
+```python
+handle = runner.add_generator(fetch_settings())
+
+while True:                        # first: until fetch_settings() returns
+    now_ms = runner.tick()
+    if handle.done:
+        break
+    runner.wait(now_ms)
+
+if handle.error is not None:
+    print("could not fetch settings:", handle.error)
+
+while True:                        # then: the main loop, forever
     now_ms = runner.tick()
     runner.wait(now_ms)
 ```
 
-## Shared timestamps
+`runner.run_until(handle)` is the one-call form of that first loop.  It ticks and waits until the task finishes.  It re-raises `handle.error` when the task died, so the failure is loud.  It also accepts a zero-argument function and returns once that function returns something truthy.  `timeout_ms=` makes it return `False` when time runs out first, and `run_until(timeout_ms=500)` with no condition runs the loop for 500 ms.  The timeout is checked each time the loop wakes, so it lands late when nothing is due near it.  The examples write the loop out so it stays visible, and application code can call `run_until` in its place.
 
-`Runner.tick()` captures `ticks_ms()` once and passes the resulting timestamp to every service.  This ensures all services in the loop see the same moment in time, preventing drift between independent clock reads on slow microcontrollers.
+### Network I/O in a generator task
 
-The method returns `now_ms` so user code can use it alongside the service loop:
+`chumicro_sockets.generators` pauses a generator task on socket work: `connect` opens a connection, `send_all` waits for room to send, and `recv_until` waits for the reply.  The rest of the board keeps running during each pause.  The sockets guide's [Runner pattern](https://chumicro.com/ChuMicro/sockets/stable/guide/#runner-pattern) builds a round trip from them, and the requests guide's [generator fetch](https://chumicro.com/ChuMicro/requests/stable/guide/#writing-the-fetch-as-a-generator) builds an HTTP request on the same pauses.
+
+### Waiting for a callback
+
+Some services report events through a callback, such as a button's `on_press` in [`chumicro-buttons`](https://chumicro.com/ChuMicro/buttons/stable/guide/).  `Signal` and `wait_for` from `chumicro_timing.waits` pause a generator task until that callback fires:
 
 ```python
+from chumicro_timing.waits import Signal, wait_for
+
+pressed = Signal()
+button.on_press = pressed.set      # the button calls it with no arguments
+
+
+def wait_for_start():
+    print("press the button to start")
+    yield from wait_for(pressed)   # pause here until the button's callback runs
+    print("starting")
+
+
+runner.add(button, period_ms=20)
+runner.add_generator(wait_for_start())
+```
+
+`wait_for` returns the value passed to `set()`.  The task resumes on the next pass of the loop after `set()` runs.  `wait_for(signal, deadline_ms=...)` bounds the wait.  Past that absolute tick, it raises `OSError(ETIMEDOUT)` inside the task.  A signal stays set after `wait_for` returns, so `signal.clear()` re-arms it before the next wait.
+
+A signal suits a one-time event that a sequence waits for.  An event the program reacts to every time it happens fits a service or a plain callback better.  The wifi guide waits for the network this way in [State-change notifications](https://chumicro.com/ChuMicro/wifi/stable/guide/#state-change-notifications).
+
+### Choosing between a service and a generator task
+
+| Use a service (`runner.add`) when... | Use a generator task (`runner.add_generator`) when... |
+|---|---|
+| The work is a reaction: a condition comes true and you respond | The work is a sequence: connect, send, receive, close |
+| The state fits in a flag or two | The state would be a long chain of steps |
+| You want `set_period()` and `run_count` to control it | You want the steps to read top to bottom |
+
+A timed job or a service is the place to start.  A generator task earns its place once a service grows into a state machine.  The two mix freely in one runner.
+
+### Why generators and not `async` / `await`?
+
+The runner steps plain generators.  No ChuMicro library uses `async`, `await`, or `asyncio`.
+
+1. **Every pause is real.**  `yield from` needs a generator, so ordinary helpers stay ordinary functions.  Every `yield from` in a task is a place where the other jobs run.  An `async def` helper can be awaited without ever pausing, and the code then looks as if it shares time while it holds the loop.
+2. **Every pause is visible.**  A `yield` hands control to the runner in one step, and a breakpoint can sit on it.  A traceback names the line a task was paused at.
+3. **Less garbage on CircuitPython.**  CircuitPython compiles each `await` into a method call that builds a new object every time the line runs.  `yield from` compiles to one bytecode on both device runtimes.
+4. **One loop.**  Generator code has no event loop of its own to start, so nothing fights the runner for the `while True:`.
+
+## Using `now_ms` in your own loop
+
+`tick()` returns `now_ms`, so code in the loop body can use the same time the jobs saw:
+
+```python
+from chumicro_runner import Runner
 from chumicro_timing import Rate, ticks_ms
 
-rate = Rate(500, ticks_ms())
 
-while True:
-    now = runner.tick()
-    if rate.due(now):
-        do_something()
-    runner.wait(now)
-```
+def heartbeat(now_ms):
+    print("tick")
 
-## Idling between ticks
 
-`Runner.wait(now_ms)` is the loop's idle path and the runner's one sanctioned blocking point.  Call it right after `tick()`:
+runner = Runner()
+runner.add_periodic(heartbeat, period_ms=1000)
+status = Rate(5000, ticks_ms())
 
-```python
 while True:
     now_ms = runner.tick()
+    if status.due(now_ms):
+        print("still running")
     runner.wait(now_ms)
 ```
 
-Each call to `wait`:
+`wait()` knows only the jobs registered with the runner.  It can sleep straight past the `Rate`, and the `if` then runs late, by up to the longest gap between registered jobs.  Here that gap is the one second between `heartbeat` runs.  Work that has to run on time belongs in `add_periodic`, where `wait()` can see it.
 
-1. **Syncs the poll set** from each service's optional `io_socket` and `io_interest(now_ms)` bitmask (register newly wanted sockets, modify changed interest, unregister sockets that have gone away).  Idempotent: a no-change loop touches the poller zero times.
-2. **Computes the timeout** as the minimum across every entry's `next_due_ms` and every service's optional `next_deadline(now_ms)`, minus `now_ms`.
-3. **Blocks** in `ipoll(timeout_ms)` over the registered sockets when any are registered; otherwise sleeps the timeout via `time.sleep_ms`.  Returns immediately when the nearest deadline has already passed or no deadline applies.
+## How `wait()` decides how long to sleep
 
-Errors on a registered socket (`POLLERR` / `POLLHUP`) are routed to the owning service's optional `io_error(now_ms, eventmask)` hook so the service can transition cleanly to a failure state.  `POLLIN` / `POLLOUT` are wake signals only: `check` and `next_deadline` decide what runs on the next `tick`.
+`runner.wait(now_ms)` is the only call in the loop that blocks.
 
-Not sure which wait primitive a given job wants?  The timing guide's [Choosing a wait](https://chumicro.com/ChuMicro/timing/stable/guide/#choosing-a-wait) table maps each question to its primitive across `chumicro_timing`, `chumicro_sockets`, and this service contract.
+1. **It updates the list of sockets to watch.**  Each network service reports which socket it is waiting on and whether it wants to read or write.  When nothing has changed, this step touches nothing.
+2. **It works out how long it may sleep**: until the earliest job is due, or the earliest `next_deadline(now_ms)` a service reports, whichever comes first.
+3. **It sleeps.**  With sockets to watch, it sleeps in `select.poll().ipoll()` and wakes early when one is ready.  When no job has a time, it waits on the sockets alone.  With no sockets, it sleeps in `time.sleep_ms()`.  It returns at once when a job is already due, or when it has neither a socket nor a job time to wait for.
 
-### Writing a service that participates in `wait`
+A ready socket only wakes the loop.  The next `tick()` still asks each service's `check()` whether to run `handle()`.  A socket that reports `POLLERR`, or `POLLHUP` with nothing left to read, also goes to its service's `io_error(now_ms, eventmask)`.  A hang-up that arrives with `POLLIN` comes from a peer that sent its last bytes and closed.  The service reads those bytes, then the end of the stream, on its next turn.
 
-A socket-owning service exposes the duck-typed attributes the runner reads each loop.  All are optional: services without them work the same way they always did; the runner just won't wake for their I/O:
+The timing guide's [Choosing a wait](https://chumicro.com/ChuMicro/timing/stable/guide/#choosing-a-wait) table maps each kind of waiting to the helper that does it, across `chumicro_timing`, `chumicro_sockets`, and the runner.
 
-| Attribute | Type | Purpose |
+### Network services
+
+A service that owns a socket adds these optional members so `wait()` can sleep until that socket is ready.  A service without them still works.  `wait()` then never wakes early for it.
+
+| Member | What it returns | Purpose |
 |---|---|---|
-| `io_socket` | socket-ish object or `None` | The socket whose readiness should wake the loop.  Either the pollable itself or an adapter wrapper exposing it on `.sock`; the runner unwraps `.sock` at registration, so producers never need to. |
-| `io_interest(now_ms)` | `int` | A bitmask OR-ing `IO_READ` (register `POLLIN`) and/or `IO_WRITE` (register `POLLOUT`); `0` registers nothing.  Import the bits from `chumicro_runner`. |
-| `next_deadline(now_ms)` | `int` or `None` | The next tick the service must run even if no I/O arrives (timeouts, keepalives) |
-| `io_error(now_ms, eventmask)` | callable | Notified when the registered socket reports `POLLERR` or `POLLHUP` |
+| `io_socket` | a socket, or `None` | The socket whose readiness should wake the loop.  The runner also accepts an object that keeps the real socket on `.sock` |
+| `io_interest(now_ms)` | `int` | `IO_READ` to wake when the socket has data, `IO_WRITE` to wake when it can send, both OR-ed together, or `0` for neither.  Import the bits from `chumicro_runner` |
+| `next_deadline(now_ms)` | `int` or `None` | The tick by which the service must run even if no data arrives, such as a timeout or a keepalive |
+| `io_error(now_ms, eventmask)` | nothing | Called when the socket reports `POLLERR`, or `POLLHUP` without `POLLIN` |
 
-The runner re-reads these every `wait()`, so a service can flip its interest between read and write (or set `io_socket = None`) between ticks and the poll set follows on the next call.  The single `io_interest` call replaces the earlier paired `io_wants_read` / `io_wants_write` booleans; the runner caches the bound method once at `add`, so the sync stays allocation-free.
-
-A minimal sketch:
+The runner reads these on every `wait()`.  A service can switch between reading and writing, or set `io_socket = None`, between ticks, and the watch list follows on the next call.
 
 ```python
 from chumicro_runner import IO_READ, IO_WRITE
 
 
 class EchoClient:
-    """Read bytes from a connected socket, echo them back."""
+    """Read bytes from a connected socket and send them back."""
 
-    def __init__(self, sock) -> None:
+    def __init__(self, sock):
         self.io_socket = sock
-        self._want = IO_READ
-        self._outbox = bytearray()
+        self.wanted = IO_READ
 
-    def io_interest(self, now_ms: int) -> int:
-        return self._want
+    def io_interest(self, now_ms):
+        return self.wanted
 
-    def check(self, now_ms: int) -> bool:
-        return self._want != 0
+    def check(self, now_ms):
+        return self.wanted != 0
 
-    def handle(self, now_ms: int) -> None:
-        # Drain whatever is ready; flip interest based on what's left
-        # (self._want = IO_WRITE when there are bytes to send, etc.).
+    def handle(self, now_ms):
+        # Read what is ready, then set self.wanted = IO_WRITE while
+        # there are bytes waiting to go back out.
         ...
 
-    def io_error(self, now_ms: int, eventmask: int) -> None:
-        self.io_socket = None  # drops out of the poll set on next wait()
+    def io_error(self, now_ms, eventmask):
+        self.io_socket = None   # stop watching it from the next wait()
 ```
 
-Every networked library in ChuMicro (`wifi`, `sockets`, `requests`, `http_server`, `mqtt`, `websockets`) implements this protocol, which is why their handlers share fairly with the rest of your loop.
+`chumicro-sockets`, `chumicro-requests`, `chumicro-http-server`, `chumicro-mqtt`, and `chumicro-websockets` implement `io_socket` and `io_interest`, so each one sits idle in `wait()` until its socket is ready.
 
-### Injecting a poller for tests
+### The service contract
 
-`Runner(poller=...)` accepts any object exposing `register(obj, eventmask)` / `modify(obj, eventmask)` / `unregister(obj)` / `ipoll(timeout_ms)`.  The default poller is built lazily on the first `wait()` that has a socket to register, so applications that never register an `io_socket` never pay for it.
-
-`chumicro_runner.testing.FakePoller` is the test stand-in; see [Testing tasks](#testing-tasks).
-
-## The service contract
-
-A service is any object you hand to `runner.add(service)`.  The runner reads six members off it: two are required, the rest optional, each optional member carrying a coherence rule the dispatch relies on.
+The runner reads these members from an object passed to `runner.add(service)`:
 
 | Member | Required | When the runner reads it | For |
 |---|---|---|---|
-| `check(now_ms) -> bool` | yes | each `tick`, subject to any period gate | deciding whether `handle` runs this tick |
-| `handle(now_ms)` | yes | each `tick`, when `check` returned `True` | one tick of work |
-| `io_socket` | no | each `wait`, as an attribute (the socket, or `None`) | the socket to poll |
-| `io_interest(now_ms) -> int` | no | each `wait` | OR-ing `IO_READ` / `IO_WRITE` into the poll set for `io_socket` |
-| `next_deadline(now_ms) -> int \| None` | no | each `wait` | bounding the idle timeout so the service still runs on time with no I/O |
-| `io_error(now_ms, eventmask)` | no | on `wait`, when `io_socket` reports `POLLERR` / `POLLHUP` | transitioning cleanly to a failure state |
+| `check(now_ms) -> bool` | yes | each `tick`, once the period has come round | deciding whether `handle` runs this tick |
+| `handle(now_ms)` | yes | each `tick` where `check` returned `True` | one step of work |
+| `io_socket` | no | each `wait` | the socket to watch, or `None` |
+| `io_interest(now_ms) -> int` | no | each `wait` | `IO_READ` / `IO_WRITE` interest in `io_socket` |
+| `next_deadline(now_ms) -> int \| None` | no | each `wait` | the latest time the service must run, data or not |
+| `io_error(now_ms, eventmask)` | no | on `wait`, when `io_socket` reports `POLLERR`, or `POLLHUP` without `POLLIN` | moving to a failure state |
 
-The coherence rules.  Only the first raises on its own (`Runner.add` reads both attributes at registration); the dispatch silently depends on the other two, where a violation no-ops rather than raising, which is what `validate_service` below exists to catch:
+`check` and `handle` are both required.  `runner.add` fails at once without them.
 
-- **`check` and `handle` are both required.**  `Runner.add` reads both off the object at registration, so a service missing either cannot register.
-- **`io_socket` and `io_interest` come as a pair.**  The poll sync reaches the socket through `io_interest`; one member without the other never reaches the poller.
-- **`io_error` requires `io_socket`.**  It is dispatched only when that socket reports a poll error.
+`io_socket` and `io_interest` come as a pair, since the runner reaches the socket through `io_interest`.  `io_error` needs an `io_socket` to report on.  A service that breaks either rule registers without error, and the runner never watches its socket.
 
-`chumicro_runner.testing.validate_service(service)` checks exactly these rules and raises `ValueError` naming the offending member.  It validates shape, never behavior, so drop it into your project's test suite to catch a malformed service before it reaches a live runner:
+`chumicro_runner.testing.validate_service(service)` checks all of these rules without calling any member.  It raises `ValueError` naming the member at fault:
 
 ```python
 from chumicro_runner.testing import validate_service
@@ -200,122 +374,29 @@ def test_my_service_is_a_valid_runner_service():
     validate_service(MySensorService(...))
 ```
 
-Work runs on the runner in two shapes: services, the contract above, and generators registered with `runner.add_generator`.  This section is the service side; the generator side is its own surface with its own helpers, and there is no third shape.
+### Choosing the poller
 
-## Registration patterns
+`Runner(poller=...)` accepts any object with `register(obj, eventmask)`, `modify(obj, eventmask)`, `unregister(obj)`, and `ipoll(timeout_ms)`.  The default wraps `select.poll()`.  The runner builds it on the first `wait()` that has a socket to watch, so a program with no network services never creates one.  Tests pass `FakePoller` from `chumicro_runner.testing` ([Testing your jobs](#testing-your-jobs)).
 
-### Object-based
+## What a generator task yields
 
-Pass an object with `.check(now_ms) -> bool` and `.handle(now_ms)`:
-
-```python
-class MotionDetector:
-    """Gate-based motion detector using a PIR sensor."""
-
-    def __init__(self) -> None:
-        # On a real board: self._pin = digitalio.DigitalInOut(board.D5)
-        pass
-
-    def detect_motion(self) -> bool:
-        """Read PIR sensor pin: fast digital read."""
-        # On a real board: return self._pin.value
-        return False
-
-    def check(self, now_ms: int) -> bool:
-        """Return True when motion is detected.
-
-        Args:
-            now_ms: Current tick timestamp.
-
-        Returns:
-            True if the PIR sensor reads high.
-        """
-        return self.detect_motion()
-
-    def handle(self, now_ms: int) -> None:
-        """React to detected motion.
-
-        Args:
-            now_ms: Current tick timestamp.
-        """
-        print("Motion!")
-
-runner.add(MotionDetector())
-```
-
-### Handler-only
-
-Pass just a handler with no check; it fires every tick (or per period):
-
-```python
-runner.add(handler=lambda now_ms: scan_buttons(now_ms))
-```
-
-### Periodic
-
-No check needed.  The handler fires on a schedule:
-
-```python
-runner.add_periodic(
-    lambda now_ms: print("blink!"),
-    period_ms=500,
-)
-```
-
-### Generator-driven
-
-Write the I/O as a generator function and register it with `runner.add_generator(gen)`.  Each `yield from connect(...)` / `send_all(...)` / `recv_until(...)` hands control back to the runner between steps, so the body reads top-to-bottom while other services keep ticking.  Import the helpers explicitly from `chumicro_sockets.generators`; plain-runner consumers pay nothing.
-
-```python
-from chumicro_runner import Runner
-from chumicro_sockets.generators import connect, recv_until, send_all
-from chumicro_sockets import connector
-
-
-def echo_run(host, port, radio):
-    sock = yield from connect(connector(host, port, radio=radio))
-    try:
-        yield from send_all(sock, b"hello\n")
-        reply = yield from recv_until(sock, b"\n", max_bytes=4096)
-        print(f"got {reply!r}")
-    finally:
-        sock.close()
-
-
-runner = Runner()
-handle = runner.add_generator(echo_run("echo.example", 7, radio=wifi_radio))
-
-while True:
-    now_ms = runner.tick()
-    if handle.done:
-        break            # check before wait(): a finished task re-arms nothing
-    runner.wait(now_ms)
-
-if handle.error is not None:
-    raise handle.error   # the generator died; say so instead of exiting clean
-```
-
-That is the same `while True` loop as everywhere else, with a finish line in it.  Check `handle.done` *before* `wait()`: once the task is finished nothing re-arms a deadline, so `wait()` would idle on a socket with no event coming.
-
-`runner.run_until(handle)` is the one-call form of that loop.  It drives tick/wait until the generator finishes and re-raises `handle.error` for you.  Pass a callable instead for arbitrary conditions, or just `timeout_ms=` to run for a fixed window (a QoS-ack drain, a settling period).
-
-Each `yield from` is a scheduler checkpoint; between yields, other services registered on the same runner get their turn.  A bare `yield` suspends for exactly one tick.  `handle.done` flips True the moment the generator returns, dies, or is cancelled; `handle.error` holds the exception when the body raised (`None` otherwise), so a `while not handle.done` loop can report *why* a task ended: check it after the loop, or wire `Runner(on_handler_error=...)` for a loud callback at the moment of death.  `handle.cancel()` raises `GeneratorExit` inside the body so any `finally` block runs the cleanup.
-
-#### What a generator yields, and driving one without the runner
-
-A suspended generator yields a **wait**: a small object describing why it stopped.  Waits are duck-typed and every hook is optional:
+Every `yield` inside a pause helper hands the runner a **wait**, a small object that describes what the task is waiting for.  A wait carries any of these hooks, all optional:
 
 | Hook | Meaning | Who reads it |
 |---|---|---|
-| `ready(now_ms) -> bool` | The wait judges its own condition, with no clock involved | any driver |
-| `next_deadline(now_ms)` | Resume once this tick lands | any driver, and `Runner.wait()` to bound its idle timeout |
+| `ready(now_ms) -> bool` | Return `True` once the thing being waited for has happened, without looking at the clock | any driver |
+| `next_deadline(now_ms)` | Resume once the clock reaches this tick | any driver, and `Runner.wait()` to bound its sleep |
 | `io_socket` + `io_interest(now_ms)` | Resume when this socket is readable or writable | `Runner.wait()`, to sleep on `ipoll` |
 
-No wait compares times itself, and that is deliberate: the deadline is published, and whoever drives the generator compares it with the clock it was built on.  A wait that reached for its own clock would measure a `Runner(ticks=...)` sleep in the wrong units.  So the gate is three cases, in order: honour `ready` when it answers `True`, resume once `next_deadline` lands, otherwise resume on any pass.
+A wait never compares times itself.  It publishes its deadline and leaves the comparison to whatever drives the task, which uses its own clock.  A `Runner(ticks=...)` built on a different clock therefore measures every pause in its own units.  A driver resumes a task on the first of these cases that holds:
 
-Socket waits carry no `ready` and no deadline, so they fall to that last case.  Their helpers retry the syscall and re-suspend on `EAGAIN`, which makes an early resume cost a wasted pass and nothing else.
+1. The wait's `ready(now_ms)` answers `True`.
+2. The wait has a deadline, and the deadline has passed.
+3. The wait has neither `ready` nor a deadline.
 
-That gate is the whole cost of lifting `chumicro_sockets.generators` into a project with no runner:
+Socket waits carry neither `ready` nor a deadline, so they take the last case.  Their helpers retry the socket call and pause again when it would block, so resuming early costs one wasted pass.
+
+A loop without a `Runner` drives `chumicro_sockets.generators` with those three cases:
 
 ```python
 def should_resume(wait, now_ms, ticks):
@@ -329,7 +410,7 @@ def should_resume(wait, now_ms, ticks):
     return ready is None
 
 
-wait = generator.send(None)                 # prime it to the first suspension
+wait = generator.send(None)                 # run the task up to its first pause
 while True:
     now_ms = ticks.ticks_ms()
     if should_resume(wait, now_ms, ticks):
@@ -339,219 +420,79 @@ while True:
             break
 ```
 
-This spins where `Runner.wait()` would sleep, which costs battery on a device, and it produces identical results.  `tests/test_socket_generators.py` runs a full connect, send, and receive through exactly this loop, and a `sleep_until` through its deadline branch.
+This loop never sleeps, so on a board it spins and costs battery where `Runner.wait()` would idle.  The task behaves the same under either driver.  The library's own tests run a full connect, send, and receive through this loop.
 
-#### Waiting on a callback-completed event
+## When a job raises
 
-`Signal` + `wait_for` (in `chumicro_timing.waits`) suspend a generator until a callback-style service reports a one-time completion, which removes the state-change-callback-plus-module-flag preamble from sequential flows.  Hand `signal.set` (or a small wrapper) to the service as its callback, then `yield from`:
-
-```python
-from chumicro_timing.waits import Signal, wait_for
-
-link_up = Signal()
-wifi.on_state_change(lambda old, new: link_up.set(new))
-
-
-def main_run(wifi):
-    yield from wait_for(link_up)          # suspend until wifi's callback fires
-    sock = yield from connect(connector(HOST, PORT, radio=wifi.adapter.radio))
-    ...
-```
-
-`wait_for(signal, deadline_ms=...)` bounds the wait: past the absolute-ticks deadline it raises `OSError(ETIMEDOUT)` inside the generator body, where a `try / except OSError` can route to a retry or a clean shutdown.  Reuse one signal across sequential waits by calling `signal.clear()` between them.  Scope discipline: this is for one-time completions a sequential flow genuinely blocks on; reactive fan-out and fire-and-forget acks stay callbacks.
-
-#### Choosing between `add` and `add_generator`
-
-| Use `runner.add(service)` when... | Use `runner.add_generator(gen)` when... |
-|---|---|
-| The work is reactive: a condition fires, you respond | The work is a one-shot sequence: connect, send, recv, close |
-| The state machine is small and stable (one state, or a handful of binary flags) | The state machine is long and linear: multiple I/O steps in order |
-| Multiple instances run side by side and share resources cooperatively | A single attempt drives one connection to completion |
-| You want to expose `set_period()` / `run_count` for runtime control | You want PEP 380 `return value` for the helper's terminal result |
-
-Default to `check` / `handle` for reactive work; reach for `add_generator` when the work is naturally sequential I/O.  "Everything is a generator" is the drift to avoid: reactive services read more clearly in the gated shape, and two service models coexisting is genuinely lower overhead than forcing all work into one or the other.
-
-#### What the runner does NOT use
-
-The runner deliberately does not use `async` / `await` or the `asyncio` module.  Generators were picked over async syntax for four reasons in declining order of weight:
-
-1. **Yield-point hygiene.**  `yield from helper()` raises `TypeError` if `helper` isn't a generator, so the syntax enforces that every yield-point is a deliberate scheduler checkpoint.  `await helper()` against a regular function silently produces a *coroutine-without-await*, and the asyncio community already has a class of linters chasing that footgun.
-2. **Transparency.**  A `yield` is one bytecode that hands control to the scheduler: single-steppable, breakpoint-able, visible in a traceback.  `await` hides the same handoff behind compile-time machinery that differs per runtime.
-3. **Allocation budget on CircuitPython.**  CircuitPython compiles `await x` to `load_method __await__; call; YIELD_FROM`; every `await` allocates a fresh generator from the `__await__()` call.  `yield from x` is one bytecode on every runtime.
-4. **Smaller lint surface.**  A user who has never seen `async def` cannot reach for `import asyncio`.
-
-`async def` / `await` / `async with` / `async for` and `import asyncio` / `import uasyncio` are banned across every ChuMicro package, device-side and host-side alike.
-
-## Period-gated services
-
-Pass `period_ms` to `add()` and the runner will only check the service when the period elapses.  Services without a period are checked every tick.
+An exception inside a job or a generator task leaves the loop running.  The runner catches it, adds one to `runner.handler_errors`, keeps it in `runner.last_handler_error`, and runs the remaining jobs as usual.  The runner prints nothing, so a job that fails every time fails silently until an `on_handler_error` callback reports it:
 
 ```python
-runner = Runner()
+def report_error(task, error):
+    print("job failed:", repr(error))
 
-# Sensor is only checked every 5 seconds.
-handle = runner.add(sensor, period_ms=5000)
-
-# Button scanner runs every tick.
-runner.add(button_scanner)
+runner = Runner(on_handler_error=report_error)
 ```
 
-You can change or remove the period at runtime via the `TaskHandle`:
+The callback receives the failing job's `TaskHandle` and the exception, so it can also call `task.remove()` to stop a job that keeps failing.  The runner catches and counts an exception raised inside the callback the same way.  `KeyboardInterrupt` and `SystemExit` pass through, so Ctrl+C still stops the program.
 
-```python
-# Speed up.
-handle.set_period(1000)
-
-# Remove the period; service runs every tick again.
-handle.set_period(None)
-
-# Remove the service entirely.
-handle.remove()
-```
-
-### Delayed start
-
-Pass `start_after_ms` to delay the first check.  Subsequent checks use `period_ms`:
-
-```python
-# Wait 2 seconds, then check every 5 seconds.
-runner.add(sensor, period_ms=5000, start_after_ms=2000)
-```
-
-### Limited runs
-
-Pass `run_count` to auto-remove a task after a set number of handler fires:
-
-```python
-# Fire exactly 3 times, then stop.
-runner.add_periodic(calibrate, period_ms=1000, run_count=3)
-```
-
-### Phase anchoring
-
-By default a fired periodic reschedules from the tick that fired it, so fires are always at least `period_ms` apart, but each fire inherits the tick's lateness, and the drift compounds.  A 1 Hz publish whose handler takes 80 ms settles near 1.08 s per cycle.
-
-Pass `preserve_phase=True` for sampling, metering, or telemetry tasks that must hold their long-run cadence.  The next deadline then advances from the previous deadline in whole periods: fires stay aligned to the original schedule, and a stall longer than one period skips the missed fires instead of bursting to catch up.
-
-```python
-# Holds 10 Hz cadence even when handlers run long.
-runner.add_periodic(sample_adc, period_ms=100, preserve_phase=True)
-```
-
-One caveat: a phase-preserving fire that runs late catches back up to its schedule, so two fires can land closer together than `period_ms`.  Code that needs a guaranteed minimum gap (throttles, debounce) should keep the default.
-
-## Multiple services
-
-The pattern scales to many services with no extra boilerplate:
-
-```python
-runner = Runner()
-runner.add(motion_detector)
-runner.add(temperature_sensor, period_ms=5000)
-runner.add_periodic(toggle_led, period_ms=500)
-runner.add_periodic(log_status, period_ms=10000)
-
-while True:
-    now_ms = runner.tick()
-    runner.wait(now_ms)
-```
-
-## Batch firing
-
-All services are checked first, then all due handlers fire in sequence.  This guarantees that handlers see a consistent view of the world: no handler modifies state while other services are still being checked.
-
-```
-tick():
-  1. Capture ticks_ms() → now_ms
-  2. For each entry:
-     - Period gate: skip if not due
-     - Check gate: skip if check(now_ms) returns False
-     - Queue handler
-  3. Fire all queued handlers with now_ms
-```
+A job that calls `runner.tick()` itself raises `ReentrantTickError`.  The runner lets that exception through, because it marks a bug in the program rather than a fault in one job.
 
 ## Memory notes
 
-- Handlers are collected into a reused scratch list that keeps its high-water capacity across ticks, so batch-firing allocates nothing once the list has grown to the working set.
-- No `collections.deque` or ring buffers are required.
+- The runner keeps one small `TaskHandle` per job.  A generator task adds the generator and a `GeneratorHandle`.
+- `tick()` collects due jobs into a list it reuses from tick to tick, and `wait()` reuses its watch list, so once the loop is running neither allocates.
+- `chumicro_runner.generators` and the generator machinery load only when a program first calls `add_generator` or imports them.
 
-## Testing tasks
+## Testing your jobs
 
-The `chumicro_runner.testing` module provides three host-test helpers:
+`chumicro_runner.testing` holds helpers for tests that run on a computer:
 
-- `CallRecorder`: a callable that records handler invocations for assertion in host-side tests.
-- `validate_service`: checks a service object against the coherence rules in [The service contract](#the-service-contract) and raises `ValueError` naming the offending member.
-- `FakePoller`: a stand-in for `select.poll().ipoll` so unit tests can drive `Runner.wait()` without real file descriptors (CPython's `select.poll` needs real fds that in-memory fake sockets do not have).  Records every `register` / `modify` / `unregister` / `ipoll` call so tests can assert on what the runner did with the poll set; `set_ready(obj, eventmask)` queues a ready pair for the next `ipoll` return.
+- `CallRecorder`: a function registered as a job that records the `now_ms` of each call.
+- `validate_service`: checks a service against the rules in [The service contract](#the-service-contract).
+- `FakePoller`: a stand-in for `select.poll()`, so tests can drive `wait()` with no real sockets.  It records every call the runner makes, and `set_ready(obj, eventmask)` queues a ready socket for the next `ipoll()`.
 
-### `CallRecorder`
+`FakeTicks` from `chumicro_timing.testing` pairs with them.  It is a clock that moves only when the test calls `advance()`:
 
 ```python
+from chumicro_runner import Runner
 from chumicro_runner.testing import CallRecorder
 from chumicro_timing.testing import FakeTicks
 
-fake = FakeTicks()
+clock = FakeTicks()
 recorder = CallRecorder()
-runner = Runner(ticks=fake)
+runner = Runner(ticks=clock)
 runner.add_periodic(recorder, period_ms=100)
 
 runner.tick()
-assert len(recorder) == 0  # not due yet
+assert len(recorder) == 0     # not due yet
 
-fake.advance(100)
+clock.advance(100)
 runner.tick()
 assert recorder.calls == [100]
 ```
 
-### `FakePoller`
-
-```python
-import select
-from chumicro_runner import IO_READ, Runner
-from chumicro_runner.testing import FakePoller
-from chumicro_timing.testing import FakeTicks
-
-poller = FakePoller()
-runner = Runner(ticks=FakeTicks(), poller=poller)
-
-class _Service:
-    def __init__(self, sock):
-        self.io_socket = sock
-    def io_interest(self, now_ms): return IO_READ
-    def check(self, now_ms): return False
-    def handle(self, now_ms): pass
-
-sock = object()
-runner.add(_Service(sock), period_ms=100)
-runner.wait(0)
-
-assert (sock, select.POLLIN) in poller.register_calls
-assert poller.ipoll_calls == [100]
-```
-
-See the [testing helpers](testing.md) page for detailed usage.
+On a runner built with `FakeTicks`, a `wait()` with no sockets to watch moves the fake clock forward by the time it would have slept.  A test can then step through minutes of schedule without sleeping.  The [testing helpers](testing.md) page shows all three helpers, `FakePoller` included.
 
 ## Platform notes
 
-All classes use only basic Python features and work identically on CPython, MicroPython, and CircuitPython.  No `abc`, `typing`, or `asyncio` dependencies.
+The runner is plain Python and runs unchanged on CPython, MicroPython, and CircuitPython.  Two calls inside `wait()` differ by runtime.  On the boards, it sleeps in `select.poll().ipoll()` and `time.sleep_ms()`.  CPython has neither, so it uses `poll()` and `time.sleep()` in their place.
 
 ## Examples
 
-The [examples](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner/examples) directory contains complete runnable scripts:
+Every program in the [examples](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner/examples) directory ends in a `while True:` loop that runs until stopped.  The examples without a runtime prefix print to the console and run on a computer as well as a board.  The `circuitpython_*` and `micropython_*` examples drive real pins and list their wiring at the top.
 
 | Example | What it shows |
 |---|---|
-| `basic_handler.py` | Simplest handler-only registration |
-| `periodic_blink.py` | Periodic handler with `add_periodic()` |
-| `sensor_threshold.py` | Object-based check/handle with simulated sensor |
-| `multi_service.py` | Multiple services in one runner |
-| `runtime_control.py` | `TaskHandle` for dynamic period changes and removal |
-| `generator_basic.py` | Generator-driven service using `sleep_until` (no hardware) |
-| `circuitpython_blink.py` | LED blink on CircuitPython hardware |
-| `micropython_blink.py` | LED blink on MicroPython hardware |
-| `circuitpython_button_led.py` | Button + LED gate pattern on CircuitPython |
-| `micropython_button_led.py` | Button + LED gate pattern on MicroPython |
-
-Simulated examples run on CPython.  Hardware examples (`circuitpython_*` / `micropython_*`) require a real board; see the setup notes in each file.
+| `periodic_blink.py` | One timed job: a pretend LED that prints on and off every 500 ms |
+| `circuitpython_blink.py` | The same blink on a real LED, CircuitPython |
+| `micropython_blink.py` | The same blink on a real LED, MicroPython |
+| `basic_handler.py` | Plain functions on two timers, plus one that runs on every pass of the loop |
+| `sensor_threshold.py` | A service: `check()` reads a pretend sensor, `handle()` prints an alert |
+| `circuitpython_button_led.py` | A service that toggles the LED on each button press, CircuitPython |
+| `micropython_button_led.py` | A service that toggles the LED on each button press, MicroPython |
+| `multi_service.py` | Two services and two timed jobs sharing one loop at different rates |
+| `runtime_control.py` | Changing jobs while they run: `set_period()`, `remove()`, and `run_count` |
+| `generator_basic.py` | A generator task that blinks a pattern with pauses while another job keeps time |
 
 ---
 

@@ -1,109 +1,92 @@
-# requires: hardware
-"""Store and retrieve device settings in non-volatile memory (NVM).
+"""Save settings in NVM so they survive a reset, then show they are still there.
 
-CircuitPython provides ``microcontroller.nvm``, a small byte array
-(typically 256–8192 bytes depending on the board) that persists across
-reboots and power cycles.  It behaves like a ``bytearray``: you read
-and write individual bytes or slices.
+When the board starts, it loads a small settings dict from
+``microcontroller.nvm``, turns the brightness setting up by 10, and saves
+the dict back.  After that it reads NVM every five seconds and prints what
+it finds.  Press reset and the board loads the brightness it saved last
+time, which shows the setting survived.
 
-This example uses ``packb`` to convert a Python dict into compact
-msgpack bytes, writes those bytes into NVM with a 2-byte length
-header, and reads them back with ``unpackb``.  The length header is
-needed because NVM is a fixed-size buffer.  Without it, you would not
-know where the meaningful data ends and the unused bytes begin.
+``microcontroller.nvm`` is a few kilobytes of memory that keeps its contents
+through a reset or a power cycle.  It works like a ``bytearray`` of fixed
+size, so the example stores a two-byte length in front of the data to know
+where the data ends::
 
-**NVM layout used by this example:**
+    bytes 0-1   how many bytes of msgpack data follow (high byte first)
+    bytes 2...  the settings dict, packed by ``packb``
 
-.. code-block:: text
-
-    Byte 0      Byte 1      Byte 2 ...  Byte N+1
-    ┌──────────┬──────────┬───────────────────────┐
-    │ len high │ len low  │  msgpack payload ...   │
-    └──────────┴──────────┴───────────────────────┘
-
-    len = (byte_0 << 8) | byte_1   (big-endian 16-bit unsigned integer)
-
-Runs on CircuitPython.
+Every save erases a block of flash, and flash wears out after a limited
+number of erases.  That is why the board saves once each time it starts and
+only reads after that: save a setting when it changes, never on a fast timer.
 
 Setup:
 
-1. Install the library::
+1. Install the library with ``circup install chumicro_msgpack``, or copy
+   ``chumicro_msgpack/`` to the ``lib/`` folder on your board.
+2. No wiring needed.
+3. Save this file as ``code.py`` on the CIRCUITPY drive.
 
-       circup install chumicro_msgpack
+Example output after a few resets::
 
-   Or copy ``chumicro_msgpack/`` to the ``lib/`` folder on your board.
+    Loaded from NVM: {'name': 'lamp', 'brightness': 30}
+    Saved brightness 40.  Press reset and the board loads 40.
+    NVM holds: {'name': 'lamp', 'brightness': 40}
+    NVM holds: {'name': 'lamp', 'brightness': 40}
 
-2. No extra wiring required.
-
-3. Save as ``code.py`` on the CIRCUITPY drive.
+Runs on CircuitPython.
 """
 
-#: CircuitPython-only.  Uses ``microcontroller.nvm``, a CP-specific
-#: API with no MicroPython equivalent.  The marker tells
-#: ``deploy-example`` to refuse this file on MP boards instead of
-#: silently AttributeError'ing at import.
+# CircuitPython only: microcontroller.nvm has no MicroPython equivalent.
 __chumicro_runtimes__ = ("circuitpython",)
+
+import time
 
 import microcontroller
 from chumicro_msgpack import packb, unpackb
 
-# --- Key definitions -------------------------------------------------------
 
-# Integer keys keep the msgpack payload small.  Each integer key
-# encodes in a single byte, whereas a string key like "ssid" would
-# take 5+ bytes.  Define named constants so the rest of your code
-# reads clearly without sacrificing compactness on the wire.
-KEY_SSID = 0
-KEY_PASSWORD = 1
-KEY_DEVICE_NAME = 2
-KEY_CONFIGURED = 3
+def save_settings(nvm, settings):
+    """Write *settings* into *nvm*: a two-byte length, then the msgpack bytes."""
+    data = packb(settings)
+    header = bytes([len(data) >> 8, len(data) & 0xFF])
+    # One write for header and data together, so the board erases flash once.
+    nvm[0 : 2 + len(data)] = header + data
 
-# --- Save settings to NVM -------------------------------------------------
 
-settings = {
-    KEY_SSID: "MyNetwork",
-    KEY_PASSWORD: "secret123",
-    KEY_DEVICE_NAME: "living-room-lamp",
-    KEY_CONFIGURED: True,
-}
+def load_settings(nvm):
+    """Return the settings dict saved in *nvm*, or None when nothing valid is there."""
+    length = (nvm[0] << 8) | nvm[1]
+    # A length of 0, or one longer than NVM, means nothing was saved here yet.
+    if length == 0 or length > len(nvm) - 2:
+        return None
+    try:
+        settings = unpackb(nvm[2 : 2 + length])
+    except ValueError:
+        return None
+    if not isinstance(settings, dict):
+        return None
+    return settings
 
-# packb converts the dict to compact binary bytes.
-data = packb(settings)
-length = len(data)
 
-# Get a reference to the NVM byte array.  Its size varies by board
-# (e.g., 256 bytes on ESP32-S2, 8192 on some RP2040 boards).
-# Not all boards have NVM. Check before using it.
 nvm = microcontroller.nvm
-if nvm is None:
-    print("This board does not have NVM.")
-    raise SystemExit
+while nvm is None:
+    # Some boards have no NVM.  Say so every ten seconds instead of stopping.
+    print("This board has no microcontroller.nvm, so there is nowhere to save settings.")
+    time.sleep(10)
 
-# Write a 2-byte big-endian length prefix so we know how many bytes
-# to read back later.  Big-endian means the high byte comes first:
-#   length = 52  →  high byte = 0, low byte = 52
-#   length = 300 →  high byte = 1, low byte = 44
-nvm[0] = (length >> 8) & 0xFF  # high byte
-nvm[1] = length & 0xFF         # low byte
-
-# Write the msgpack payload immediately after the 2-byte header.
-nvm[2:2 + length] = data
-
-print(f"saved {length} bytes to NVM (total NVM size: {len(nvm)} bytes)")
-
-# --- Load settings from NVM -----------------------------------------------
-
-# Reconstruct the length from the 2-byte header.
-stored_length = (nvm[0] << 8) | nvm[1]
-
-# Validate: length must be positive and fit within the NVM buffer
-# (minus the 2-byte header).  A length of 0 or a value larger than
-# the buffer means NVM has not been written yet or is corrupted.
-if 0 < stored_length <= len(nvm) - 2:
-    # Read exactly stored_length bytes from NVM and decode.
-    # bytes() copies the slice out of NVM into a regular bytes object
-    # that unpackb can parse.
-    restored = unpackb(bytes(nvm[2:2 + stored_length]))
-    print(f"loaded: {restored}")
+settings = load_settings(nvm)
+if settings is None:
+    print("No settings in NVM yet, so starting from brightness 0.")
+    settings = {"name": "lamp", "brightness": 0}
 else:
-    print("no valid settings in NVM")
+    print(f"Loaded from NVM: {settings}")
+
+# Change one setting and save it, once per start.  Brightness steps 0, 10, ... 100, 0.
+settings["brightness"] = (settings.get("brightness", 0) + 10) % 110
+save_settings(nvm, settings)
+brightness = settings["brightness"]
+print(f"Saved brightness {brightness}.  Press reset and the board loads {brightness}.")
+
+# Keep running, and read the saved settings back every five seconds.
+while True:
+    time.sleep(5)
+    print(f"NVM holds: {load_settings(nvm)}")

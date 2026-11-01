@@ -32,6 +32,12 @@ Read from the deployed ``runtime_config.msgpack``:
   ``secrets.toml`` ``[mqtt.broker]``).  Override with the
   ``BROKER_HOST`` / ``BROKER_PORT`` constants below for ad-hoc runs.
 
+Any MQTT 3.1.1 broker the board can reach works.  For Mosquitto on your
+laptop, save ``listener 1883`` and ``allow_anonymous true`` as two lines
+of ``mosquitto.conf`` and run ``mosquitto -c mosquitto.conf -v``;
+without a listener line Mosquitto only accepts connections from the
+laptop itself.
+
 Deploying
 =========
 
@@ -39,8 +45,11 @@ Deploying
 
     chumicro-workspace deploy-example mqtt bench --device <id>
 
-Then watch serial output (``chumicro-repl --device <id>``).  The
-device drives every scenario itself.  No host script needed.
+Then watch serial output (``chumicro-workspace repl --device <id>``).
+The device drives every scenario itself.  No host script needed.
+
+Unlike the other examples, the bench runs once: it stops after printing
+its summary.
 
 What you should see
 ===================
@@ -54,6 +63,7 @@ If the bench can't reach the broker, you'll see ``FAIL_MQTT_CONNECT``
 plus the underlying error.
 """
 
+# noqa: CHU038 - benchmark: runs every scenario once, then prints a summary
 __chumicro_runtimes__ = ("circuitpython", "micropython")
 
 import gc

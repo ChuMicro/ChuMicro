@@ -1,7 +1,12 @@
-"""One-shot HTTP fetch and streamed-body reads as generators.
+"""``chumicro_requests.generators`` runs a whole HTTP request inside a generator, as
+``response = yield from get(transport_factory, url)``.
 
-Public entry points: :func:`fetch`, :func:`get`, :func:`post`,
-:func:`put`, :func:`patch`, :func:`delete`, and :func:`stream`.
+The generator runs under ``Runner.add_generator``.  ``fetch`` and the
+per-method helpers ``get``, ``post``, ``put``, ``patch``, and ``delete``
+return the ``Response``.  ``stream`` returns a ``BodyReader`` that reads a
+large body one piece at a time.  Each helper builds its own ``HttpClient``.
+This module loads only when imported by name, as in
+``from chumicro_requests.generators import get``.
 """
 
 from chumicro_requests._wire import (
@@ -40,19 +45,31 @@ def _issue(
 
 
 class BodyReader:
-    """Streamed-body pull surface returned by :func:`stream`."""
+    """``BodyReader`` reads the body of a ``stream`` request one piece at a time.
+
+    ``count = yield from reader.read_into(buffer)`` in a loop reads the body
+    until the count is 0.
+
+    Attributes:
+        response: The ``Response`` with the status and headers.  Its ``body``
+            is empty.
+    """
 
     def __init__(self, client, handle):
         self._client = client
         self._handle = handle
-        #: Final response (status, reason, headers).
         self.response = handle.response
 
     def read_into(self, buffer):
-        """Fill caller-owned *buffer* with body bytes; return the count.
+        """Fill ``buffer`` with the next body bytes and return how many arrived, or 0 at the end of the body.
+
+        It is a generator: call it as
+        ``count = yield from reader.read_into(buffer)``, where ``buffer`` is a
+        ``bytearray`` or ``memoryview``.  While no body bytes are waiting it
+        yields the ``HttpClient`` for the runner to poll.
 
         Raises:
-            HttpError: The request failed mid-body.
+            HttpError: The request failed or timed out mid-body.
         """
         handle = self._handle
         client = self._client
@@ -73,7 +90,11 @@ class BodyReader:
             raise
 
     def cancel(self):
-        """Abort the transfer: close the socket, fail the handle."""
+        """Abort the transfer and close its socket.
+
+        When the transfer was still running, a later ``read_into`` call
+        raises ``HttpError``.
+        """
         self._client.cancel()
 
 
@@ -91,31 +112,49 @@ def fetch(
     user_agent: str | None = None,
     ticks: object | None = None,
 ) -> object:
-    """Issue one HTTP request and return the :class:`Response`.
+    """Run one HTTP request and return its ``Response``.
+
+    Call it as ``response = yield from fetch(transport_factory, "GET", url)``
+    inside a generator that ``Runner.add_generator`` drives.  The generator
+    yields while it waits for the server.  Opening the connection can hold the
+    main loop, as with ``HttpClient``.  A failed, timed-out, or abandoned
+    request closes its socket.
 
     Args:
-        transport_factory: Callable ``(host, port, use_tls) -> connector`` (the ``HttpClient`` contract).
-        method: HTTP verb, sent verbatim.
-        url: Absolute ``http://`` / ``https://`` URL.
-        headers: Optional dict / iterable of ``(name, value)`` pairs.
-        body: Optional ``bytes`` / ``str`` body (mutually exclusive with *json*).
-        json: Optional JSON body; sets ``Content-Type: application/json``.
-        max_redirects: Hops to follow before returning the 3xx as-is.
-        max_body_bytes: Hard cap on the response body.
-        timeout_ms: Deadline for the whole request, DNS lookup excluded.
-        user_agent: Override the default ``User-Agent``.
-        ticks: Optional ``chumicro_timing``-shaped tick source.
+        transport_factory: Function ``(host, port, use_tls)`` that returns a
+            connector, the same one ``HttpClient`` takes.
+        method: HTTP method, such as ``"GET"``.
+        url: Absolute ``http://`` or ``https://`` URL.
+        headers: Extra headers as a dict or ``(name, value)`` pairs.
+        body: Request body as ``bytes`` or ``str``.  Pass at most one of
+            ``body`` and ``json``.
+        json: Object to send as a JSON body, with
+            ``Content-Type: application/json``.
+        max_redirects: Redirects to follow, or ``None`` for 5.
+        max_body_bytes: Largest response body to accept, in bytes.  Default
+            65536.
+        timeout_ms: Time limit in ms for the whole request, counted from the
+            first step.  The limit is checked between steps, so it cannot cut
+            a blocking DNS lookup or handshake short.  Default 10000.
+        user_agent: ``User-Agent`` header value, or ``None`` for the default.
+        ticks: Clock with ``ticks_ms``, ``ticks_diff``, and ``ticks_add``, or
+            ``None`` for ``chumicro_timing.ticks``.
+
+    Yields:
+        The ``HttpClient``, for the runner to poll, while the request is in
+            flight.
 
     Returns:
-        :class:`~chumicro_requests.client.Response`.
+        The ``Response``.
 
     Raises:
-        HttpTimeoutError: The request exceeded *timeout_ms* (DNS stall excluded).
-        HttpOversizedError: Body exceeded *max_body_bytes*.
-        HttpProtocolError: Response was not valid HTTP/1.1 or peer closed mid-response.
-        HttpURLError: *url* or a redirect ``Location`` did not parse.
-        HttpError: The transport failed.
-        ValueError: Both *body* and *json* were given.
+        HttpTimeoutError: ``timeout_ms`` passed before the response finished.
+        HttpOversizedError: The body is larger than ``max_body_bytes``.
+        HttpProtocolError: The response broke HTTP/1.1, or the server closed
+            the connection early.
+        HttpURLError: ``url`` or a redirect ``Location`` did not parse.
+        HttpError: The connection failed.
+        ValueError: Both ``body`` and ``json`` were given.
     """
     client, handle, now_ms = _issue(
         transport_factory, method, url,
@@ -152,14 +191,22 @@ def stream(
     user_agent=None,
     ticks=None,
 ):
-    """Issue one request and return a :class:`BodyReader` for its body.
+    """Start one HTTP request, wait for its headers, and return a ``BodyReader`` for its body.
+
+    Call it as ``reader = yield from stream(transport_factory, "GET", url)``.
+    ``reader.response`` holds the status and headers, and
+    ``reader.read_into`` reads the body.  The body passes through a window of
+    ``stream_buffer_size`` bytes, so its size has no limit.  The other
+    arguments match ``fetch``, and ``timeout_ms`` covers the body as well as
+    the headers.  Until the headers arrive the generator yields the
+    ``HttpClient`` for the runner to poll.
 
     Raises:
-        HttpTimeoutError: *timeout_ms* elapsed before headers arrived.
-        HttpProtocolError: The response was not valid HTTP/1.1.
-        HttpURLError: *url* or a redirect ``Location`` did not parse.
-        HttpError: The transport failed before headers arrived.
-        ValueError: Both *body* and *json* were given.
+        HttpTimeoutError: ``timeout_ms`` passed before the headers arrived.
+        HttpProtocolError: The response broke HTTP/1.1.
+        HttpURLError: ``url`` or a redirect ``Location`` did not parse.
+        HttpError: The connection failed before the headers arrived.
+        ValueError: Both ``body`` and ``json`` were given.
     """
     client, handle, now_ms = _issue(
         transport_factory, method, url,
@@ -185,25 +232,45 @@ def stream(
 
 
 def get(transport_factory, url, **kwargs):
-    """One-shot GET; call as ``yield from get(transport_factory, url)``."""
+    """Run a GET request for ``url`` and return its ``Response``.
+
+    Call it as ``response = yield from get(transport_factory, url)``.  The
+    keywords pass to ``fetch``.
+    """
     return fetch(transport_factory, "GET", url, **kwargs)
 
 
 def post(transport_factory, url, **kwargs):
-    """One-shot POST; call as ``yield from post(transport_factory, url, json=...)``."""
+    """Run a POST request and return its ``Response``.
+
+    Call it as ``response = yield from post(transport_factory, url, json=data)``.
+    The keywords pass to ``fetch``.
+    """
     return fetch(transport_factory, "POST", url, **kwargs)
 
 
 def put(transport_factory, url, **kwargs):
-    """One-shot PUT; call as ``yield from put(transport_factory, url, body=...)``."""
+    """Run a PUT request and return its ``Response``.
+
+    Call it as ``response = yield from put(transport_factory, url, body=data)``.
+    The keywords pass to ``fetch``.
+    """
     return fetch(transport_factory, "PUT", url, **kwargs)
 
 
 def patch(transport_factory, url, **kwargs):
-    """One-shot PATCH; call as ``yield from patch(transport_factory, url, body=...)``."""
+    """Run a PATCH request and return its ``Response``.
+
+    Call it as ``response = yield from patch(transport_factory, url, json=data)``.
+    The keywords pass to ``fetch``.
+    """
     return fetch(transport_factory, "PATCH", url, **kwargs)
 
 
 def delete(transport_factory, url, **kwargs):
-    """One-shot DELETE; call as ``yield from delete(transport_factory, url)``."""
+    """Run a DELETE request for ``url`` and return its ``Response``.
+
+    Call it as ``response = yield from delete(transport_factory, url)``.  The
+    keywords pass to ``fetch``.
+    """
     return fetch(transport_factory, "DELETE", url, **kwargs)

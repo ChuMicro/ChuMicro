@@ -6,11 +6,43 @@
 
 - [ ] **Public repo mode — process and settings BOTH LANDED 2026-08-09; punch list remains.**  [workstreams/public-repo-mode.md](workstreams/public-repo-mode.md) — PR #11 merged (Decision 0120 main-is-PR-only, workflow least-privilege + SHA pins, `@claude /review`, maintainer runbook, contributor-docs updates), and the five settings flips are done and verified: ruleset bypass actors to PR-mode, workflow-token default back to read, fork-PR CI approval for all outside collaborators, pypi environment restricted to main, and private vulnerability reporting ENABLED (found disabled while flipping — SECURITY.md's only reporting channel pointed at a switched-off feature).  `ANTHROPIC_API_KEY` verified live: the first `@claude /review` ran end to end on PR #14 and its findings were applied there.  Dependabot #7/#9 closed as superseded by #11's SHA pins.  Open: the workstream punch list (changelogs, py.typed, labeler, provenance, chunraid hardware lane someday) and the repo-level require-SHA-pinning setting.
 
+- [ ] **Board pass for the beginner-examples PR (`docs/beginner-friendly-examples`).**  Every example and demo was rewritten to loop forever and was checked on CPython only.  Run each on one board per chip family per runtime, one at a time, with a one-minute tail: highest risk are `demos/mqtt_sensor_motor`, `demos/websockets_stream`, `demos/http_server_roundtrip`, `demos/sockets_tls_roundtrip` (a handshake every 5 s on a Pico W), `timing/examples/circuitpython_debounce.py`, and the MicroPython examples whose default pins moved to the Pico W's.
+
 ## Out of scope
 
 - **Page titles stay long.**  Bing's site scan warns "title too long" on 36 pages, which is 18 pages counted once per channel.  Truncation is display only: search engines index the whole title, so nothing ranks worse for it.  Shortening would cost the distinctive half of each title ("storage that survives a reboot" becoming "storage"), and the runtime names it would save are in every page's meta description anyway.  Decided 2026-08-18: leave them.  Do not re-open this from a fresh scan report.
 
 ## Next
+
+- [ ] **Workbench template examples still exit when wifi fails.**  Decision 0130 says an example never ends itself and retries a failure on the next pass of its loop.  In the `ChuMicro-Workbench-Template` repo, `examples/periodic_get/app.py`, `examples/two_board_handshake/server/app.py`, and `examples/two_board_handshake/client/app.py` each `raise SystemExit(f"wifi failed: ...")` inside `run()` before reaching their `while True:`.  Rewrite each to print the failure and keep waiting for wifi.  `examples/hello_world/app.py` also breaks out of its loop after ten ticks.  `CHU038` does not scan that repo, and its module-level clause does not fit the template's `run()` entrypoint.
+
+- [ ] **`install-firmware` cannot flash a board that is not registered yet.**  `_cmd_install_firmware` calls `_resolve_device` before it reads `--url`, and with no `devices.yml` entry there is no port or runtime to flash against, so the "new board out of the packaging" path fails.  The user docs route new boards to circuitpython.org and micropython.org until it takes `--address` and `--runtime` (the onboarding flow in `onboarding.py` and the template README step 3 depend on it too).
+
+- [ ] **The CircuitPython connector hands back a blocking socket.**  `libraries/sockets/src/chumicro_sockets/_adapters/cp.py` leaves the socket blocking after `connect`, so `send_all` and `recv_until` hold up the loop on CircuitPython although the `generators.connect` docstring promises non-blocking.  One line (`sock.setblocking(False)`), but it needs a CircuitPython board run, and the sockets guide's wait-mode section changes with it.
+
+- [ ] **A bare `yield` in a runner generator publishes no deadline.**  `_NextTickWait` has no hooks, so the wrapper resumes it every tick but `Runner.wait()` can sleep past it until something else wakes the loop.  Decide whether a bare yield means "due now" (and spins) or document it as "resume at the next wake".
+
+- [ ] **No check catches a runner service that `Runner.wait()` cannot see.**  `WifiService`, `NTPClient`, the websockets inbound wait, and the sockets connector's DNS step each lacked a deadline and either spun the loop or slept past their work; `plans/patterns.md` "Service pattern" now states the rule.  Scope a warning in `chumicro_runner.testing.validate_service` (or a CHU rule) for a service with neither `next_deadline` nor `io_socket`, allowing the `period_ms` registration polled inputs use.
+
+- [ ] **`dump-config` prints a raw traceback when `secrets.toml` is missing.**  `workbench/workspace/src/chumicro_workspace/cli/config.py` should name the missing file and the `setup` command that creates it.
+
+- [ ] **The kvstore guide names backends only private modules export.**  `MpNvsBackend` and `MpLittlefsBackend` live in `chumicro_kvstore._backends.*`; export them or document the capacity knob another way.
+
+- [ ] **Selecting some tests in a file fails under `chumicro-pytest-device`.**  `pytest file.py::test_x --target unix-port` (or `-k`) ends in "Device ran test(s) the host never collected": `collection.py` sends `name_filter=None` to the board but checks results against the selected items.
+
+- [ ] **`chumicro-pytest-device` needs the test harness in a standalone install.**  `session._installed_harness_source_dir` finds `chumicro_test_harness` with `find_spec`, and no declared dependency installs it.  Declare `chumicro-test-harness` once its publish status is settled.
+
+- [ ] **`KVStore.reload()` loses unsaved changes after a corrupt read.**  It clears `_dirty` before `load()`, so after `KVStoreCorrupt` the next `commit_if_changed()` writes nothing.
+
+- [ ] **The persisting-data page and Decision 0034 disagree on ESP32 NVS.**  `docs/troubleshooting/persisting-data.md` says a power cut can lose the whole saved block; Decision 0034 and the kvstore guide say an NVS commit is atomic.  Settle which holds and fix the other.
+
+- [ ] **Workbench CLI rough edges a newcomer hits.**  `add-device`, `bootstrap`, `demo`, and `repl` skip TTY auto-detection; `remove-device` and `reset-device` ignore `--non-interactive`; `deploy` lets `ConfigManifestError` escape as a traceback; the `chumicro_*` ImportError hint says to rerun `setup`, which fixes the laptop and leaves the board as it was; `chumicro-repl --baudrate` is parsed and never used; `chumicro-deploy deploy` and `flash-firmware` crash on piped input without `--non-interactive`.
+
+- [ ] **Sphinx roles render as literal text in workbench docstrings.**  The API pages render `:class:` and `:meth:` as plain text; the library API pages now use code spans, and about 1,140 roles remain in workbench/*/src and support/test_harness/src.
+
+- [ ] **Library examples name the tick `now`; READMEs and guides name it `now_ms`.**  The timing, buttons, and knobs examples still use `now`; rename it so a reader copying between a README and an example sees one name.
+
+- [ ] **AGENTS.md and the `task-checkpoint` skill disagree on committing.**  AGENTS.md says never commit unsolicited; the skill's step 6 commits and pushes at every checkpoint.  Reword one so they agree.
 
 - [ ] **`chumicro_test_harness.markers.marker` has no caller left.**  Decision 0123 moved every demo `app.py` to plain `print` for its `NAME key=value` lines, and the demos were the helper's only consumer; the sole remaining reference is `support/test_harness/tests/test_markers.py`.  Decide between deleting it with its lazy export in `chumicro_test_harness/__init__.py` and keeping it documented for people writing their own on-device tests.  Either way `markers.py` can join `_DEMO_UNUSED_HARNESS_MODULES` in `deploy_api.py`, which is flash back on a 256 KB board.  Note the guarantee that goes with it: `marker()` raised at develop time on a value carrying whitespace or `=`, where a hand-written print fails silently on the host parser instead.
 

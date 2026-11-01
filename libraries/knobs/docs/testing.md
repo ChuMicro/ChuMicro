@@ -1,19 +1,17 @@
 # Testing Helpers
 
-`chumicro_knobs.testing` provides `FakeEncoderSource` and `FakeAnalogSource`, hand-driven stand-ins for the hardware a knob reads.  Turn the shaft or park the wiper, tick the knob, and assert on what it made of them.  The module declares `__chumicro_test_support__ = True`, so the deploy filter keeps it on the host and it never lands on a device.
+`chumicro_knobs.testing` holds two stand-ins for the hardware a knob reads.  `FakeEncoderSource` replaces the quadrature pins of a rotary encoder, and `FakeAnalogSource` replaces the analog pin under a potentiometer.  A test turns the shaft or parks the wiper, ticks the knob, and checks what the knob made of it, with no board and no waiting.  `pip install chumicro-knobs pytest` installs everything the tests on this page import.  Project deploys and the board bundles leave the module out.
 
-This is the piece that makes knob behavior testable at a desk.  A menu that wraps at the end, a volume figure that stops at 20, a brightness slider that has to hold still while a converter wanders underneath: all of that is ordinary logic, and with a fake source it runs on a laptop, in milliseconds, without a shaft to turn ten thousand times.
+## The smallest test
 
-## Usage
-
-Build the knob with `source=` instead of pins, then script the movement:
+Save this as `test_menu_knob.py` and run `pytest test_menu_knob.py`:
 
 ```python
 from chumicro_knobs import Encoder
 from chumicro_knobs.testing import FakeEncoderSource
 
 
-def test_the_menu_ring_carries_past_the_last_entry():
+def test_menu_wraps_past_the_last_entry():
     source = FakeEncoderSource()
     menu = Encoder(source=source, bounds=(0, 3), wrap=True)
 
@@ -23,40 +21,77 @@ def test_the_menu_ring_carries_past_the_last_entry():
     assert menu.position == 1
 ```
 
-`turn()` moves the shaft in whole detents, positive one way and negative the other, which is what the runtime sources publish once they have divided the pulses down.  Nothing here reads a clock: a knob hands the timestamp it was given straight down to its source, so the test decides what time it is and stays instant and deterministic.
+`Encoder` takes `source=` in place of its two pins.  A knob reads no clock: it hands the `now_ms` passed to `check()` straight to its source.
 
-A source can also start with a count already on it, standing in for a knob built while the shaft was somewhere other than home:
+## `FakeEncoderSource`
+
+| Call or attribute | What it does |
+|---|---|
+| `FakeEncoderSource(raw_position=0)` | Starts the shaft count at `raw_position` detents. |
+| `turn(detents)` | Turns the shaft by whole detents, negative for the other direction. |
+| `raw_position` | The shaft count so far. |
+| `poll_calls` | Counts the times the knob asked for a reading. |
+| `last_poll_ms` | The `now_ms` of the latest reading, which shows the knob passes its tick down. |
+| `deinit_calls` | Counts the times the knob released the source. |
+
+Several turns before one `check()` arrive together, the way a fast spin does while the loop is busy elsewhere:
 
 ```python
-source = FakeEncoderSource(raw_position=17)
+from chumicro_knobs import Encoder
+from chumicro_knobs.testing import FakeEncoderSource
+
+
+def test_turns_between_ticks_add_up():
+    source = FakeEncoderSource()
+    volume = Encoder(source=source)
+
+    source.turn(4)
+    source.turn(3)
+    volume.check(250)
+
+    assert volume.delta == 7
+    assert source.poll_calls == 1
+    assert source.last_poll_ms == 250
 ```
 
-The first `check()` treats that as the starting point and reports no movement, so a restart mid-session behaves the way a real board does.
-
-## Turns add up between ticks
-
-Several turns queued before one `check()` arrive together, which is how a test covers the spin that happened while the loop was busy elsewhere:
+An `Encoder` takes the source's count at construction as its zero.  `raw_position` stands in for a knob built while the shaft sat somewhere other than home:
 
 ```python
-source.turn(4)
-source.turn(3)
-volume.check(0)
+from chumicro_knobs import Encoder
+from chumicro_knobs.testing import FakeEncoderSource
 
-assert volume.delta == 7
+
+def test_a_knob_counts_from_where_the_shaft_sat():
+    source = FakeEncoderSource(raw_position=17)
+    knob = Encoder(source=source)
+
+    knob.check(0)
+    assert knob.position == 0
+
+    source.turn(2)
+    knob.check(10)
+    assert knob.position == 2
 ```
 
-That is the case worth writing a test for, because it is the one a fast desk loop never reproduces by itself and a device with a socket read in it hits every day.
+## `FakeAnalogSource`
 
-## An analog knob with no wiper
+| Call or attribute | What it does |
+|---|---|
+| `FakeAnalogSource(raw=0)` | Starts the reading at `raw`, on the 0 to 65535 scale every runtime reports. |
+| `set_raw(raw)` | Parks the wiper at `raw`. |
+| `raw` | The current reading. |
+| `poll_calls` | Counts the times the knob asked for a conversion. |
+| `last_poll_ms` | The `now_ms` of the latest conversion. |
+| `deinit_calls` | Counts the times the knob released the source. |
 
-`FakeAnalogSource` carries a reading on the same 0 to 65535 scale every runtime reports on.  `set_raw()` parks the wiper, and small moves are how a test proves the deadband is doing its job:
+A small move tests the deadband, the band of wander an `AnalogKnob` ignores:
 
 ```python
 from chumicro_knobs import AnalogKnob
 from chumicro_knobs.testing import FakeAnalogSource
 
 
-def test_a_parked_wiper_holds_the_brightness_step():
+def test_a_parked_wiper_holds_its_step():
     source = FakeAnalogSource()
     brightness = AnalogKnob(source=source)
 
@@ -64,30 +99,16 @@ def test_a_parked_wiper_holds_the_brightness_step():
     brightness.check(0)
     assert brightness.value == 50
 
-    source.set_raw(33168)                       # 400 counts of wander
-    assert brightness.check(10) is False        # inside the deadband, so nothing moved
+    source.set_raw(33168)
+    assert brightness.check(10) is False
     assert brightness.value == 50
 ```
 
-Give the knob a `deadband=` of its own to test a tighter or looser setting, and `FakeAnalogSource(raw=...)` to start it somewhere along the sweep.
+The second reading sits 400 counts from the first, inside the default deadband of 512, so `check()` reports no movement.  `AnalogKnob(deadband=...)` sets a tighter or looser band.
 
-## What the fakes record
+## API reference
 
-Both fakes keep a tally of what the knob asked of them, so a test can assert on the conversation as well as on the reading:
-
-| Hook | What it holds |
-|---|---|
-| `source.poll_calls` | How many times the knob asked this source for a reading |
-| `source.last_poll_ms` | The tick that last reading was asked for, which proves the knob passes the loop's shared timestamp down rather than fetching a clock of its own |
-| `source.deinit_calls` | How many times the knob released the source |
-
-```python
-volume.check(250)
-assert source.poll_calls == 1
-assert source.last_poll_ms == 250
-```
-
-The [guide](guide.md) covers what the readings mean once they arrive, and the [API reference](api.md) lists every method on both fakes.
+The [API page](api.md#chumicro_knobstesting) lists every method on both fakes.
 
 ---
 

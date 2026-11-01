@@ -10,11 +10,12 @@ pinned-CA-context wiring at the request-pipeline level.
 Endpoint: `https://example.com/` — IANA-reserved, ships a small
 known body, real CA-signed cert.
 
-Why pin a CA instead of using the runtime's default trust store?
-Embedded CP / MP don't ship a real trust store —
-`ssl.create_default_context()` on those runtimes returns an empty /
-placeholder context, not the CPython equivalent. Pin the issuing
-root via `chumicro_sockets.ssl_context_with_ca(pem)` instead.
+Why pin a CA when every runtime verifies by default?  The default
+trust differs per runtime (CircuitPython's firmware bundle, the
+curated bundle chumicro-sockets ships for MicroPython, the host's
+store on CPython).  Pinning the issuing root through
+`chumicro_sockets.ssl_context_with_ca(pem)` exercises the custom-CA
+wiring and gives every runtime the same trust anchor.
 
 What we pin: just the root (`SSL.com TLS ECC Root CA 2022`), not
 the full chain. mbedTLS validates the server's chain against the

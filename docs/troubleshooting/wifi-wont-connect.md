@@ -1,51 +1,77 @@
 # WiFi won't connect
 
-This page is for when a board in your workspace won't join wifi, or joins and then behaves strangely.  Most week-one wifi trouble is one of five traps: credentials that never reached the board, a silent drop that raises nothing, a connect that freezes everything else, a specific board that needs its transmit power turned down, or a `settings.toml` that fights the wifi library for the radio.
+A board that never joins wifi has, most often, never received your network name and password.
 
-## The functional tests all skip, or a deployed example never joins anything
+## The board never joins, and `wifi.last_error` is `None`
 
-The credentials never reached the board.  Wifi credentials start in `secrets.toml` at the workspace root, which the deploy merges into `/runtime_config.msgpack` for the board to read back.  Workspace setup materializes that file from a template with deliberately bogus placeholder values, so a fresh clone can't join a network by accident, and two states leave you with nothing happening and no wifi error to read:
+The `connect_to_ap.py` example in `chumicro-wifi` prints `joining <network name>` first. When it prints `joining replace-with-your-ap-ssid`, your real network never reached the deploy.
 
-- **`secrets.toml` is missing.**  Nothing is staged, so `load_runtime_config()` on the board raises `OSError`.  The networking libraries' functional tests catch this at collection time and skip every device test with a message naming the keys they wanted.  A deployed example has no such guard: it dies on the board, which you see only if you are tailing the serial output.
-- **`secrets.toml` is there but still carries the placeholder SSID** (`replace-with-your-ap-ssid`).  The functional-test conftests read that placeholder as "no credentials yet" and stage nothing, so those tests skip the same way.  A deployed example fails fast instead: its helpers recognize both the in-file `WIFI_SSID` placeholder and the `secrets.toml` one, and raise immediately with a message naming where to put real credentials.
+To check any project, print the config the deploy sends to the board:
 
-**Fix.** Put your real network name and password in the workspace-root `secrets.toml`, then deploy again:
+```bash
+python3 run.py dump-config <project>
+```
+
+A `wifi.ssid` of `replace-with-your-ap-ssid` means `secrets.toml` still holds the placeholder it was created with, and the board is trying to join a network by that name. A `FileNotFoundError` naming `secrets.toml` means the file is missing. `python3 run.py setup` creates it again, placeholders included.
+
+Put your network's name and password in `secrets.toml` in the [workspace](../glossary.md#workspace) folder:
 
 ```toml
-# secrets.toml: gitignored, never committed
 [wifi]
 ssid = "your-network"
 password = "your-password"
 ```
 
-`chumicro-workspace dump-config <project>` prints the merged config a deploy would send, so you can confirm `wifi.ssid` before touching the board, and `chumicro-workspace deploy <project> --tail` shows what the board says once it boots.  (details: [Device testing](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md#configure-secretstoml))
+Then deploy again and watch what the board prints:
 
-## The board sits in `RECONNECTING`, nothing is raised, and `wifi.last_error` is `None`
-
-On MicroPython on a Pi Pico W (the CYW43 radio), `connect()` returns right away and leaves `isconnected()` False without raising anything.  There is no exception and no error to read, so code that waits on `last_error` waits forever.
-
-**Fix.** Don't gate recovery on `last_error`.  Check `wifi.state` and `wifi.connected` instead, which each adapter re-derives from `isconnected()` after every connect attempt.
-
-## Everything else freezes for up to 15 seconds while a CircuitPython board connects
-
-CircuitPython's `wifi.radio.connect()` blocks, and the firmware exposes no non-blocking variant.  While the board is `CONNECTING` or `RECONNECTING`, every other runner service (an LED heartbeat, an in-flight HTTP request, MQTT keep-alives) pauses, for up to `connect_timeout_ms` (default 15000).
-
-**Fix.** Expect the stall on CircuitPython, and connect before you start time-critical work.  If a non-blocking connect is load-bearing, run MicroPython on an RP2040, RP2350, or ESP32 board, where `wlan.connect()` is non-blocking.
-
-## Every join attempt fails with status 202 or 205 on a board that worked hours ago
-
-A pre-2024 ESP32-S3 (the UM "P4" revision) has vendor-documented wifi instability, worst at full 20 dBm transmit power with native USB.  The tell is a marginal signal reading (RSSI around -82 where a healthy board reads -54) and hard join failures on every attempt through radio cycles.
-
-**Fix.** Turn the radio's transmit power down to about 75% in your deploy config:
-
-```
-wifi.tx_power_dbm = 15
+```bash
+python3 run.py deploy <project> --tail
 ```
 
-CircuitPython maps this to `wifi.radio.tx_power` and MicroPython to `sta.config(txpower=)`.  At `txpower=15` the same board joins in about 2 seconds with no loss.  This is a config knob only; the library never inspects the board for you.
+When the name and password are right and the board still never joins:
 
-## Flaky or competing wifi on CircuitPython
+- Check the band. ESP32, ESP32-S2, ESP32-S3, and Pi Pico W radios see only 2.4 GHz networks, so a router that offers only 5 GHz is invisible to them.
+- Check spelling and case. Network names and passwords are case-sensitive.
 
-`CIRCUITPY_WIFI_SSID` and the other `CIRCUITPY_WIFI_*` keys in `settings.toml` switch on CircuitPython's own auto-connect supervisor, which then fights `chumicro-wifi` for control of the radio.  `settings.toml` is CircuitPython-only (MicroPython never reads it) and is reserved for `CIRCUITPY_*` keys.
+`wifi.last_error` stays `None` because a wrong name or password raises nothing readable. On CircuitPython, `WifiService` catches the radio's connection error and counts a failed attempt. A Pi Pico W on MicroPython stays unconnected without raising at all. An ESP32 on MicroPython does raise, and `last_error` holds that error.
 
-**Fix.** Keep `CIRCUITPY_WIFI_*` out of `settings.toml`.  Put wifi and app config in `secrets.toml`, which the deploy converts to `runtime_config.msgpack` on the board, and ship a `settings.toml` with no wifi keys.  (background: [Decision 0057](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0057-two-file-config.md))
+`WifiService` then tries again after one second, doubles the wait after each failure up to a minute, and keeps trying forever, with `wifi.state` reading `"connecting"`. Watch `wifi.state` and `wifi.connected` to see what the radio is doing. To make it give up, set `reconnect_max`, a number of attempts, under `[wifi]` in `secrets.toml`. `wifi.state` becomes `"failed"` once the attempts run out.
+
+[Wiring wifi credentials](../wiring-wifi-credentials.md) covers where credentials live and how they reach the board.
+
+## An example stops with `RuntimeError: set WIFI_SSID + WIFI_PASSWORD at the top of the example`
+
+Put your network in `secrets.toml` as the previous section shows, and deploy the example again. For an example copied onto a board by hand, type your network into the `WIFI_SSID` and `WIFI_PASSWORD` lines at its top.
+
+Several library examples check for placeholder credentials before touching the radio. The deploy sent no real network name, so the example stopped rather than try to join `your-wifi-ssid`.
+
+## Everything freezes for up to 15 seconds while a CircuitPython board connects
+
+Join wifi before you start anything that has to keep time. To shorten each stall, lower `connect_timeout_ms` under `[wifi]` in `secrets.toml`. `first_connect_timeout_ms` sets the first attempt's limit on its own.
+
+CircuitPython's `wifi.radio.connect()` waits until it joins or gives up, and the firmware offers no call that returns early. While `WifiService` connects on CircuitPython, everything else in your loop waits with it: a blinking LED, an HTTP request, MQTT keep-alive messages. Each attempt holds the loop for up to `connect_timeout_ms`, which defaults to 15000, or 15 seconds.
+
+On MicroPython the join runs in the background, so the loop keeps going while the board connects.
+
+## Joins fail every time on an ESP32-S3 board that worked earlier
+
+Look for a weak signal reading where a neighbouring board reads strong, and joins that fail on every attempt with status 202 or 205.
+
+Turn the transmit power down to 15 dBm, about three quarters of full power, under `[wifi]` in `secrets.toml`:
+
+```toml
+[wifi]
+ssid = "your-network"
+password = "your-password"
+tx_power_dbm = 15
+```
+
+On the bench, a board that failed every join at full power joined in two seconds at 15. The wifi library applies the value you set, and leaves a board without the setting at full power.
+
+Unexpected Maker [documents](https://help.unexpectedmaker.com/docs/boards/wifi-stability-issues/) its early ESP32-S3 boards, the P4 and P7 revisions made before 2024, as unstable at full transmit power.
+
+## WiFi drops or fights itself on CircuitPython
+
+Keep wifi settings in the workspace's `secrets.toml`, and out of the board's `settings.toml`. A deploy removes a `settings.toml` it finds on the board, and prints a warning when it does.
+
+A `settings.toml` on the board with `CIRCUITPY_WIFI_SSID` or another `CIRCUITPY_WIFI_*` key makes CircuitPython join wifi on its own at startup. It then competes with the wifi library for the radio, and connections drop or never settle. MicroPython never reads `settings.toml`.

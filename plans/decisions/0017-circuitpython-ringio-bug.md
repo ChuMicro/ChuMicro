@@ -11,7 +11,7 @@ Building the CircuitPython unix port with `VARIANT=standard` fails: an inherited
 
 ## Decision
 
-Build `VARIANT=standard` and pass `-DMICROPY_PY_MICROPYTHON_RINGIO=0` via `CFLAGS_EXTRA`.  This is the same mechanism CP's own coverage variant uses (a header-level define), applied from the command line.  Implemented in `scripts/prepare_circuitpython.py::_build_env()`.
+Build `VARIANT=standard` and pass `-DMICROPY_PY_MICROPYTHON_RINGIO=0` via `CFLAGS`.  This is the same mechanism CP's own coverage variant uses (a header-level define), applied from the command line.  Implemented in `scripts/prepare_circuitpython.py`, through `shared.build_environment()`.
 
 The flag is harmless when the upstream bug is eventually fixed: setting a value that is already `0` has no effect, so the workaround is self-removing — upgrading to a fixed CP version needs no change on our side.
 

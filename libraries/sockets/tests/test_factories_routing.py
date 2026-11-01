@@ -468,9 +468,11 @@ class TestCircuitPythonTLSPassthrough:
 
 class TestSslContextWithCa:
     def test_routes_through_cpython_adapter(self) -> None:
-        """Stub ``ssl.create_default_context`` + confirm CPython adapter wiring.
+        """The CPython adapter builds a bare client context and feeds *ca_pem*
+        into ``load_verify_locations``.
 
-        Confirms the helper feeds *ca_pem* into ``load_verify_locations``.
+        A bare ``SSLContext(PROTOCOL_TLS_CLIENT)`` starts with an empty trust
+        store, so the supplied CA is the only one trusted.
         """
         captured: dict = {}
 
@@ -478,8 +480,13 @@ class TestSslContextWithCa:
             def load_verify_locations(self, *, cadata):
                 captured["cadata"] = cadata
 
+        def recording_ssl_context(protocol):
+            captured["protocol"] = protocol
+            return _RecordingContext()
+
         fake_ssl = FakeModule()
-        fake_ssl.create_default_context = lambda: _RecordingContext()
+        fake_ssl.PROTOCOL_TLS_CLIENT = "tls-client"
+        fake_ssl.SSLContext = recording_ssl_context
 
         from chumicro_sockets._adapters import cpython as cpython_adapter
 
@@ -489,6 +496,7 @@ class TestSslContextWithCa:
             result = ssl_context_with_ca(ca_pem)
 
         assert isinstance(result, _RecordingContext)
+        assert captured["protocol"] == "tls-client"
         # PEM bytes are decoded to str for stdlib's cadata.
         assert isinstance(captured["cadata"], str)
         assert "fake-bytes" in captured["cadata"]
@@ -504,7 +512,8 @@ class TestSslContextWithCa:
                 captured["cadata"] = cadata
 
         fake_ssl = FakeModule()
-        fake_ssl.create_default_context = lambda: _RecordingContext()
+        fake_ssl.PROTOCOL_TLS_CLIENT = "tls-client"
+        fake_ssl.SSLContext = lambda protocol: _RecordingContext()
         der = b"\x30\x82\x01\x10" + b"\x00" * 40
 
         from chumicro_sockets._adapters import cpython as cpython_adapter
@@ -520,7 +529,8 @@ class TestSslContextWithCa:
         """Neither PEM nor DER raises a clear ValueError, not a silent
         empty-trust context."""
         fake_ssl = FakeModule()
-        fake_ssl.create_default_context = lambda: object()
+        fake_ssl.PROTOCOL_TLS_CLIENT = "tls-client"
+        fake_ssl.SSLContext = lambda protocol: object()
 
         from chumicro_sockets._adapters import cpython as cpython_adapter
 

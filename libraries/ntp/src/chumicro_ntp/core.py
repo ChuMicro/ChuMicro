@@ -1,4 +1,4 @@
-"""Core implementation for chumicro-ntp."""
+"""``NTPClient`` sends SNTP requests over UDP and parses each reply into Unix seconds."""
 
 import errno
 import struct
@@ -20,8 +20,11 @@ CLIENT_FIRST_BYTE = const(0x23)
 
 SERVER_MODE = const(4)
 
-# Max stale datagrams discarded per query() call; a flooded socket must not spin.
+# Max stale datagrams query() discards before sending.  The cap keeps a flooded socket from spinning.
 _DRAIN_LIMIT = const(8)
+
+# How often next_deadline asks for a turn while a reply is outstanding.
+_REPLY_POLL_MS = const(20)
 
 _CLIENT_REQUEST = bytes([CLIENT_FIRST_BYTE]) + b"\x00" * (PACKET_SIZE - 1)
 
@@ -32,13 +35,17 @@ if hasattr(errno, "EWOULDBLOCK"):
 
 
 class NTPError(OSError):
-    """SNTP exchange failed."""
+    """Error stored in ``NTPResult.error`` when a query times out, is canceled, or gets a bad reply.
+
+    ``NTPError`` subclasses ``OSError``, so ``except OSError`` also catches
+    the socket errors a failed send or receive stores in the same place.
+    """
 
 
 def _parse_response(packet: bytes | memoryview) -> int:
     if len(packet) < PACKET_SIZE:
         raise NTPError(f"short SNTP response ({len(packet)} bytes)")
-    # Match mode (low 3 bits) only; some servers echo VN != 4.
+    # Check only the mode (low 3 bits).  Some servers reply with a version other than 4.
     mode = packet[0] & 0b111
     if mode != SERVER_MODE:
         raise NTPError(f"unexpected SNTP mode {mode} (want {SERVER_MODE})")
@@ -46,22 +53,33 @@ def _parse_response(packet: bytes | memoryview) -> int:
     if stratum == 0:
         # RFC 4330 §5: stratum 0 is a kiss-of-death, not a usable time.
         raise NTPError("SNTP kiss-of-death (stratum=0)")
-    # Transmit timestamp: bytes 40-43 are seconds since 1900; 44-47 fraction, discarded.
+    # Transmit timestamp: bytes 40-43 hold whole seconds since 1900.  The fraction in 44-47 is dropped.
     seconds_1900 = struct.unpack_from(">I", packet, 40)[0]
     if seconds_1900 == 0:
         # RFC 4330 §5: reject a zero timestamp before the era lift makes it 2036.
         raise NTPError("SNTP zero transmit timestamp")
-    # Below the epoch offset means NTP era 1 (post-2036); lift by 2**32.
+    # A count below the epoch offset belongs to NTP era 1 (after 2036), so add 2**32.
     if seconds_1900 < NTP_TO_UNIX:
         seconds_1900 += 0x100000000
     return seconds_1900 - NTP_TO_UNIX
 
 
 class NTPResult:
-    """Handle for a single in-flight SNTP exchange.
+    """One SNTP query, returned by ``NTPClient.query()`` before the reply arrives.
+
+    ``done`` turns ``True`` when the query finishes.  A finished query holds
+    either the time in ``unix_seconds`` or the cause of failure in ``error``.
 
     Args:
-        ticks_started_ms: Tick value when the request was issued.
+        ticks_started_ms: ``ticks_ms()`` reading when the request went out.
+            ``NTPClient`` measures ``timeout_ms`` from it.
+
+    Attributes:
+        done: ``True`` once the query has a time or an error.
+        error: ``None`` until the query fails, then the exception that ended
+            it.  A timeout, ``NTPClient.cancel()``, or a malformed reply
+            stores an ``NTPError``.  A failed send or receive stores the
+            socket's ``OSError``.
     """
 
     def __init__(self, ticks_started_ms: int) -> None:
@@ -72,11 +90,14 @@ class NTPResult:
 
     @property
     def unix_seconds(self) -> int:
-        """Server's transmit timestamp converted to Unix-epoch seconds.
+        """Server's clock at the moment it sent the reply, in whole seconds since 1 January 1970 UTC.
+
+        Read it once ``done`` is ``True`` and ``error`` is ``None``.  The
+        fraction of a second in the reply is dropped.
 
         Raises:
-            Exception: Re-raises the stored :attr:`error` when the exchange failed.
-            RuntimeError: The exchange has not finished yet.
+            RuntimeError: The query has not finished.
+            OSError: The query failed.  The stored ``error`` is raised again.
         """
         if not self.done:
             raise RuntimeError("NTP request still in flight")
@@ -90,17 +111,32 @@ class NTPResult:
 
 
 class NTPClient:
-    """Runner-shaped SNTP client over an injected UDP socket.
+    """Asks a time server for the current time, one non-blocking step per pass of the main loop.
+
+    ``query()`` sends the request and returns an ``NTPResult`` at once.  On
+    each pass of the loop, ``check(now_ms)`` returns ``True`` while the reply
+    is pending.  ``handle(now_ms)`` then reads the reply once it arrives.
+    ``now_ms`` is the millisecond count from ``chumicro_timing.ticks_ms()``.
+    A ``chumicro_runner.Runner`` makes both calls itself after
+    ``runner.add(client)``.  One query runs at a time.
 
     Args:
-        socket: Non-blocking UDP object with sendto/recvfrom_into/close/setblocking.
-        server: NTP server hostname. Defaults to ``"pool.ntp.org"``.
-        port: NTP server UDP port. Defaults to ``123``.
-        timeout_ms: Tick budget for the recv side. Defaults to ``5000``.
-        ticks: Optional tick source (``chumicro_timing.ticks`` shape); defaults to the real clock.
+        socket: Non-blocking UDP socket with ``sendto(payload, host, port)``,
+            ``recvfrom_into(buffer)``, and ``close()``.  Pass ``socket`` or
+            ``transport_factory``, never both.
+        transport_factory: Zero-argument callable that returns such a socket.
+            The client calls it at the first ``query()`` and at the first
+            ``query()`` after each ``close()``.
+        server: Host name or IP address of the time server.
+        port: UDP port of the time server.
+        timeout_ms: Milliseconds from ``query()`` until ``handle()`` fails
+            the query with ``NTPError``.
+        ticks: Clock object with ``ticks_ms()``, ``ticks_add()``, and
+            ``ticks_diff()``.  ``None`` selects ``chumicro_timing.ticks``.
 
     Raises:
-        ValueError: ``timeout_ms`` is non-positive.
+        ValueError: ``timeout_ms`` is zero or negative, or the call passed
+            both or neither of ``socket`` and ``transport_factory``.
     """
 
     @classmethod
@@ -114,22 +150,33 @@ class NTPClient:
         ticks: object | None = None,
         **constructor_kwargs: object,
     ) -> "NTPClient":
-        """Build an :class:`NTPClient` from runtime config.
+        """Build a client from a flat config mapping, with a UDP socket that opens at the first query.
+
+        With neither ``socket`` nor ``transport_factory`` given, the client
+        opens its socket through ``chumicro_sockets.sockets_factory`` and
+        reopens it after ``close()``.
 
         Args:
-            config: Mapping-like runtime config; reads ``ntp.server``,
-                ``ntp.port``, and ``ntp.timeout_ms``, all optional.
-            radio: CircuitPython radio handle for the default UDP factory.
-            socket: Pre-built non-blocking UDP socket; skips the factory.
-            transport_factory: Callable returning the UDP socket on first use.
-            ticks: Optional tick source, forwarded to the constructor.
-            **constructor_kwargs: Any other constructor knob, passed
-                through verbatim; an explicit keyword wins over its
-                config-derived value.
+            config: A ``dict`` or other mapping with ``get()``.  The client
+                reads ``ntp.server`` (default ``"pool.ntp.org"``),
+                ``ntp.port`` (default ``123``), and ``ntp.timeout_ms``
+                (default ``5000``).
+            radio: The CircuitPython radio, such as ``wifi.radio``, for the
+                default socket.  MicroPython and CPython ignore it.
+            socket: Ready UDP socket to use instead of the default one.
+            transport_factory: Zero-argument callable that returns a UDP
+                socket, used instead of the default one.
+            ticks: Clock object, passed to the constructor.
+            **constructor_kwargs: Any other constructor argument.  A keyword
+                given here wins over the config value.
+
+        Returns:
+            A new ``NTPClient`` with no query in flight.
 
         Raises:
-            RuntimeError: No socket or factory was given and
-                ``chumicro_sockets.sockets_factory`` is unavailable.
+            RuntimeError: Neither ``socket`` nor ``transport_factory`` was
+                given, and ``chumicro_sockets.sockets_factory`` is missing
+                from the board.
         """
         if socket is None and transport_factory is None:
             try:
@@ -188,17 +235,26 @@ class NTPClient:
 
     @property
     def busy(self) -> bool:
-        """``True`` between :meth:`query` and result completion."""
+        """``True`` from ``query()`` until that query's ``NTPResult`` is done."""
         return self._result is not None and not self._result.done
 
     def query(self) -> NTPResult:
-        """Issue a single SNTP query.
+        """Send one SNTP request and return its ``NTPResult`` without waiting for the reply.
+
+        ``handle()`` fills in the result on a later pass of the loop.  The
+        client first throws away any late replies to an earlier query.  With
+        the default socket, a host name in ``server`` costs a DNS lookup
+        inside this call that blocks until the resolver answers.
+        A failed send comes back as a result that is already done, with the
+        socket's ``OSError`` in ``error``.
 
         Returns:
-            An :class:`NTPResult` the caller polls.
+            The ``NTPResult`` for this query.
 
         Raises:
-            RuntimeError: A query is already in flight (``busy``).
+            RuntimeError: A query is already in flight (``busy`` is
+                ``True``), or ``close()`` ran on a client built with
+                ``socket=``.
         """
         if self.busy:
             raise RuntimeError(
@@ -235,18 +291,41 @@ class NTPClient:
                 return
 
     def check(self, now_ms: int) -> bool:
-        """Return ``True`` when the runner should call :meth:`handle`.
+        """Return ``True`` when ``handle()`` has work to do: a query waits for its reply.
 
         Args:
-            now_ms: Current tick value (unused; required by the runner).
+            now_ms: Current ``ticks_ms()`` reading.  The client ignores it and
+                accepts it to match the runner's calling convention.
         """
         return self.busy
 
-    def handle(self, now_ms: int) -> None:
-        """Drain one tick of work for the in-flight query.
+    def next_deadline(self, now_ms: int) -> int | None:
+        """Return the ``ticks_ms()`` value by which ``handle()`` must run next, or ``None`` when idle.
+
+        ``Runner.wait()`` sleeps no later than the earliest deadline its
+        services report.  While a reply is pending, the client asks for a
+        turn 20 ms after ``now_ms``.  ``handle()`` checks the socket on that
+        turn.
 
         Args:
-            now_ms: Current tick value, used for timeout detection.
+            now_ms: Current ``ticks_ms()`` reading.
+        """
+        if self.busy:
+            return self._ticks.ticks_add(now_ms, _REPLY_POLL_MS)
+        return None
+
+    def handle(self, now_ms: int) -> None:
+        """Read the reply to the query in flight if it has arrived, and finish the query.
+
+        A valid reply sets ``unix_seconds`` on the result.  A malformed reply,
+        a socket error, or ``timeout_ms`` passing with no reply sets
+        ``error``.  Either way the result's ``done`` turns ``True``.  Each
+        call reads at most one datagram and returns at once when none has
+        arrived.
+
+        Args:
+            now_ms: Current ``ticks_ms()`` reading, compared against the time
+                the query went out.
         """
         result = self._result
         if result is None or result.done:
@@ -282,10 +361,11 @@ class NTPClient:
             )
 
     def cancel(self) -> bool:
-        """Abort an in-flight query.
+        """End the query in flight with ``NTPError("canceled")`` and free the client for the next one.
 
         Returns:
-            ``True`` if a query was in flight, ``False`` if the client was idle.
+            ``True`` when a query was in flight, ``False`` when the client
+                was idle.
         """
         if not self.busy:
             return False
@@ -295,9 +375,9 @@ class NTPClient:
     def close(self) -> None:
         """Close the UDP socket.
 
-        A factory-built client reopens on the next :meth:`query`; a client
-        constructed with ``socket=`` raises ``RuntimeError`` from ``query``
-        after close, since it has no way to rebuild the socket.
+        A client built with ``transport_factory`` opens a fresh socket at the
+        next ``query()``.  A client built with ``socket=`` has no way to open
+        another, so its next ``query()`` raises ``RuntimeError``.
         """
         if self.socket is None:
             return

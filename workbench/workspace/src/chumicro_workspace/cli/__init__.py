@@ -58,9 +58,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="chumicro-workspace",
         description=(
-            "Host-side dispatcher for ChuMicro project workspaces: "
-            "deploy projects, probe boards, open REPLs, and manage "
-            "devices.yml from one CLI."
+            "chumicro-workspace puts your Python projects on "
+            "CircuitPython and MicroPython boards.  It registers a "
+            "board, creates projects, copies a project and the "
+            "libraries it imports onto the board, and shows what the "
+            "board prints."
+        ),
+        epilog=(
+            "First steps, in order: bootstrap registers the board "
+            "plugged into USB.  new blinker creates projects/blinker/.  "
+            "library add chumicro_timing fetches a library into the "
+            "workspace.  deploy blinker --tail 30 copies the project "
+            "onto the board and shows 30 seconds of its output.  repl "
+            "opens the board's Python prompt.  In a workspace made from "
+            "the workbench template, type python3 run.py where these "
+            "steps say chumicro-workspace.  chumicro-workspace <command> "
+            "--help lists one command's options."
         ),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)

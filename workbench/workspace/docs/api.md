@@ -1,15 +1,13 @@
 # API Reference
 
-Auto-generated from docstrings via mkdocstrings.  The package root
-keeps a deliberately narrow surface; everything else is imported
-from the submodule that owns it, so the sections below are grouped
-by source file.
+Generated from the docstrings in the source.  The package root
+exports a few names, and every other name lives in the submodule
+that owns it, so the sections below follow the source files.
 
-`devices.yml` reading and writing is not here.  That schema belongs
-to `chumicro-deploy`, whose
+`chumicro-deploy` reads and writes `devices.yml`.  Its
 [API reference](https://chumicro.com/ChuMicro/deploy/stable/api/)
-documents `chumicro_deploy.config.devices_yaml` along with
-`derive_firmware_url` and the transports.
+documents `chumicro_deploy.config.devices_yaml`,
+`derive_firmware_url`, and the board transports.
 
 ## Package root
 
@@ -21,8 +19,8 @@ documents `chumicro_deploy.config.devices_yaml` along with
 
 ## Config merge pipeline
 
-`build_runtime_config` is the whole flow; the four steps below it are
-public so callers can compose them directly.
+`build_runtime_config` runs the whole merge.  The four steps after
+it are public, and a caller can run them one at a time.
 
 ::: chumicro_workspace.pipeline
 

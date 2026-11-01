@@ -3,9 +3,9 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-**Compact binary serialization for settings and config, smaller than JSON.**
+**Turn a dict into a few bytes and back again: the job JSON does, in fewer bytes.**
 
-The subset of [MessagePack](https://msgpack.org) that fits on a 256 KB board: 32-bit ints, single-precision floats, 16-bit lengths.  Wire-compatible with the PyPI `msgpack` library when it's configured for the same subset (`use_single_float=True`); on CircuitPython firmware that ships the native `msgpack` C module, encoding and decoding delegate to the C path automatically.
+`packb(reading)` turns a dict, list, number, or string into compact bytes you can save in NVM, write to a file, or send over the network.  `unpackb(data)` turns them back.  The bytes follow the [MessagePack](https://msgpack.org) format, so a laptop reading them with the PyPI `msgpack` package gets the same values.  On a CircuitPython board whose firmware has the built-in `msgpack` module, these functions use it.  The same code runs on CircuitPython, MicroPython, and CPython.
 
 <br clear="left">
 
@@ -24,99 +24,111 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_msgpack
 pip install chumicro-msgpack
 ```
 
-For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and details on PyPI naming, see the [ChuMicro install guide](https://chumicro.com/ChuMicro/guides/install/).
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
 
+Pack a changing sensor reading once a second and print the bytes:
+
 ```python
+import time
+
 from chumicro_msgpack import packb, unpackb
 
-settings = {0: "MyNetwork", 1: "secret", 2: True}
+count = 0
 
-data = packb(settings)       # compact binary bytes
-print(len(data))             # much smaller than JSON
+while True:
+    count += 1
+    reading = {"count": count, "temp_c": 20.0 + (count % 10) / 2}
 
-restored = unpackb(data)
-print(restored)              # {0: 'MyNetwork', 1: 'secret', 2: True}
+    data = packb(reading)                    # dict -> 20 bytes
+    print(f"{len(data)} bytes: {data.hex()}")
+    print(f"unpacked: {unpackb(data)}")      # bytes -> the same dict
+
+    time.sleep(1)
 ```
+
+The same reading as JSON text takes 28 bytes.
 
 ## What's included
 
-### Stream-based API (preferred on microcontrollers)
+### Bytes
 
 | Symbol | Description |
 |---|---|
-| `pack(obj, stream)` | Pack an object to a writable stream (streams without an intermediate buffer on the native CircuitPython encoder; on the pure path it encodes to bytes first) |
-| `unpack(stream)` | Unpack one object from a readable stream |
+| `packb(obj)` | Pack a Python object into MessagePack bytes |
+| `unpackb(data)` | Unpack MessagePack `bytes`, `bytearray`, or `memoryview` back into a Python object |
 
-### Bytes-based API
+### Streams
 
 | Symbol | Description |
 |---|---|
-| `packb(obj)` | Pack a Python object to msgpack bytes (allocates a temporary buffer) |
-| `unpackb(data)` | Unpack msgpack bytes (bytes, bytearray, or memoryview) to a Python object |
+| `pack(obj, stream)` | Pack an object and write it to anything with a `write()` method, such as a file or socket |
+| `unpack(stream)` | Read one packed object back from anything with a `read()` method |
 
-Use `pack`/`unpack` when writing to files, sockets, or NVM.  Use `packb`/`unpackb` when you need the encoded bytes in memory (e.g., to measure length before framing).
+Use `packb` and `unpackb` to hold the bytes in hand: to save them in NVM, to measure their length, or to put a header in front.  Use `pack` and `unpack` to write straight to a file or socket.  On a CircuitPython board with the built-in module, `pack` writes as it encodes.  Everywhere else it packs to bytes first and then writes them.
 
 ### Supported types
 
-| Python type | msgpack format | Limit |
+| Python type | MessagePack format | Limit |
 |---|---|---|
 | `None` | nil | none |
 | `True` / `False` | bool | none |
 | `int` | fixint, int8/16/32, uint8/16/32 | `-2^31 ≤ value ≤ 2^32 − 1` |
-| `float` | float32 | single precision (~7 decimal digits) |
+| `float` | float32 | single precision, about 7 decimal digits |
 | `str` | fixstr, str8, str16 | up to 65 535 bytes UTF-8 |
 | `bytes` / `bytearray` | bin8, bin16 | up to 65 535 bytes |
 | `list` / `tuple` | fixarray, array16 | up to 65 535 elements |
 | `dict` | fixmap, map16 | up to 65 535 entries |
 
-Values outside these limits raise `OverflowError` on encode. Tags outside the subset (`float64` `0xcb`, `int64` `0xd3`, `uint64` `0xcf`, the `*32`-length variants) raise a descriptive `ValueError` on decode that names the offending tag.
+On MicroPython and CPython, packing a value outside these limits raises `OverflowError`.  Unpacking a format outside this table, such as `float64` (`0xcb`), `int64` (`0xd3`), `uint64` (`0xcf`), or a `*32`-length variant, raises a `ValueError` that names the format byte.  On a CircuitPython board, the built-in module packs integers from `-2^30` to `2^30 − 1` and raises `ValueError` for a larger integer or a type it cannot pack.
 
-`tuple` decodes back as `list`, since msgpack has no tuple type. `dict` keys may be any supported type, including `int` (no `strict_map_key` enforcement). Ext types (timestamps, custom classes) are not supported in either direction.
-
-## Cross-runtime compatibility
-
-| Direction | Works? | Notes |
-|---|---|---|
-| chumicro device writes → host reads | ✓ always | Bytes are spec-compliant; any standard reader decodes them |
-| chumicro device writes → chumicro device reads | ✓ always | The common case; full round-trip |
-| Host writes with PyPI `msgpack` → chumicro device reads | ✓ if host stays in subset | See recipe below |
-| Host writes default PyPI `msgpack` → chumicro device reads | ✗ | PyPI defaults to `float64`, decodes raise on device |
-| CircuitPython firmware codec writes deep nesting → pure-path reads | ✗ past 8 levels | CircuitPython boards resolve `packb` to the firmware's native `msgpack`, which has no nesting cap; the pure path (MicroPython, CPython) refuses depth past 8 on decode.  A payload nested deeper than 8 persisted on a CircuitPython board (NVM, littlefs) will not load after reflashing that board to MicroPython; keep persisted structures within 8 levels |
-
-**Host-side recipe**, when a host script needs to produce bytes a chumicro device will read:
-
-```python
-import msgpack  # standard PyPI library
-data = msgpack.packb(obj, use_single_float=True)
-# Caller's job: keep ints in [-2**31, 2**32-1] and lengths under 65 536.
-```
-
-`use_single_float=True` switches PyPI msgpack from `float64` to `float32`, matching what chumicro reads.  This is what `chumicro-workspace` does when it writes `runtime_config.msgpack` for the device.
+A `tuple` comes back as a `list`, because MessagePack has no tuple type.  A `dict` key may be any supported type, including `int`.  Extension types, such as timestamps and custom classes, are unsupported in both directions.
 
 ## Where this fits
 
-Leaf, no upstream ChuMicro deps.  Used directly by [`chumicro-config`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config) to decode `/runtime_config.msgpack` on the device, and by host-side workspace tooling to write it.
+Needs no other library.  [`chumicro-config`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config) uses it to read `/runtime_config.msgpack` on the board, and [`chumicro-kvstore`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/kvstore) uses it to save its values.
 
 ## Platform support
 
+Works on CPython, MicroPython, and CircuitPython.
+
 | Runtime | Implementation |
 |---|---|
-| CircuitPython (hardware) | Delegates to the native C `msgpack` module; pure-Python code is never loaded |
-| CircuitPython (unix port) | Pure-Python encoder/decoder (native module not compiled in) |
-| MicroPython | Pure-Python encoder/decoder |
-| CPython | Pure-Python encoder/decoder |
+| CircuitPython board | The firmware's built-in `msgpack` module.  The pure-Python code never loads |
+| CircuitPython unix port | The pure-Python code, because the port leaves the built-in module out |
+| MicroPython | The pure-Python code |
+| CPython | The pure-Python code |
 
+### Reading and writing on a laptop
+
+| Writer | Reader | Result |
+|---|---|---|
+| A board | A laptop with PyPI `msgpack` | Works.  The bytes follow the MessagePack spec, so any reader decodes them |
+| A board | A board | Works |
+| A laptop with PyPI `msgpack`, inside the supported types | A board | Works when the laptop packs with `use_single_float=True` |
+| A laptop with PyPI `msgpack` defaults | A MicroPython board | Fails on floats.  PyPI `msgpack` packs floats as 64-bit by default.  MicroPython refuses them, and a CircuitPython board's built-in module reads them as 32-bit floats |
+| A CircuitPython board, with nesting deeper than 8 levels | MicroPython or CPython | Fails.  CircuitPython's built-in module has no nesting limit, and the pure-Python reader refuses depth past 8.  Data saved in NVM on a CircuitPython board fails to load after that board is reflashed to MicroPython, so keep saved data within 8 levels |
+
+A laptop script writes bytes a board can read with this recipe:
+
+```python
+import msgpack  # the PyPI package
+
+data = msgpack.packb(obj, use_single_float=True)
+# Keep ints in [-2**31, 2**32-1] and lengths under 65 536.
+```
+
+`use_single_float=True` switches PyPI `msgpack` from `float64` to `float32`, which every board reads.  `chumicro-workspace` uses the same setting when it writes `/runtime_config.msgpack` for a board.
 
 ## Examples
 
 | Example | What it shows |
 |---|---|
-| `packb_basic.py` | Pack and unpack a settings dict |
-| `packb_size_comparison.py` | Compare msgpack vs JSON size for the same dict (packs a five-field settings dict to 78 bytes where JSON needs 109, about 28 % smaller; integer keys instead of strings widen the gap further) |
-| `stream_roundtrip.py` | Use the stream-based `pack` / `unpack` API with `BytesIO` |
-| `circuitpython_nvm_settings.py` | Store and load settings in non-volatile memory (hardware) |
+| [`packb_basic.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/msgpack/examples/packb_basic.py) | Packs a changing reading once a second, prints the bytes, and unpacks them again |
+| [`packb_size_comparison.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/msgpack/examples/packb_size_comparison.py) | Measures a reading every two seconds as JSON (64 bytes), MessagePack (41 bytes), and MessagePack with number keys (13 bytes) |
+| [`stream_roundtrip.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/msgpack/examples/stream_roundtrip.py) | Writes a reading into a `BytesIO` stream with `pack` and reads it back with `unpack`, once a second |
+| [`circuitpython_nvm_settings.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/msgpack/examples/circuitpython_nvm_settings.py) | Saves a settings dict in `microcontroller.nvm` once per start and reads it back every five seconds.  Press reset to see it survive.  CircuitPython board |
 
 ## Contributing
 

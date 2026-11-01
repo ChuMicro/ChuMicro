@@ -1,4 +1,4 @@
-"""MQTT 3.1.1 wire format: exceptions, constants, codecs, encoders, and the packet decoder."""
+"""``chumicro_mqtt._wire`` builds and parses MQTT 3.1.1 packets and defines the package's exception types."""
 
 import struct
 
@@ -10,15 +10,36 @@ except ImportError:
 
 
 class MQTTError(Exception):
-    """Base class for every chumicro-mqtt failure."""
+    """Base class of the exceptions ``chumicro_mqtt`` defines.
+
+    ``MQTTClient.last_error`` holds an ``MQTTError`` or ``None``.  A socket
+    ``OSError`` that ends a connection arrives there wrapped in one.
+    """
 
 
 class MQTTProtocolError(MQTTError):
-    """The broker sent something the spec doesn't allow."""
+    """Error in ``MQTTClient.last_error`` when the broker breaks the MQTT protocol or ends the session.
+
+    The client stores it when the broker sends a malformed or unexpected
+    packet, closes the TCP connection, or refuses a subscription.  The
+    ``WhenOversized.DISCONNECT`` policy reports an oversized message with it
+    too.
+    """
 
 
 class MQTTConnectError(MQTTError):
-    """CONNACK arrived with a non-zero return code."""
+    """Error in ``MQTTClient.last_error`` when the broker refuses the connection.
+
+    The broker answers the client's CONNECT packet with a CONNACK packet.  A
+    nonzero return code in the CONNACK means refused.  After codes 1, 2, 4,
+    and 5 the client stops reconnecting until the next ``connect()``.
+    After code 3 it keeps retrying.
+
+    Attributes:
+        return_code: The CONNACK return code.  1 is an unacceptable
+            protocol version, 2 a rejected client id, 3 server unavailable,
+            4 a bad username or password, and 5 not authorized.
+    """
 
     def __init__(self, message, *, return_code):
         super().__init__(message)
@@ -26,11 +47,19 @@ class MQTTConnectError(MQTTError):
 
 
 class MQTTBackpressureError(MQTTError):
-    """The outbound queue is full, so the caller must back off."""
+    """Raised by ``publish()``, ``subscribe()``, or ``unsubscribe()`` when the client's send queue is full.
+
+    Before the broker accepts the connection, ``publish()`` raises it when
+    the pre-connect queue is full.  Later ``handle()`` calls empty the
+    queues.  The same call succeeds once there is room.
+    """
 
 
 class UnsupportedQoSError(MQTTError):
-    """User requested QoS 2, which is not implemented."""
+    """Raised when a publish, a subscription, or a last will asks for QoS 2 or higher.
+
+    The client implements QoS 0 and QoS 1.
+    """
 
 
 # PACKET_SUBSCRIBE (0x82) and PACKET_UNSUBSCRIBE (0xA2) carry 0x02 in the low
@@ -118,7 +147,15 @@ def _append_string(buffer, value):
 
 
 def topic_matches(topic, pattern):
-    """Return ``True`` when *topic* matches the wildcard *pattern*."""
+    """Return ``True`` when ``topic`` matches the subscription filter ``pattern``.
+
+    Both strings split into levels at ``/``.  A ``+`` level in ``pattern``
+    matches any one level.  A ``#`` as the last level matches every
+    remaining level, including none, so ``"home/#"`` matches ``"home"``.
+    Every other level must match exactly.  ``topic`` is the topic of a
+    received message, such as ``"home/kitchen/temp"``.  ``pattern`` is a
+    filter, such as ``"home/+/temp"`` or ``"home/#"``.
+    """
     topic_levels = topic.split("/")
     pattern_levels = pattern.split("/")
     pattern_count = len(pattern_levels)
@@ -465,8 +502,8 @@ class PacketDecoder:
         )
 
     def _parse_publish(self, fixed_byte, view, body_start, body_end):
-        # qos is bits 1-2 of the fixed-header byte; the retain bit (bit 0)
-        # is accepted off the wire but not surfaced — no consumer reads it.
+        # QoS sits in bits 1-2 of the fixed-header byte.  ParsedPublish has
+        # no retain field, so the retain flag in bit 0 is ignored.
         qos = (fixed_byte >> 1) & 0x03
         if body_end - body_start < 2:
             raise MQTTProtocolError("PUBLISH missing 2-byte topic-length prefix")

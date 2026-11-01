@@ -1,55 +1,73 @@
 # Deploys and file persistence
 
-The first week with the deploy tool has two traps that both look like lost data.  A deploy clears files you put on the board by hand, and RAM mode (a deploy mode that runs your code straight from host memory) never writes anything to the board at all, so nothing a run saves survives.  RAM mode is opt-in: deploys go to flash by default, and you reach RAM mode only by setting `deploy_mode: ram` on a device entry in `devices.yml` or passing `--deploy-mode ram`.  This page covers both traps, along with the memory error you hit when a RAM-mode deploy is too big for the board.
+A deploy makes the files on the board match your project. Files copied onto `CIRCUITPY` by hand disappear at the next deploy.
 
-## A deploy made my hand-installed libraries and `settings.toml` disappear
+## A deploy deleted files put on the board by hand
 
-Deploys are clean-slate by default.  Each one reconciles the board's filesystem to the project's payload (the set of files the deploy sends) and removes anything that isn't in it, apart from a small keep set: `boot.py`, `boot_out.txt`, and the persistent key-value store blob.  A board-resident `settings.toml` is evicted with a one-time notice because it competes with config-driven wifi.  Libraries you installed by hand with `circup` or `mip`, and files you uploaded yourself, are not in the payload, so a default deploy removes them.
-
-Let the workspace own the board's `/lib` by adding libraries through the tool, which puts them in the payload:
+List exactly what a deploy sends, without touching the board:
 
 ```bash
-chumicro-workspace library add chumicro_mqtt
-chumicro-workspace deploy <project>
+python3 run.py deploy <project> --dry-run
 ```
 
-To keep hand-managed files in place for a single deploy, pass `--no-wipe`:
+Keep each kind of file where the deploy sends it from:
+
+- **Libraries:** add them to the [workspace](../glossary.md#workspace), and every deploy carries the ones your project imports. A project with its own `code.py` or `main.py` also needs `--import-graph`, as [Deploy refused, or ImportError on boot](deploy-refused-importerror.md#the-board-prints-importerror-no-module-named-chumicro_-after-a-clean-deploy) explains.
+
+  ```bash
+  python3 run.py library add chumicro_mqtt
+  ```
+
+- **Your own files**, such as fonts, images, or a data table: put them in the project folder. They ride along with every deploy.
+- **Your own `boot.py`:** put it in the project folder too. A project's `boot.py` replaces the one on the board.
+- **Wifi passwords and other settings:** `secrets.toml` in the workspace folder. The deploy turns it into `/runtime_config.msgpack` on the board.
+
+To deploy once and leave the board's other files alone, pass `--no-wipe`:
 
 ```bash
-chumicro-workspace deploy <project> --no-wipe
+python3 run.py deploy <project> --no-wipe
 ```
 
-`--wipe` is the opposite escape: a full erase before the copy.
+A deploy sends your project, the libraries it uses, and a config file, then deletes every other file on the board except these:
 
-## Messages stop after the first publish, or the boot counter never increments (`OSError: [Errno 2] ENOENT` on `/runtime_config.msgpack`)
+- `boot.py`, the file CircuitPython and MicroPython run before your program starts.
+- `boot_out.txt`, which CircuitPython writes about itself at power-up.
+- `_chu_kv.msgpack`, where `chumicro-kvstore` saves data on boards that keep it in a file.
 
-The board is deploying in RAM mode.  Flash is the default, so something opted in: a `deploy_mode: ram` line on the device's entry in `devices.yml`, or a `--deploy-mode ram` on the command.  RAM mode mounts your host source as `/remote/` on the device and never writes the board's flash or non-volatile memory, so absolute paths like `/runtime_config.msgpack` and any state a previous run saved simply aren't there.  Anything that counts across reboots or reads a file at a fixed absolute path fails.  (background: [Decision 0047](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0047-deploy-mode-flash-default.md))
+The deleted files include libraries installed with `circup` or `mip`. A `settings.toml` on the board goes too, with a `WARNING: removing the board's settings.toml` notice. Its `CIRCUITPY_WIFI_*` keys make CircuitPython join wifi by itself, which [fights the wifi library for the radio](wifi-wont-connect.md#wifi-drops-or-fights-itself-on-circuitpython).
 
-Put the device back on flash mode, which writes files to the board's own filesystem.  Drop the `deploy_mode: ram` line from its entry in `devices.yml`, or set flash explicitly:
+## `reset-board` erased `settings.toml` and `boot.py`
 
-```yaml
-# devices.yml
-devices:
-  - id: my-board
-    deploy_mode: flash
-```
+A `boot.py` kept in the project folder comes back with the next deploy. Wifi settings belong in the workspace's `secrets.toml`, which every deploy sends.
 
-Or override it for one run:
+`reset-board` empties the board's filesystem, the files a deploy keeps included. Its job is recovering a board whose files are damaged. Without `--yes` it refuses to run, which leaves a moment to back up files that exist only on the board:
 
 ```bash
-chumicro-workspace deploy <project> --deploy-mode flash
+python3 run.py reset-board --device <id> --yes
 ```
 
-Heavy networking libraries (mqtt, requests, http_server, websockets) switch to flash on their own.
+`deploy --wipe` erases the same way before it copies your project.
 
-## `INSUFFICIENT_MEMORY`: the RAM-mode payload exceeds the board's free heap
+## The deploy prints `switching to flash mode` after you asked for RAM
 
-RAM mode runs your code as an inline payload that has to fit in the board's working memory (its heap).  A fat module, or a tight board like the Pico W with 256 KB, can't hold it, and a large CircuitPython RAM payload can even drop the USB connection instead of raising a clean `MemoryError`.
+Nothing needs fixing: your project runs in flash mode as normal. To stop the message, drop the `deploy_mode: ram` line from `devices.yml`, or the `--deploy-mode ram` flag from the command.
 
-Drop the RAM pin and deploy in flash mode, which writes to the filesystem instead of loading the whole payload into memory:
+*Flash* mode, the default, writes your files to the board's storage, where they survive a reset. *RAM* mode runs your code without writing anything: it saves wear on the board's flash and loses everything at the next reset. `deploy_mode: ram` in `devices.yml` or `--deploy-mode ram` on the command selects RAM mode.
+
+The deploy switches a RAM request to flash, and prints why, whenever the payload holds something RAM mode can't carry. RAM mode carries only `.py` files reliably. A workspace project always sends its config file, `/runtime_config.msgpack`, so every project deploy lands in flash. The network libraries `chumicro-mqtt`, `chumicro-requests`, `chumicro-http-server`, and `chumicro-websockets` trigger the same switch, because importing them in RAM mode runs small boards out of memory.
+
+## After `--force-deploy-mode ram`: `ENOENT` on `/runtime_config.msgpack`, a boot counter that never counts, or `INSUFFICIENT_MEMORY`
+
+Deploy in flash mode:
 
 ```bash
-chumicro-workspace deploy <project> --deploy-mode flash
+python3 run.py deploy <project>
 ```
 
-Splitting a large module into smaller files helps too.  The deploy already checks free memory, strips comments and docstrings, and sends the payload in chunks; when even one chunk won't fit, it fails early and tells you to use flash.
+When `devices.yml` sets `deploy_mode: ram` for the board, or under `defaults:` for every board, delete that line or change it to `deploy_mode: flash`.
+
+`--force-deploy-mode ram` keeps RAM mode even where the deploy would switch, so everything the switch protects against happens:
+
+- `/runtime_config.msgpack` never reaches the board, so `load_runtime_config()` raises `OSError: [Errno 2] ENOENT` and your wifi settings never arrive.
+- Your program never lands in the board's storage, so after a reset the board runs nothing, and a boot counter never gets the chance to count.
+- The payload has to fit in the board's free memory at once. A large one fails with `INSUFFICIENT_MEMORY`, and on CircuitPython it can drop the USB connection instead.

@@ -488,17 +488,32 @@ def _add_setup_parsers(subparsers: argparse._SubParsersAction) -> None:
     """
     setup_parser = subparsers.add_parser(
         "setup",
-        help="Install dependencies and materialize template files.",
+        help="Install the workspace's tools and create its starter files.",
+        description=(
+            "Install the workspace's Python dependencies into the Python "
+            "running this command, then create workspace.yml, "
+            "secrets.toml, and devices.yml where they are missing.  Run "
+            "it once after cloning the workbench template.  A later run "
+            "keeps your edits to those files and adds any keys a newer "
+            "template introduced."
+        ),
     )
     _add_workspace_arg(setup_parser)
     setup_parser.set_defaults(func=_cmd_setup)
 
     update_parser = subparsers.add_parser(
         "update",
-        help=(
-            "Re-flow tool-owned template files from upstream. "
-            "User-owned files are skipped; tool-owned files upstream "
-            "no longer ships are deleted."
+        help="Refresh the files the workbench template provides.",
+        description=(
+            "Fetch the workbench template and rewrite the files it owns: "
+            "run.py, pyproject.toml, requirements.txt, constraints.txt, "
+            "the agent and contributor guides, projects/_template/, "
+            "examples/, and the template's workflows and skills under "
+            ".github/.  Your projects, shared/, packages/, devices.yml, "
+            "secrets.toml, and workspace.yml stay as they are.  A "
+            "template file that the new template dropped is deleted.  A "
+            "template file you edited stays as you left it, and update "
+            "lists it and exits 3.  --force overwrites it."
         ),
     )
     _add_workspace_arg(update_parser)
@@ -506,41 +521,53 @@ def _add_setup_parsers(subparsers: argparse._SubParsersAction) -> None:
         "--from",
         dest="template_url",
         default=None,
-        help="Template git URL (defaults to the ChuMicro template).",
+        help=(
+            "Git URL of the template to fetch.  Defaults to the ChuMicro "
+            "workbench template."
+        ),
     )
     update_parser.add_argument(
         "--ref",
         dest="git_reference",
         default=None,
-        help="Branch or tag to fetch (defaults to the remote's HEAD).",
+        help=(
+            "Branch or tag of the template to fetch.  Defaults to the "
+            "template's default branch."
+        ),
     )
     update_parser.add_argument(
         "--force",
         action="store_true",
         help=(
-            "Overwrite or delete tool-owned files even when their "
-            "content differs from the last-applied template version "
-            "(without this flag such files are refused and left "
-            "untouched)."
+            "Overwrite, or delete, template files you edited.  Without "
+            "it, update lists those files and leaves them as you left "
+            "them."
         ),
     )
     update_parser.set_defaults(func=_cmd_update)
 
     new_parser = subparsers.add_parser(
         "new",
-        help=(
-            "Create projects/<path>/ by copying a template or example tree.  "
-            "Path may be nested (slash- or dotted-form)."
+        help="Create a project folder under projects/ for your code.",
+        description=(
+            "Copy projects/_template/ to projects/<name>/.  The copy "
+            "holds app.py, where your code goes inside a run() function, "
+            "and project_config.toml for the project's own settings.  "
+            "--from copies an example or another project in place of "
+            "the template.  --library and --workbench create a package "
+            "with src/, tests/, docs/, and examples/ in place of a "
+            "project."
         ),
     )
     _add_workspace_arg(new_parser)
     new_parser.add_argument(
         "name",
         help=(
-            "Name of the new project (becomes projects/<path>/).  Accepts "
-            "bare ('bedroom_sensor'), slash ('upstairs/bedroom_sensor'), "
-            "or dotted ('upstairs.bedroom_sensor') forms.  Intermediate "
-            "namespace directories are auto-created."
+            "Project name, such as blinker.  A path such as "
+            "garage/door_open puts the project inside projects/garage/ "
+            "and creates that folder, and garage.door_open means the "
+            "same.  Each part is a Python name: letters, digits, and "
+            "underscores, starting with a letter."
         ),
     )
     new_parser.add_argument(
@@ -548,31 +575,29 @@ def _add_setup_parsers(subparsers: argparse._SubParsersAction) -> None:
         dest="from_path",
         default=None,
         help=(
-            "Copy from this directory (relative to the workspace root) "
-            "instead of projects/_template/.  Source must contain an "
-            "app.py / code.py / main.py entry-point.  Useful for "
-            "`new garage/heater --from examples/two_board_handshake/server`."
+            "Copy this folder in place of projects/_template/.  The path "
+            "is relative to the workspace folder, and the folder holds "
+            "an app.py, code.py, or main.py.  Example: new my_wifi "
+            "--from examples/wifi_only."
         ),
     )
     new_parser.add_argument(
         "--library",
         action="store_true",
         help=(
-            "Scaffold a chumicro-style library under "
-            "<workspace>/libraries/<name>/.  Mutually exclusive with "
-            "--from / --workbench; uses the built-in scaffolder."
+            "Create a library at libraries/<name>/, with src/, tests/, "
+            "docs/, examples/, pyproject.toml, and VERSION.  Every "
+            "project in the workspace can import it as <name>.  "
+            "Conflicts with --from and --workbench."
         ),
     )
     new_parser.add_argument(
         "--workbench",
         action="store_true",
         help=(
-            "Scaffold a host-only workbench tool under "
-            "<workspace>/workbench/<name>/.  Same scaffolder as "
-            "--library, but uses a workbench-flavored pyproject "
-            "template (CLI entry point, no cross-runtime concerns; "
-            "free to depend on CPython-only third-party libs).  "
-            "Mutually exclusive with --library / --from."
+            "Create a laptop-only Python tool at workbench/<name>/, "
+            "with a command-line entry point in its pyproject.toml.  "
+            "Conflicts with --library and --from."
         ),
     )
     new_parser.add_argument(
@@ -580,8 +605,8 @@ def _add_setup_parsers(subparsers: argparse._SubParsersAction) -> None:
         type=Path,
         default=None,
         help=(
-            "Library scaffolder only: override the parent directory "
-            "for the new library tree (default <workspace>/libraries/)."
+            "With --library or --workbench: create the package inside "
+            "this folder in place of libraries/ or workbench/."
         ),
     )
     new_parser.set_defaults(func=_cmd_new)

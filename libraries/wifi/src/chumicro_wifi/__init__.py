@@ -1,6 +1,9 @@
-"""Unified wifi supervisor across CircuitPython, MicroPython, and CPython.
+"""``chumicro_wifi`` joins a wifi network and rejoins it after a drop, on CircuitPython,
+MicroPython, and CPython.
 
-Exports :class:`WifiService`, :class:`WifiConfig`, and :class:`WifiState`.
+``WifiService`` does the work.  It takes a ``WifiConfig`` holding the network
+name, password, and retry timing, and the main loop calls its ``check`` and
+``handle`` methods.  ``WifiState`` names the values ``WifiService.state`` takes.
 """
 
 import gc

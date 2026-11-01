@@ -49,15 +49,23 @@ _TX_QUEUE_HEADROOM = const(8)
 
 
 class WhenOversized:
-    """Policy for inbound messages exceeding ``max_message_bytes``."""
+    """Values for ``when_oversized``: what to do with a message bigger than ``max_message_bytes``.
 
-    #: Drop the message silently; stay connected for the next one.
+    The connection reads an oversized message off the socket and throws it
+    away.  At most ``max_message_bytes`` of it sits in memory at once.
+
+    Attributes:
+        DROP_SILENT: Drop the message and stay connected.
+        DROP_WITH_EVENT: Drop the message, call
+            ``on_oversized(reported_length)``, and stay connected.  The
+            default.
+        DISCONNECT: Close the connection with ``CLOSE_TOO_BIG`` (1009).
+    """
+
     DROP_SILENT = "drop_silent"
 
-    #: Default. Drop the message, fire ``on_oversized(reported_length)``, and stay connected.
     DROP_WITH_EVENT = "drop_with_event"
 
-    #: Close immediately with :data:`CLOSE_TOO_BIG` when oversize means peer corruption.
     DISCONNECT = "disconnect"
 
 
@@ -85,7 +93,15 @@ def _force_non_blocking(socket):
 
 
 class InboundMessage:
-    """A complete inbound WebSocket data message returned by ``next_message``."""
+    """One complete message from the other end, as ``next_message()`` returns it.
+
+    Attributes:
+        is_text: ``True`` for a text message, ``False`` for a binary one.
+        text: The message as a ``str`` when ``is_text`` is ``True``, else
+            ``None``.
+        data: The message as ``bytes`` when ``is_text`` is ``False``, else
+            ``None``.
+    """
 
     def __init__(self, *, is_text: bool, text: str | None = None, data: bytes | None = None):
         self.is_text = is_text
@@ -103,8 +119,18 @@ class _InboundWait:
 
     io_socket = None
 
+    def __init__(self, session) -> None:
+        self._session = session
 
-_INBOUND_WAIT = _InboundWait()
+    def next_deadline(self, now_ms):
+        # Due now once a message is queued or the session has closed, so
+        # Runner.wait() returns instead of sleeping until the next socket
+        # event; the generator may have been checked before the session
+        # read the message on the same tick.
+        session = self._session
+        if session._inbound_queue or session.state == WebSocketState.CLOSED:
+            return now_ms
+        return None
 
 
 class _BaseSession:
@@ -160,6 +186,7 @@ class _BaseSession:
         self._inbound_oversized = False
         self._inbound_queue = None
         self._inbound_to_queue = False
+        self._inbound_wait = _InboundWait(self)
         # Peer-reported size of the in-progress message; load-bearing on tier-3 oversize.
         self._inbound_reported_length = 0
         self._inbound_empty_fragment_run = 0
@@ -188,7 +215,7 @@ class _BaseSession:
 
     @property
     def io_socket(self):
-        """The session's socket-ish object while live, else ``None``."""
+        """Socket ``Runner.wait()`` watches for this connection, or ``None`` once it is ``CLOSED``."""
         if self._socket is None:
             return None
         if self.state == WebSocketState.CLOSED:
@@ -196,7 +223,15 @@ class _BaseSession:
         return self._socket
 
     def io_interest(self, now_ms):
-        """Poll-interest bitmask (``_IO_READ`` / ``_IO_WRITE``) for the runner."""
+        """Return the socket events ``Runner.wait()`` should wake for, as a bitmask.
+
+        Bit value 1 asks to wake when ``io_socket`` is readable, and 2 when
+        it is writable.  An ``OPEN`` or ``CLOSING`` connection always asks to
+        read, and asks to write while frames wait to be sent.  During the
+        opening handshake it asks for whichever direction the handshake
+        needs next.  ``0`` asks for neither.  ``now_ms`` is the current
+        ``ticks_ms()`` reading.
+        """
         if self.state in (WebSocketState.OPEN, WebSocketState.CLOSING):
             interest = _IO_READ
             if bool(self._tx_queue) or self._tx_partial_buffer is not None:
@@ -218,7 +253,12 @@ class _BaseSession:
         return False
 
     def next_deadline(self, now_ms):  # noqa: ARG002 - runner contract
-        """Earliest tick at which ``handle()`` must run on a quiet socket, or ``None``."""
+        """Return the ``ticks_ms()`` value by which ``handle()`` must run, or ``None`` with no timer set.
+
+        The value is the nearest of the opening-handshake deadline, the
+        closing-handshake deadline, the PONG deadline, and the next automatic
+        PING.  The connection ignores ``now_ms``.
+        """
         # Four explicit comparisons: a tuple literal here would allocate on
         # every wait() in the loop.
         ticks_diff = self._ticks.ticks_diff
@@ -235,11 +275,17 @@ class _BaseSession:
         return nearest
 
     def send_text(self, text: str) -> None:
-        """Enqueue a text frame.
+        """Queue ``text`` to go out as one text message, encoded as UTF-8.
+
+        Later ``handle()`` calls write the queued frames to the socket.
+
+        Args:
+            text: The message.
 
         Raises:
-            WebSocketStateError: Not in OPEN state.
-            WebSocketBackpressureError: TX queue is full.
+            WebSocketStateError: ``state`` is not ``OPEN``.
+            WebSocketBackpressureError: ``max_tx_queue_size`` messages
+                already wait to be sent.
         """
         if self.state != WebSocketState.OPEN:
             raise WebSocketStateError(
@@ -248,11 +294,17 @@ class _BaseSession:
         self._enqueue_user_frame(OPCODE_TEXT, text.encode("utf-8"))
 
     def send_binary(self, data) -> None:
-        """Enqueue a binary frame from ``bytes``, ``bytearray``, or ``memoryview``.
+        """Queue ``data``, a ``bytes``, ``bytearray``, or ``memoryview``, to go out as one binary message.
+
+        The frame copies ``data`` before the call returns, so the caller can
+        reuse the buffer at once.  Later ``handle()`` calls write the queued
+        frames to the socket.
 
         Raises:
-            WebSocketStateError: Not in OPEN state.
-            WebSocketBackpressureError: TX queue is full.
+            TypeError: ``data`` is another type.
+            WebSocketStateError: ``state`` is not ``OPEN``.
+            WebSocketBackpressureError: ``max_tx_queue_size`` messages
+                already wait to be sent.
         """
         if self.state != WebSocketState.OPEN:
             raise WebSocketStateError(
@@ -270,7 +322,22 @@ class _BaseSession:
         self._enqueue_user_frame(OPCODE_BINARY, data)
 
     def send_ping(self, payload: bytes = b"") -> None:
-        """Send a PING frame the peer must echo as a PONG; payload capped at 125 bytes."""
+        """Queue a PING frame, which the other end must answer with a PONG frame carrying the same payload.
+
+        A PING checks that the connection still works.  When no PONG arrives
+        within ``pong_timeout_ms``, the connection fails with
+        ``WebSocketTimeoutError`` in ``last_error``.  ``on_pong`` fires when
+        the PONG arrives.
+
+        Args:
+            payload: Up to 125 bytes for the other end to echo.
+
+        Raises:
+            WebSocketStateError: ``state`` is not ``OPEN``.
+            WebSocketBackpressureError: ``max_tx_queue_size`` messages
+                already wait to be sent.
+            WebSocketProtocolError: ``payload`` is longer than 125 bytes.
+        """
         if self.state != WebSocketState.OPEN:
             raise WebSocketStateError(
                 f"send_ping() requires OPEN state, was {self.state}",
@@ -279,10 +346,24 @@ class _BaseSession:
         self._arm_pong_deadline()
 
     def close(self, code: int = CLOSE_NORMAL, reason: str = "") -> None:
-        """Initiate a graceful close handshake.
+        """Start the closing handshake: queue a CLOSE frame and move to ``CLOSING``.
+
+        Later ``handle()`` calls send the frame and wait up to
+        ``close_timeout_ms`` for the other end's CLOSE.  The connection then
+        moves to ``CLOSED``.  ``on_close`` fires.
+
+        Args:
+            code: Status code for the other end, one of the ``CLOSE_*``
+                constants: ``CLOSE_NORMAL`` (1000), ``CLOSE_GOING_AWAY``
+                (1001), ``CLOSE_PROTOCOL_ERROR`` (1002), ``CLOSE_BAD_DATA``
+                (1007), ``CLOSE_TOO_BIG`` (1009), or ``CLOSE_INTERNAL_ERROR``
+                (1011).
+            reason: Short text for the other end.  A reason over 123 bytes
+                in UTF-8 makes the CLOSE frame go out with no code or reason.
 
         Raises:
-            WebSocketStateError: Already CLOSING or CLOSED.
+            WebSocketStateError: ``state`` is already ``CLOSING`` or
+                ``CLOSED``.
         """
         if self.state in (WebSocketState.CLOSING, WebSocketState.CLOSED):
             raise WebSocketStateError(
@@ -291,10 +372,15 @@ class _BaseSession:
         self._send_close(code, reason, None)
 
     def next_message(self):
-        """Suspend until the next inbound data message, then return it.
+        """Wait in a generator task for a complete message: ``message = yield from client.next_message()``.
 
-        Returns:
-            The next :class:`InboundMessage`, or ``None`` once the session is CLOSED and drained.
+        A generator task is a function with ``yield`` in it that
+        ``chumicro_runner.Runner.add_generator()`` runs one step per tick.
+        The first call switches delivery from ``on_text`` and ``on_binary``
+        to a queue of ``max_inbound_queue_size`` messages.  A full queue
+        drops its oldest message.  The ``yield from`` expression evaluates to
+        the next ``InboundMessage``, or to ``None`` once ``state`` is
+        ``CLOSED`` and the queue is empty.
         """
         if self._inbound_queue is None:
             # 2-arg deque drops the oldest item on append-when-full on every runtime.
@@ -305,7 +391,7 @@ class _BaseSession:
                 return self._inbound_queue.popleft()
             if self.state == WebSocketState.CLOSED:
                 return None
-            yield _INBOUND_WAIT
+            yield self._inbound_wait
 
     def _outbound_mask(self):  # pragma: no cover - abstract
         raise NotImplementedError

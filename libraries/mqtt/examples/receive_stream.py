@@ -1,49 +1,80 @@
-"""MQTT receive-stream client via next_message on a real board.
+"""Print every MQTT message sent to the board, one at a time, forever.
 
-Brings wifi up via the local ``helpers`` module, connects to a
-configured MQTT broker, subscribes to one command topic, then receives
-every inbound message with a ``yield from mqtt.next_message()`` loop
-driven by ``Runner.add_generator``: wait for a message, act on it,
-wait for the next.  The bottom of the file is the ``while True``
-main loop that turns the runner.
+The board joins your wifi, connects to an MQTT broker, subscribes to
+the topic ``chumicro-demo/cmd``, and prints each message that arrives
+there until you unplug it.
 
-Pair with ``telemetry.py``, which uses the ``on_message`` callback and
-its own tick loop; this one shows the linear receive loop for a
-single-subscription consumer, with the client and the consumer both
-registered with the runner.  Pick one inbound
-surface per client, not both: the first ``next_message()`` call
-switches data delivery from the callbacks to the stream.
+MQTT is a publish/subscribe protocol.  The board and your laptop each
+connect to a broker, a small server that passes messages along.  Your
+laptop publishes to a named topic, and every client subscribed to that
+topic, the board included, gets a copy.
 
-Configuration
-=============
+The receiving code in ``print_commands()`` reads top to bottom: wait
+for the next message, print it, wait again.  It is a generator (a
+function with ``yield`` in it), and ``yield from mqtt.next_message()``
+pauses it until a message arrives.  While it is paused, the runner at
+the bottom of the file keeps the connection and everything else on the
+board moving.  ``telemetry.py`` receives through an ``on_message``
+callback instead.  A client uses one or the other: the first
+``next_message()`` call switches ``on_message`` off.
 
-Reads the deployed ``runtime_config.msgpack`` via the flat-key API:
+Stop the broker while this runs and the board prints that it lost the
+connection.  Start it again and the board reconnects on its own and
+subscribes again, so the next message you send still arrives.
 
-* WiFi (read by ``helpers.wifi_up``): ``wifi.ssid`` / ``wifi.password``.
-* MQTT (read by ``MQTTClient.from_config``): ``mqtt.broker.host`` /
-  ``mqtt.broker.port`` / ``mqtt.client_id``.
-* App-level: ``mqtt.command_topic``, the topic this consumer drains
-  (defaults to ``chumicro-demo/cmd``).
+Run a broker on your laptop
+===========================
 
-Deploying
-=========
+1. Install Mosquitto: ``brew install mosquitto`` on a Mac, or
+   ``sudo apt install mosquitto mosquitto-clients`` on Debian or
+   Ubuntu.  On Linux the package starts a broker that only answers the
+   laptop itself; stop it with ``sudo systemctl stop mosquitto``.
+2. Save these two lines as ``mosquitto.conf``.  They let clients on
+   your wifi connect without a password::
 
-Deploy with ``chumicro-workspace``::
+       listener 1883
+       allow_anonymous true
+
+3. Start the broker and leave it running.  ``-v`` prints every
+   connection and message::
+
+       mosquitto -c mosquitto.conf -v
+
+4. Once the board says ``MQTT connected``, send it messages from a
+   second terminal::
+
+       mosquitto_pub -h localhost -t chumicro-demo/cmd -m ping
+       mosquitto_pub -h localhost -t chumicro-demo/cmd -m blink
+
+Run it on the board
+===================
+
+Set ``WIFI_SSID``, ``WIFI_PASSWORD``, and ``BROKER_HOST`` below.
+``BROKER_HOST`` is your laptop's IP address on the wifi network:
+``ipconfig getifaddr en0`` prints it on a Mac, ``hostname -I`` on
+Linux.  When you deploy with ``chumicro-workspace``, the values under
+``[wifi]`` and ``[mqtt.broker]`` in your ``secrets.toml`` are used
+instead::
 
     chumicro-workspace deploy-example mqtt receive_stream --device <id>
 
-Example output::
+What you will see
+=================
+
+::
 
     WIFI_OK ip=10.0.0.42
-    [mqtt] connected
-    [rx 1] chumicro-demo/cmd <- b'ping'
-    [rx 2] chumicro-demo/cmd <- b'blink'
+    Connecting to MQTT broker 10.0.0.5:1883
+    MQTT connected
+    [1] chumicro-demo/cmd: b'ping'
+    [2] chumicro-demo/cmd: b'blink'
+
+Try sending ``on`` and ``off`` and switching an LED in
+``print_commands()``.
 """
 
-#: Cross-runtime: wifi-up via :mod:`helpers` dispatches per
-#: ``sys.implementation.name`` (CP / MP) and the MQTT client is
-#: pure-Python.  The marker tells :func:`scripts.verify_examples`
-#: + ``deploy-example`` to allow this file on either runtime.
+# Runs on CircuitPython and MicroPython boards.  helpers.wifi_up picks
+# the right wifi calls for each.
 __chumicro_runtimes__ = ("circuitpython", "micropython")
 
 from chumicro_mqtt import MQTTClient
@@ -52,46 +83,68 @@ from helpers import runtime_config, wifi_up
 
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 - replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 - replace before deploying
+BROKER_HOST = ""  # your laptop's IP address, for example "192.168.1.20"
+BROKER_PORT = 1883
+COMMAND_TOPIC = "chumicro-demo/cmd"
 
-config = runtime_config()
-
+# Join wifi.  wifi_up waits until the board has an IP address.
 radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)
 print(f"WIFI_OK ip={ip}")
 
+# Settings deployed by chumicro-workspace win over the constants above.
+# A file copied to the board by hand gets an empty config here.
+config = runtime_config()
+config.setdefault("mqtt.broker.host", BROKER_HOST)
+config.setdefault("mqtt.broker.port", BROKER_PORT)
+if not config["mqtt.broker.host"]:
+    raise RuntimeError("set BROKER_HOST at the top of this file to your broker's IP address")
+print(f"Connecting to MQTT broker {config['mqtt.broker.host']}:{config['mqtt.broker.port']}")
+
+# from_config builds a client that dials the broker through this board's
+# wifi radio, and dials again by itself whenever the connection drops.
 mqtt = MQTTClient.from_config(config, radio=radio)
-command_topic = config.get("mqtt.command_topic", "chumicro-demo/cmd")
 
 
 def on_connect():
-    # subscribe() requires the CONNECTED state, so wire it through
-    # on_connect (it fires once the broker session is up).
-    print("[mqtt] connected")
-    mqtt.subscribe(command_topic, qos=1)
+    # Runs each time the broker accepts the board, reconnects included.
+    print("MQTT connected")
+
+
+def on_disconnect():
+    # Runs when a working connection drops.  The client reconnects on
+    # its own: at once, then 1, 2, 4... seconds apart, at most a minute.
+    print(f"MQTT connection lost: {mqtt.last_error}")
 
 
 mqtt.on_connect = on_connect
+mqtt.on_disconnect = on_disconnect
+
+# Ask the broker for COMMAND_TOPIC.  The client sends the request once
+# connected, and again after every reconnect.
+mqtt.subscribe(COMMAND_TOPIC, qos=1)
 mqtt.connect()
 
 
-def consume_commands():
-    received = 0
+def print_commands():
+    count = 0
     while True:
+        # Pause here until a message arrives.
         message = yield from mqtt.next_message()
         if message is None:
-            break
-        received += 1
-        print(f"[rx {received}] {message.topic} <- {message.payload!r}")
-    print(f"[mqtt] stream ended after {received} message(s)")
+            # The client gave up for good, for example because the
+            # broker refused its username or password.
+            print(f"MQTT stopped: {mqtt.last_error}")
+            return
+        count += 1
+        print(f"[{count}] {message.topic}: {message.payload}")
 
 
+# The runner takes turns between everything added to it: the client's
+# network work and the print_commands() generator.
 runner = Runner()
 runner.add(mqtt)
-runner.add_generator(consume_commands())
+runner.add_generator(print_commands())
 
-# The main loop.  tick() gives the client and the consumer generator one
-# small step each; wait() idles the CPU until the next socket event or
-# timer deadline instead of spinning.  It never exits, which is what a
-# board program does: press Ctrl-C in the serial console to stop it.
 while True:
-    now_ms = runner.tick()
-    runner.wait(now_ms)
+    now_ms = runner.tick()   # each added task takes one small step
+    runner.wait(now_ms)      # then the CPU rests until a message or timer is due

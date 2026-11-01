@@ -1,44 +1,25 @@
-# sockets_runner_connector_explicit: sockets via runner with a user-defined service
+# sockets_runner_connector_explicit: the same echo, written as your own service class
 
-The explicit `check` / `handle` expansion of
-[`sockets_runner_connector`](../sockets_runner_connector/): the same
-TCP echo round trip written as a hand-rolled runner-service instead of
-a generator.  Read it to see what the `connect` / `send_all` /
-`recv_until` generator helpers collapse.  For new custom-protocol code,
-reach for the generator demo first.
+This demo does exactly what
+[`sockets_runner_connector`](../sockets_runner_connector/) does: every
+five seconds the board connects to an echo server on your laptop, sends
+`hello chumicro`, and reads it back, with a heartbeat printing once a
+second the whole time. The difference is the code. Here the round trip
+is `EchoService`, a class the runner calls over and over, instead of a
+generator.
 
-`EchoService` here writes it all out: a short state machine (`idle` →
-`connecting` → `sending` → `receiving` → `done`) plus the runner-ABI
-surface (`io_socket` / `io_interest(now_ms)`) that
-let the runner sleep on socket-ready events instead of polling.  Only
-the wire-format logic in `_handle_sending` / `_handle_receiving`
-changes for a real custom protocol.
+Read this one after its sibling. It is the shape every ChuMicro service
+has, the wifi service and the MQTT client included, so it is the one to
+copy when you write a library-style service other people will
+`runner.add(...)`.
 
-## What it shows
+## What you need
 
-- **User-defined runner-service.**  `runner.add(echo)` where `echo`
-  is the user's `EchoService` class, same registration shape as
-  `runner.add(wifi)` / `runner.add(mqtt)`.  The class is local to
-  the app; no library scaffolding involved.
-- **The service drives its own connector.**  `EchoService.start()`
-  builds the `SocketConnector`; the service's own `handle` calls
-  `connector.tick(now_ms)` during `connecting` and inspects the
-  connector's state inline.  Single runner entry, deterministic
-  ordering, no sibling state polling between two entries.  The
-  service's `io_socket` / `io_interest` delegate to the connector during
-  the connect phase, then own the socket once `ready`.
-- **Service owns the socket after `ready`.**  `_handle_connecting`
-  grabs `self._socket = self.connector.socket`; from then on the
-  service's own `io_socket` / `io_interest(now_ms)`
-  describe the send and receive phases.  The connector goes inert
-  (terminal state, `io_interest` returns `0`) and the runner ignores it.
-- **Real send loop, not a one-shot.**  `_handle_sending` loops on
-  `send()` and tracks `_send_offset` so a short return (including
-  `EAGAIN`) resumes from the right byte on the next wake.  The
-  shape any custom-protocol service uses for outbound bytes.
-- **Single `while not echo.done` loop at the end.**  Everything else
-  is declarative: services register before the loop, and the loop
-  is just `now_ms = runner.tick(); runner.wait(now_ms)`.
+- A wifi board (Pi Pico W, ESP32-S2, ESP32-S3) registered with
+  `chumicro-workspace add-device`.
+- `secrets.toml` at the repo root with `wifi.ssid` and `wifi.password`
+  ([wiring wifi credentials](../../docs/wiring-wifi-credentials.md)).
+- The board and your laptop on the same network.
 
 ## Run it
 
@@ -46,78 +27,83 @@ changes for a real custom protocol.
 .venv/bin/python demos/sockets_runner_connector_explicit/driver.py
 ```
 
-The driver is deliberately identical to `sockets_runner_connector`'s:
-only the deployed `app.py` differs, so the two demos contrast the app
-shapes under the same host harness.
+The driver deploys [`app.py`](app.py) to the first CircuitPython board
+in `devices.yml`. Pick a board with `--device <id>`, or
+`--runtime micropython` for the first MicroPython one. Its options and
+output match `sockets_runner_connector`'s driver, so the only thing
+that differs between the two runs is the code on the board.
 
-Defaults: targets the first CircuitPython device in `devices.yml`.
+## What you will see
 
-Override:
+Lines starting `board |` are what the board prints; `driver:` lines come
+from the script on your laptop.
 
-- `--device <id>`: a specific device id from `devices.yml`.
-- `--runtime micropython`: pick the first MicroPython device.
+```
+driver: tcp echo server up on 10.0.0.5:54321
+driver: targeting pi-pico-w-circuitpython-board (circuitpython @ /dev/cu.usbmodem...)
+board | WIFI_OK ip=10.0.0.42
+board | CONNECTING host=10.0.0.5 port=54321
+board |   ...still ticking
+board | CONNECTED
+board | SENT bytes=15
+board | ECHO_RECEIVED bytes=14 payload_hex=68656c6c6f206368756d6963726f
+board |   echo 1: 'hello chumicro' came back
+board | DEMO_COMPLETE
+driver: first round trip done; watching 2 more
+board |   ...still ticking
+board |   ...still ticking
+board |   ...still ticking
+board |   ...still ticking
+board | CONNECTING host=10.0.0.5 port=54321
+board |   ...still ticking
+board | CONNECTED
+board | SENT bytes=15
+board | ECHO_RECEIVED bytes=14 payload_hex=68656c6c6f206368756d6963726f
+board |   echo 2: 'hello chumicro' came back
+...
+board |   echo 3: 'hello chumicro' came back
+driver: done, stopping the echo server.  The board keeps running; its next rounds print ECHO_FAILED and retry.
+```
+
+## Try next
+
+- Make a second `EchoService` with its own payload, `runner.add` it, and
+  call its `start()` next to the first one's. Both round trips run on
+  the same loop without waiting on each other.
+- Open `app.py` next to the generator version and match each state here
+  to the `yield from` line that replaces it there.
+
+## How `app.py` works
+
+- **The runner asks, then calls.** Each turn it calls
+  `check(now_ms)` ("anything to do?") and, on `True`, `handle(now_ms)`
+  ("go ahead").
+- **`self.state` remembers the place.** A round walks `connecting`,
+  `sending`, `receiving`, then `resting` until the next round is due.
+  Each call does what it can without waiting and returns.
+- **Three hooks tell the runner what to wake for.** `io_socket` and
+  `io_interest` name the socket and whether to wake when it can be
+  written to or read from. `next_deadline` names the time the next round
+  starts. While dialing, all three hand over the connector's own answers.
+- **`EAGAIN` means "not yet".** The socket is non-blocking, so `send`
+  and `recv_into` raise `EAGAIN` instead of waiting. The service returns
+  and the runner calls back once the socket is ready. `_send_step` also
+  keeps a byte count, because `send` may take only part of the payload.
+- **Any failure goes to `_fail`**, which prints `ECHO_FAILED`, closes the
+  socket, and rests until the next round.
+
+On CircuitPython, `socketpool` has no non-blocking connect, so the TCP
+handshake itself blocks the loop for its length. MicroPython and CPython
+connect without blocking.
+
+## Driver options
+
+- `--device <id>`: a device id from `devices.yml`.
+- `--runtime micropython`: pick the first MicroPython board.
 - `--wifi-timeout-s <n>`: how long to wait for `WIFI_OK` (default 45 s).
 - `--connect-timeout-s <n>`: how long to wait for `CONNECTED` after
   `CONNECTING` (default 15 s).
 - `--completion-timeout-s <n>`: how long to wait for `DEMO_COMPLETE`
   after `CONNECTED` (default 30 s).
-
-## Expected output
-
-```
-driver: tcp echo server up on 10.0.0.5:54321
-driver: targeting pi-pico-w-circuitpython-board (circuitpython @ /dev/cu.usbmodem...)
-driver: board WIFI_OK ip=10.0.0.42
-driver: board CONNECTING host=10.0.0.5 port=54321
-driver: board CONNECTED
-driver: board SENT bytes=15
-driver: board ECHO_RECEIVED bytes=14 payload_hex=68656c6c6f206368756d6963726f
-driver: demo completed cleanly.
-```
-
-## What it requires
-
-- A board registered in `devices.yml`.
-- `secrets.toml` at the repo root with `wifi.ssid` + `wifi.password`.
-- A reachable wifi network the board can join: the board needs to
-  reach the host's LAN IP that the echo server binds to.
-
-## When to use this pattern
-
-- **You're speaking a custom TCP wire protocol** (industrial,
-  embedded device telemetry, proprietary) that isn't HTTP / MQTT /
-  WebSockets.
-- **You need it under a runner** because you're sharing the loop
-  with wifi management, an LED blink, sensor reads, etc.
-
-If your protocol IS one of HTTP / MQTT / WebSockets, use those
-libraries instead: they own the wire-format codec and the runner
-integration for you.  See `demos/mqtt_pub_sub` for the
-already-built-in-client equivalent.
-
-One-shot by design: this demo exits after one round trip.  For
-reconnect-capable adapters (wifi-up / wifi-down cycles), add a small
-`reset()` to clear `connector` / `_socket` / buffers back to `idle`
-and call it from the wifi `DISCONNECTED` callback.
-
-## Substrate honesty for the connect phase
-
-- **CPython** (host pytest, sim runs): truly non-blocking via
-  `BlockingIOError`(EINPROGRESS) + `select.select(POLLOUT)` + `SO_ERROR`.
-- **MicroPython rp2 / esp32**: truly non-blocking via
-  `OSError(EINPROGRESS)` + `select.poll(POLLOUT)`.
-- **CircuitPython**: `socketpool` does not expose a non-blocking
-  connect, so the TCP step blocks for the handshake duration.
-  Honest documented compromise on CP; other runner tasks pause for
-  the duration of that one call.
-
-## Related
-
-- [`sockets_tcp_roundtrip`](../sockets_tcp_roundtrip/): runner-driven
-  connect, then synchronous send/recv on the ready socket, with no
-  custom service.  Simpler app code once connected.
-- [`sockets_tls_roundtrip`](../sockets_tls_roundtrip/): TLS variant
-  of the synchronous demo with a custom-CA trust anchor.
-- [`mqtt_pub_sub`](../mqtt_pub_sub/): the same `runner.add(service)`
-  shape but with the protocol absorbed into `MQTTClient` (no
-  user-defined service needed).
+- `--watch-rounds <n>`: echoes to watch after `DEMO_COMPLETE` before the
+  driver stops the echo server (default 2, `0` stops at the first).

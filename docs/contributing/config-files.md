@@ -2,13 +2,13 @@
 
 <img src="https://chumicro.com/assets/chumicro-head.png" alt="" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Three gitignored files live at the root of every ChuMicro workspace.  Each does what its name says.  `python scripts/run.py setup` materializes starter versions on first run; edit them as needs come up.
+`workspace.yml`, `devices.yml`, and `secrets.toml` sit gitignored at the root of every ChuMicro workspace, this repository included.  `python scripts/run.py setup` writes a starter version of each on its first run, and leaves your edits alone after that.
 
 <br clear="left">
 
 ## workspace.yml: host-side tooling knobs
 
-Linting / coverage settings, optional editable library clones, default deploy targets.  Sensible defaults cover everything; most contributors never touch this file.
+`workspace.yml` holds lint and coverage settings, optional editable library clones, and the board each project deploys to by default.  Nothing in it reaches a board.  Its defaults suit this repository, so most contributors leave it alone.
 
 ```yaml
 # library_sources:
@@ -23,49 +23,48 @@ Linting / coverage settings, optional editable library clones, default deploy ta
 #     tools: [ruff, chumicro-checks]
 ```
 
-All blocks are optional.  Empty file = workspace defaults.
+Every block is optional, and an empty file means the workspace defaults.
 
 ## devices.yml: the board registry
 
-One entry per plugged-in board: serial port, runtime, deploy-mode default, and which board the IDE play button targets.
+`devices.yml` holds one entry per registered board, with its serial port, runtime, and deploy mode.  Its `defaults:` block picks the board each runtime's tests and IDE play buttons target.
 
 ```bash
 python scripts/run.py add-device pi-pico-w-mp --address /dev/cu.usbmodem1101
 ```
 
-`add-device` probes the connected board, writes the entry, and (on first registration of each runtime) fills in the `defaults.<runtime>` pointer automatically.  Full flow + field reference in [Device Testing](device-testing.md).
+[Device Testing § Register a board](device-testing.md#register-a-board-with-add-device) covers registration and every field.
 
 ## secrets.toml: runtime credentials for on-device code
 
-Wifi password, MQTT broker host/port/auth: anything a deployed program needs at runtime that can't live in source control.  Edited once per clone.
+`secrets.toml` holds what a deployed program needs at runtime and source control must never see: the wifi password, and the MQTT broker's address and login.  Edit it once per clone, replacing the placeholders `setup` wrote.
 
 ```toml
 [wifi]
-ssid = "my-actual-network"
-password = "my-real-wifi-password"
+ssid = "your-network-name"
+password = "your-wifi-password"
+
+[mqtt]
+# Only if your broker requires a login:
+# username = "your-mqtt-user"
+# password = "your-mqtt-password"
 
 [mqtt.broker]
-host = "10.0.0.5"
+host = "your-broker-host"     # a hostname or IP address on your network
 port = 1883
-# [mqtt.broker.auth]
-# username = "my-user"
-# password = "my-mqtt-password"
 ```
 
-At deploy time the host reads this file, deep-merges per-project `project_config.toml` + per-library `functional_tests/config.toml` overrides on top, flattens the result to dotted keys (`wifi.ssid`, `mqtt.broker.host`), and msgpack-encodes it into `/runtime_config.msgpack` on the board.  On-device code reads it back via `chumicro_config.load_runtime_config()`, the same API user-written programs use.
+At deploy time the host reads `secrets.toml` and deep-merges a project's `project_config.toml`, or a library's `functional_tests/config.toml`, on top.  The overriding file wins at any nesting depth.  The host flattens the result to dotted keys such as `wifi.ssid` and `mqtt.broker.host`, and msgpack-encodes it into `/runtime_config.msgpack` on the board.  On-device code reads it back with `chumicro_config.load_runtime_config()`, the same call user-written programs make.
 
 ## Why three files
 
-Three different jobs with three different gitignore promises and three different lifecycles:
+- **`secrets.toml`** must never reach a commit, even by accident.  Folding it into another file would hold that file's share-safe content to the same strict rule.
+- **`devices.yml`** changes whenever you register, move, or remove a board.  It describes one laptop's boards, so committing it would fill shared history with every contributor's serial ports.
+- **`workspace.yml`** changes when the workspace layout shifts, which is rare.
 
-- **`secrets.toml`** is "never commit, even by accident."  Folding it into either of the others would force them to inherit the same strict promise even though their content is share-safe.
-- **`devices.yml`** changes whenever a board is plugged or unplugged.  Per-machine state, so drift between contributors would noise up shared history.
-- **`workspace.yml`** changes when the workspace layout shifts.  Stable across most days.
-
-The split lands per [Decision 0057](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0057-two-file-config.md).  Starter templates live under `workbench/workspace/src/chumicro_workspace/_payloads/` (tracked); the materialized files at the workspace root are gitignored.  `devices.yml` is the exception: its template lives with the code that reads it, at `workbench/deploy/src/chumicro_deploy/_payloads/devices.yml.template`, and materializes an empty `devices: []` registry for `add-device` to fill.
+[Decision 0057](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0057-two-file-config.md) records the split.  The starter templates for `workspace.yml` and `secrets.toml` are tracked under `workbench/workspace/src/chumicro_workspace/_payloads/`.  The template for `devices.yml` lives with the code that reads it, at `workbench/deploy/src/chumicro_deploy/_payloads/devices.yml.template`, and produces an empty `devices: []` registry for `add-device` to fill.  The files produced at the workspace root are gitignored.
 
 ## Where to learn more
 
-- [Device testing](device-testing.md): the device-side flow that reads all three files.
-- [Decision 0057](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0057-two-file-config.md): the design rationale for the three-file split.
-- [`workbench/workspace/`](https://chumicro.com/ChuMicro/workspace/stable/): the package that materializes and validates each file.
+- [Device testing](device-testing.md): registering boards, and running the tests that read these files.
+- [`chumicro-workspace` docs](https://chumicro.com/ChuMicro/workspace/stable/): the tool that writes and validates each file.

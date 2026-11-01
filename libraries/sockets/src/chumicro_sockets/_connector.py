@@ -13,7 +13,15 @@ _IO_WRITE = 2
 
 
 class SocketConnector:
-    """Base connector: runner-contract surface plus terminal-state plumbing."""
+    """``SocketConnector`` opens one TCP or TLS connection, one phase per ``tick`` call.
+
+    ``state`` moves from ``"awaiting_dns"`` through ``"awaiting_tcp"`` and,
+    for TLS, ``"awaiting_tls"``, and ends at ``"ready"`` or ``"failed"``.  At
+    ``"ready"``, ``socket`` holds the connected socket.  At ``"failed"``,
+    ``last_error`` holds the exception.  ``check``, ``handle``,
+    ``io_socket``, ``io_interest``, and ``next_deadline`` let a ``Runner``
+    drive it.  Each runtime's subclass implements ``tick``.
+    """
 
     def __init__(self, host, port, *, tls=False, context=None):
         self._host = host
@@ -46,11 +54,19 @@ class SocketConnector:
         return self.state not in _TERMINAL
 
     def handle(self, now_ms):
-        """Alias for :meth:`tick` so ``Runner.add(connector)`` works directly."""
+        """Run ``tick(now_ms)``, so ``Runner.add(connector)`` drives the connector."""
         self.tick(now_ms)
 
-    def next_deadline(self, now_ms):  # noqa: ARG002 (runner contract)
-        """``None``: the connector never times out on its own."""
+    def next_deadline(self, now_ms):
+        """``now_ms`` while the DNS lookup has yet to run, else ``None``.
+
+        The lookup runs inside ``tick`` before any socket exists, so no
+        socket event would wake ``Runner.wait()`` for it; reporting it due
+        now sends the loop straight back round.  Past that step the socket
+        wakes the loop, and the connector never times out on its own.
+        """
+        if self.state == STATE_AWAITING_DNS:
+            return now_ms
         return None
 
     def tick(self, now_ms):  # noqa: ARG002 (subclass contract)

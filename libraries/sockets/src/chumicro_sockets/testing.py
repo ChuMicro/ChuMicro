@@ -9,6 +9,7 @@ from collections import deque
 from chumicro_sockets._connector import (
     _IO_READ,
     _IO_WRITE,
+    STATE_AWAITING_DNS,
     STATE_FAILED,
     STATE_READY,
 )
@@ -231,7 +232,10 @@ class FakeSocketConnector:
     def handle(self, now_ms: int) -> None:
         self.tick(now_ms)
 
-    def next_deadline(self, now_ms: int) -> int | None:  # noqa: ARG002
+    def next_deadline(self, now_ms: int) -> int | None:
+        """Due now while the DNS step has yet to run, like the real connector."""
+        if self.state == STATE_AWAITING_DNS:
+            return now_ms
         return None
 
     def tick(self, now_ms: int) -> None:  # noqa: ARG002

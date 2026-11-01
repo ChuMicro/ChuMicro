@@ -1,103 +1,133 @@
 # Testing Helpers
 
-`chumicro_wifi.testing` provides `FakeWifi` and `FakeWifiAdapter` so your tests can drive connect, drop, and reconnect scenarios deterministically: no real radio, no real network, no real time. The fakes stay on the host: `chumicro-deploy` reads the test-support marker at the top of the module and leaves it out of every device bundle it builds.
+`chumicro_wifi.testing` stands in for the board's WiFi radio.  `FakeWifi` is a ready-made `WifiService` on a pretend radio, for code that takes a `WifiService`.  `FakeWifiAdapter` is the pretend radio itself, for a test that builds its own `WifiService`.  A test decides when a join succeeds, fails, or drops, with no radio, no network, and no waiting.  `pip install chumicro-wifi pytest` installs everything the tests on this page import, `chumicro-timing` included.  Project deploys and the board bundles leave the module out.
+
+## The smallest test
+
+Save this as `test_uploader.py` and run `pytest test_uploader.py`:
+
+```python
+from chumicro_timing.testing import FakeTicks
+from chumicro_wifi.testing import FakeWifi
+
+
+class Uploader:
+    def __init__(self, wifi):
+        self.wifi = wifi
+        self.uploads = 0
+
+    def tick(self):
+        if self.wifi.connected:
+            self.uploads += 1
+
+
+def test_uploader_waits_for_wifi():
+    wifi = FakeWifi(FakeTicks())
+    uploader = Uploader(wifi)
+
+    uploader.tick()
+    assert uploader.uploads == 0
+
+    wifi.tick()
+    uploader.tick()
+    assert wifi.ip == "192.168.0.42"
+    assert uploader.uploads == 1
+```
+
+`Uploader` takes its `WifiService` as an argument, so the test hands it a `FakeWifi`.  The first `wifi.tick()` joins the pretend network.
 
 ## `FakeWifi`
 
-A `WifiService` wrapping a `FakeWifiAdapter` with the test hooks exposed directly on the wrapper.  Use this when you want a drop-in `WifiService` your code-under-test treats like the real thing:
+`FakeWifi(ticks, *, config=None)` is a `WifiService`, so it has `state`, `connected`, `ip`, `last_error`, `check()`, `handle()`, and `on_state_change()`.  Without `config` it joins `"testnet"` with a 10 ms first retry pause that doubles up to 100 ms, so a retry test never waits long.  Pass a `WifiConfig` as `config` for other settings.
 
-```python
-from chumicro_wifi.testing import FakeWifi
-from chumicro_timing.testing import FakeTicks
-
-def test_my_service_waits_for_wifi():
-    ticks = FakeTicks()
-    wifi = FakeWifi(ticks)
-    wifi.set_connect_outcome(True)
-
-    my_service = MyService(wifi=wifi)
-    my_service.start()
-
-    ticks.advance(0)
-    wifi.tick()                    # one runner-style check + handle
-    assert wifi.state == "connected"
-    assert my_service.ready
-```
-
-`FakeWifi` ships with sensible defaults (`ssid="testnet"`, `password="password"`, short reconnect backoffs).  Pass `config=` a custom `WifiConfig` if your test needs different settings.
-
-## Test hooks
-
-The hooks below live on `FakeWifiAdapter` and are forwarded to `FakeWifi` for ergonomic test code:
-
-| Hook | What it does |
+| Call or attribute | What it does |
 |---|---|
-| `set_connect_outcome(True)` | Next `connect()` succeeds. |
-| `set_connect_outcome(False)` | Next `connect()` returns a clean refusal. |
-| `set_connect_outcome(OSError)` | Next `connect()` raises the named exception class. |
-| `set_connect_outcomes([True, False, True])` | Queue a one-shot sequence of outcomes; the default takes over after the queue drains. |
-| `drop_link()` | Simulates a link-down event: the next `is_linked()` returns `False`, which sends the service into its reconnect path. |
-| `restore_link()` | Simulates the access point coming back on its own, with no `connect()` call. |
-| `calls` | List of recorded adapter calls (`("configure", config)`, `("connect", config)`).  Assert on this to verify call ordering. |
+| `tick()` | Runs one `check()` and `handle()` pass at the current `ticks` reading, as a `Runner` would. |
+| `set_connect_outcome(outcome)` | Sets what every join does from now on: `True` joins, `False` is refused, an exception class such as `OSError` is raised.  The default is `True`. |
+| `set_connect_outcomes([...])` | Queues one outcome per join for the next few joins.  `set_connect_outcome` takes over once the queue runs out. |
+| `set_connect_blocks(blocks)` | `True`, the default, makes a refused join final at once, as on CircuitPython, where a join waits for its answer.  `False` treats a refused join as still in progress, and the service polls the link until the join times out, as on MicroPython. |
+| `set_deferred_link(link_after=n)` | Plays a MicroPython join in the background: the join returns at once, and the link comes up on the `n`th poll. |
+| `drop_link()` | Drops the link without warning.  The next pass sees it and starts rejoining. |
+| `restore_link()` | Brings the link back without a join, as an access point that recovers on its own. |
+| `calls` | The radio calls so far: `("configure", config)` and `("connect", config, timeout_ms)` tuples, in order. |
 
-## Simulating a reconnect
-
-Use `drop_link()` plus `FakeTicks.advance()` to step through a real reconnect cycle:
+`drop_link()` walks a program through a lost connection.  The service tries its first rejoin at once:
 
 ```python
-def test_reconnect_after_link_drop():
+from chumicro_timing.testing import FakeTicks
+from chumicro_wifi import WifiState
+from chumicro_wifi.testing import FakeWifi
+
+
+def test_wifi_rejoins_after_the_link_drops():
+    wifi = FakeWifi(FakeTicks())
+
+    wifi.tick()
+    assert wifi.state == WifiState.CONNECTED
+
+    wifi.drop_link()
+    wifi.tick()
+    assert wifi.state == WifiState.RECONNECTING
+
+    wifi.tick()
+    assert wifi.state == WifiState.CONNECTED
+```
+
+`set_connect_outcomes` and `FakeTicks.advance()` step through the pause between failed joins:
+
+```python
+from chumicro_timing.testing import FakeTicks
+from chumicro_wifi import WifiState
+from chumicro_wifi.testing import FakeWifi
+
+
+def test_a_refused_join_waits_before_trying_again():
     ticks = FakeTicks()
     wifi = FakeWifi(ticks)
-    wifi.set_connect_outcome(True)
+    wifi.set_connect_outcomes([False, True])
 
-    wifi.tick()                    # connects
-    assert wifi.state == "connected"
+    wifi.tick()
+    assert wifi.state == WifiState.CONNECTING
 
-    wifi.drop_link()               # simulate link-down
-    wifi.tick()                    # service notices, enters RECONNECTING
+    wifi.tick()
+    assert len([call for call in wifi.calls if call[0] == "connect"]) == 1
 
-    ticks.advance(200)             # past the first backoff window
-    wifi.tick()                    # reconnect attempt fires
-    assert wifi.state == "connected"
+    ticks.advance(10)
+    wifi.tick()
+    assert wifi.state == WifiState.CONNECTED
 ```
 
-## `FakeWifiAdapter` (lower level)
+The refused join leaves the service in `CONNECTING`.  A `tick()` during the 10 ms pause makes no second join.
 
-When you need to compose your own service shape (a test that wires `FakeWifiAdapter` into a real `WifiService` to check the supervisor's behavior, for example), use the adapter directly:
+## `FakeWifiAdapter`
+
+`FakeWifiAdapter(*, ip="192.168.0.42")` is the pretend radio under `FakeWifi`.  It takes the same `set_connect_outcome`, `set_connect_outcomes`, `set_connect_blocks`, `set_deferred_link`, `drop_link`, and `restore_link` calls and keeps the same `calls` list.  `configured_with` holds the `WifiConfig` the service last configured it with.  A test passes it to a `WifiService` it builds itself:
 
 ```python
-from chumicro_wifi import WifiConfig, WifiService
-from chumicro_wifi.testing import FakeWifiAdapter
 from chumicro_timing.testing import FakeTicks
+from chumicro_wifi import WifiConfig, WifiService, WifiState
+from chumicro_wifi.testing import FakeWifiAdapter
 
-def test_supervisor_handles_exception_during_connect():
-    ticks = FakeTicks()
+
+def test_a_radio_error_is_kept_and_retried():
     adapter = FakeWifiAdapter()
-    adapter.set_connect_outcome(OSError)         # exception class to raise
-
+    adapter.set_connect_outcome(OSError)
     service = WifiService(
-        WifiConfig(ssid="lab", password="lab-pw"),
+        WifiConfig(ssid="lab", password="lab-password"),
         adapter=adapter,
-        ticks=ticks,
+        ticks=FakeTicks(),
     )
+
     service.handle(0)
-    # The exception is captured, not propagated: the service stays
-    # in CONNECTING with a retry scheduled.
+
     assert isinstance(service.last_error, OSError)
-    assert service.state == "connecting"
+    assert service.state == WifiState.CONNECTING
+    assert adapter.configured_with.ssid == "lab"
 ```
 
-## Using these fakes in your own tests
+The service keeps the radio's exception in `last_error` and stays in `CONNECTING` with a retry scheduled.
 
-Install `chumicro-wifi` and import the fakes straight into your test suite:
-
-```python
-from chumicro_wifi.testing import FakeWifi, FakeWifiAdapter
-```
-
-Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.
-
-## API Reference
+## API reference
 
 ::: chumicro_wifi.testing
 

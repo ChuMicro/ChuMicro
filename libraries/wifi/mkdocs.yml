@@ -1,6 +1,6 @@
 site_name: chumicro-wifi
 site_description: >-
-  WiFi service for CircuitPython, MicroPython, and CPython.  Connects, retries with backoff, and reconnects after a drop while your main loop keeps running.
+  WiFi service for CircuitPython, MicroPython, and CPython.  Joins your network, retries with a growing pause, and reconnects after a drop, with no reconnect code in your main loop.
 site_url: https://chumicro.com/ChuMicro/wifi/
 repo_url: https://github.com/ChuMicro/ChuMicro/tree/main/libraries/wifi
 repo_name: Source

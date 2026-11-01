@@ -190,7 +190,8 @@ def explain(result: FirmwareSupportResult) -> list[str]:
             f"{result.runtime_name} {running} (need >= {floor}).",
             "  Library compatibility on older firmware is not tested. "
             "To upgrade in place:",
-            "  `python3 run.py install-firmware --device <id>`",
+            "  `python3 run.py install-firmware --device <id> "
+            "--method <uf2|esptool>`",
         ]
 
     if result.status is FirmwareSupportStatus.UNPARSEABLE:

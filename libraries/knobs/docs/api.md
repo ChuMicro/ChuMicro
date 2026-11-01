@@ -1,20 +1,16 @@
 # API Reference
 
-## `chumicro_knobs.encoder`
+`chumicro_knobs` exports `Encoder`, `AnalogKnob`, and the constants `DEFAULT_DETENT_STEPS`, `DEFAULT_STEPS`, `DEFAULT_DEADBAND`, and `RAW_RANGE`, each documented below under the module that defines it.  Start with `Encoder` for a rotary encoder, or `AnalogKnob` for a potentiometer or slider.  `FakeEncoderSource` and `FakeAnalogSource` in `chumicro_knobs.testing` take the place of the pins in host tests.
 
-`Encoder` reads one rotary encoder: detents counted into a running `position`, the signed `delta` for each tick, and the optional `bounds` and `wrap` that keep the count inside a range you choose.
+## `chumicro_knobs.encoder`
 
 ::: chumicro_knobs.encoder
 
 ## `chumicro_knobs.analog`
 
-`AnalogKnob` reads one potentiometer or slider: a converter held still by a deadband and quantized into steps, published as `value`, `delta`, and the settled `raw` reading behind them.
-
 ::: chumicro_knobs.analog
 
 ## `chumicro_knobs.testing`
-
-`FakeEncoderSource` and `FakeAnalogSource` stand in for the hardware so knob logic can be tested on a host.  Turn the shaft or park the wiper, tick the knob, assert on what it made of them.
 
 ::: chumicro_knobs.testing
 

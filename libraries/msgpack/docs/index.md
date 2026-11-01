@@ -4,9 +4,9 @@ title: "chumicro-msgpack: MessagePack for CircuitPython and MicroPython"
 
 # chumicro-msgpack
 
-**Cross-runtime [MessagePack](https://msgpack.org) serialization for CircuitPython, MicroPython, and CPython.**
+**Turn a dict into a few bytes and back again: the job JSON does, in fewer bytes.**
 
-Encodes Python objects to compact binary bytes and decodes them back.  On CircuitPython firmware that ships the native `msgpack` C module, every function delegates to that built-in and the pure-Python encoder never loads.
+`packb(reading)` turns a dict, list, number, or string into compact bytes you can save in NVM, write to a file, or send over the network.  `unpackb(data)` turns them back.  The bytes follow the [MessagePack](https://msgpack.org) format, so a laptop reading them with the PyPI `msgpack` package gets the same values.  On a CircuitPython board whose firmware has the built-in `msgpack` module, these functions use it.  The same code runs on CircuitPython, MicroPython, and CPython.
 
 ## Install
 
@@ -21,25 +21,35 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_msgpack
 pip install chumicro-msgpack
 ```
 
-No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
 
+Pack a changing sensor reading once a second and print the bytes:
+
 ```python
+import time
+
 from chumicro_msgpack import packb, unpackb
 
-settings = {0: "MyNetwork", 1: "secret", 2: True}
+count = 0
 
-data = packb(settings)       # compact binary bytes
-print(len(data))             # much smaller than JSON
+while True:
+    count += 1
+    reading = {"count": count, "temp_c": 20.0 + (count % 10) / 2}
 
-restored = unpackb(data)
-print(restored)              # {0: 'MyNetwork', 1: 'secret', 2: True}
+    data = packb(reading)                    # dict -> 20 bytes
+    print(f"{len(data)} bytes: {data.hex()}")
+    print(f"unpacked: {unpackb(data)}")      # bytes -> the same dict
+
+    time.sleep(1)
 ```
+
+The same reading as JSON text takes 28 bytes.
 
 ## Documentation
 
-- [User Guide](guide.md): the stream and bytes APIs, when to reach for msgpack instead of `struct`, decoding corrupt or untrusted input, integer keys for compact storage, the supported types, and the size comparison against JSON
+- [User Guide](guide.md): the bytes and stream functions, when to reach for msgpack instead of `struct`, number keys for smaller data, damaged or untrusted input, the supported types, and reading board data on a laptop
 - [API Reference](api.md): `packb` and `unpackb` for bytes, `pack` and `unpack` for streams
 
 ---

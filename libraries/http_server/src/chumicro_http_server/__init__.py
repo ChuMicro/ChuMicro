@@ -1,6 +1,11 @@
-"""Non-blocking HTTP/1.1 server for CircuitPython, MicroPython, and CPython.
+"""``chumicro_http_server`` serves HTTP requests on CircuitPython, MicroPython, and CPython,
+one small step per pass of the main loop.
 
-The entry point is :class:`HttpServer`.
+``HttpServer`` runs the server.  ``@server.route(path)`` registers a handler,
+and the main loop calls ``server.handle(now_ms)``.  This package also holds
+the request parser, the error types, and the default size limits.
+``HttpServer``, ``Request``, ``Response``, ``build_response``, and
+``encode_response`` load from ``chumicro_http_server.server`` on first use.
 """
 
 import gc

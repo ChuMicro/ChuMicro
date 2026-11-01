@@ -4,11 +4,30 @@ title: "chumicro-deploy: deploy code to CircuitPython and MicroPython boards"
 
 # chumicro-deploy
 
-**Host-side transports and deploy tooling for CircuitPython and MicroPython boards.**
+**Copy Python code to a CircuitPython or MicroPython board and run it, install new firmware, or ask a board which firmware it runs, all from your laptop.**
 
-Push code onto a board, find out what firmware it is running, flash new firmware, and get a readable explanation when the serial port or the CIRCUITPY drive misbehaves. Runs on your laptop, not on the board.
+`chumicro-deploy` is the lower-level tool under [`chumicro-workspace`](https://chumicro.com/ChuMicro/workspace/stable/).  Inside a ChuMicro workspace, `chumicro-workspace deploy` and `chumicro-workspace install-firmware` call this package and find each board by its name in `devices.yml`.  `chumicro-deploy` serves the work outside a workspace: a folder of code sent to a board by its serial port, a CI job, or a Python script that runs the deploy itself.
 
-## Quick example
+## Three commands
+
+Each command takes the board's runtime and serial port.  On macOS, `ls /dev/cu.usbmodem*` lists the ports.  On Linux, `ls /dev/ttyACM*` lists them.
+
+```bash
+# Ask the board which firmware it runs.
+chumicro-deploy probe --transport circuitpython --address /dev/cu.usbmodem1101
+
+# Copy the my_app folder to the board and run my_app/code.py.
+chumicro-deploy deploy --transport circuitpython --address /dev/cu.usbmodem1101 \
+    --directory ./my_app --entrypoint /code.py
+
+# Install CircuitPython 10.1.4 on a Raspberry Pi Pico W.
+chumicro-deploy flash-firmware --transport circuitpython --address /dev/cu.usbmodem1101 \
+    --url https://downloads.circuitpython.org/bin/raspberry_pi_pico_w/en_US/adafruit-circuitpython-raspberry_pi_pico_w-en_US-10.1.4.uf2
+```
+
+`deploy` runs the code from the board's memory by default and leaves the files stored on the board alone.  `--deploy-mode flash` writes the files to the board instead, so the code runs again after a reset.  A flash deploy deletes every board file outside the folder, `settings.toml` included, unless `--no-wipe` is passed.  When a step fails, the tool names the cause, such as another app holding the serial port or a missing CIRCUITPY drive, lists the steps that fix it, and waits for Enter to retry.
+
+## From Python
 
 ```python
 from chumicro_deploy import Device, Deployer, FileMapSource
@@ -27,19 +46,7 @@ result = Deployer(device).deploy_diff(source)
 print(result.execute_output)
 ```
 
-## What you get
-
-- **Ship a directory, a dict you built in memory, or only the modules your entrypoint imports.** `DirectorySource` walks a host directory, `FileMapSource` takes a `dict` mapping on-device paths to contents, and `ImportGraphSource` reads the import statements out of your entrypoint and ships just what they resolve to.
-- **Run from RAM while you iterate, write to flash when the code has to survive a reboot.** `Device(deploy_mode="ram")` pushes the payload over the serial REPL without touching the board's filesystem; `deploy_mode="flash"` writes it down. `Deployer.deploy_diff` also deletes on-device files that are no longer in the payload, so the board matches what you just sent.
-- **Get told what went wrong and how to fix it.** `RecoveringDeployer` names the failure (another app is holding the port, the CIRCUITPY drive is gone, the REPL is stuck, macOS has wedged its FSKit filesystem extension) and prints the physical steps that clear it. Pass `prompt=input` for an Enter-to-retry loop; the default reports once and re-raises.
-- **Check what a board is running before you deploy to it.** `probe_device` returns the runtime name, version, machine string, and CPU UID.
-- **Reflash a board from a firmware URL.** `flash_firmware` covers the UF2 bootloader drive (Pi Pico family) and esptool over serial (ESP32 family). It enters the bootloader for you and asks you to hold the button only when that fails. `resolve_firmware_url` builds the CircuitPython download URL from a board ID and a version.
-- **Keep the connection details in one `devices.yml` instead of in every script.** `chumicro_deploy.config.default.load_devices_yml` reads one entry by id, or the workspace default for a runtime. The schema is owned here, and `chumicro-repl` reads the same file.
-- **Drive the transport layer yourself when you need to.** `chumicro_deploy.micropython_transport.MicropythonTransport` and `chumicro_deploy.circuitpython_transport.CircuitpythonTransport` expose the staging and execution steps directly. Two host prerequisites that cannot be installed for you raise named errors from `chumicro_deploy.host_platform`: `WindowsNotSupportedError` and `RsyncMissingError`.
-
-## Companion: chumicro-repl
-
-After a deploy, follow the board with [`chumicro-repl`](https://chumicro.com/ChuMicro/repl/stable/), the sister workbench tool that opens interactive serial sessions, tails the friendly REPL, and exposes a programmatic `ReplSession` for headless test fixtures. Both tools read the same `devices.yml` workspace file:
+After a deploy, [`chumicro-repl`](https://chumicro.com/ChuMicro/repl/stable/) follows the board's output and opens its REPL.  Both tools read the same `devices.yml`.
 
 ```python
 from chumicro_deploy import Deployer
@@ -53,9 +60,9 @@ if result.success:
 
 ## Documentation
 
-- [User Guide](guide.md): getting started, each surface explained, runtime notes.
-- [API Reference](api.md): full API from the source docstrings.
-- [Testing Helpers](testing.md): `FakeTransport`, `FakeSerialPort`, `FakeTime` for host-side tests.
+- [User Guide](guide.md): the commands, `devices.yml`, failure recovery, then the Python API and reference tables.
+- [API Reference](api.md): every public name, generated from the source docstrings.
+- [Testing Helpers](testing.md): `FakeTransport`, `FakeSerialPort`, and `FakeTime` for host-side tests.
 
 ## Install
 
@@ -63,7 +70,7 @@ if result.success:
 pip install chumicro-deploy
 ```
 
-No bundle registration needed. chumicro-deploy is a host tool, not on-device code.
+`chumicro-deploy` runs on your laptop, so the board needs no install of its own beyond CircuitPython or MicroPython firmware.
 
 ---
 

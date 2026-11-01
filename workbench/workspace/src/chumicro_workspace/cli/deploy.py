@@ -822,7 +822,21 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
     """``deploy``: the workspace's main command.  Single project per call."""
     deploy_parser = subparsers.add_parser(
         "deploy",
-        help="Deploy one or more projects: app code + merged runtime config msgpack.",
+        help="Copy a project and its libraries onto a board and run it.",
+        description=(
+            "Copy projects/<name>/ onto the board, then restart the "
+            "board so the project runs.  A project whose app.py defines "
+            "run() gets a generated code.py (main.py on MicroPython) "
+            "that calls run(), and every library app.py imports lands "
+            "in /lib/ on the board.  A project with its own code.py or "
+            "main.py is copied as it is.  The settings from secrets.toml "
+            "and project_config.toml travel along as "
+            "/runtime_config.msgpack.  Every other file on the board is "
+            "removed except boot.py, boot_out.txt, and _chu_kv.msgpack.  "
+            "Without --device, deploy uses the board that workspace.yml's "
+            "deploy_targets: names for the project, or else the default "
+            "board in devices.yml."
+        ),
     )
     _add_workspace_arg(deploy_parser)
     _add_device_selector(deploy_parser)
@@ -831,70 +845,71 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
         nargs="*",
         metavar="name",
         help=(
-            "Name of the project under projects/ to deploy.  Optional when "
-            "the workspace contains exactly one project; that project is "
-            "deployed by default.  One positional per `deploy` call."
+            "Project to deploy, such as blinker or garage/door_open.  "
+            "A bare name finds the project anywhere under projects/.  "
+            "Optional when the workspace holds one project.  One "
+            "project per deploy."
         ),
     )
     deploy_parser.add_argument(
         "--entrypoint",
         default=None,
         help=(
-            "Override the on-device entrypoint path.  Defaults to "
-            "/code.py on CircuitPython and /main.py on MicroPython."
+            "Board path for the file the board runs at startup, for a "
+            "project that ships its own code.py or main.py.  Defaults "
+            "to /code.py on CircuitPython and /main.py on MicroPython."
         ),
     )
     deploy_parser.add_argument(
         "--import-graph",
         action="store_true",
         help=(
-            "AST-walk the entrypoint and ship only transitively-"
-            "imported modules instead of the full project directory.  "
-            "Reads workspace.yml's library_sources: for overrides.  "
-            "Combines with --boot-shim to ship libraries alongside "
-            "the boot-shim layout (walk starts from app.py)."
+            "Follow the project's import lines and copy only the modules "
+            "they reach, with libraries under /lib/ on the board.  "
+            "workspace.yml's library_sources: adds library folders to "
+            "search.  deploy picks this, together with --boot-shim, for "
+            "a project whose app.py defines run().  Passing either flag "
+            "replaces that automatic choice with the flags you pass."
         ),
     )
     deploy_parser.add_argument(
         "--boot-shim",
         action="store_true",
         help=(
-            "Ship project files at the device root + synthesise "
-            "/code.py (CP) or /main.py (MP) that imports app.run.  "
-            "app.py must export run().  Combines with --import-graph "
-            "to also ship libraries the project imports.  Auto-detected "
-            "when the project ships app.py with run() and no code.py / "
-            "main.py, so passing --boot-shim explicitly is rarely needed."
+            "Generate the board's startup file, code.py on CircuitPython "
+            "or main.py on MicroPython, as three lines that import "
+            "app.py and call its run().  The project's own files land "
+            "next to it.  Add --import-graph to copy the libraries "
+            "app.py imports as well."
         ),
     )
     deploy_parser.add_argument(
         "--dry-run",
         action="store_true",
         help=(
-            "Print the file map deploy would ship without writing to "
-            "the device.  Doubles as documentation: the output is the "
-            "reference for 'what does deploy actually do'."
+            "List every file deploy would copy, with its board path and "
+            "size, and leave the board untouched."
         ),
     )
     deploy_parser.add_argument(
         "--all-devices",
         action="store_true",
         help=(
-            "Deploy to every device in devices.yml in sequence.  "
-            "Mutually exclusive with --device / --runtime.  "
-            "Per-device failures don't abort the loop: every device "
-            "gets a chance, exit code reflects whether any failed."
+            "Deploy the project to every board in devices.yml, one "
+            "after another.  A failure on one board moves on to the "
+            "next, and the exit code is non-zero when any board failed.  "
+            "Conflicts with --device and --runtime."
         ),
     )
     deploy_parser.add_argument(
         "--all-projects",
         action="store_true",
         help=(
-            "Deploy every project in workspace.yml's `deploy_targets:` "
-            "mapping to its declared device(s).  Mutually exclusive "
-            "with positional names / --device / --runtime / "
-            "--all-devices.  Per-project failures don't abort the loop; "
-            "exit code reflects whether any failed."
+            "Deploy every project in workspace.yml's deploy_targets: to "
+            "each board listed for it.  A failure moves on to the next "
+            "pair, and the exit code is non-zero when any failed.  "
+            "Conflicts with a project name, --device, --runtime, and "
+            "--all-devices."
         ),
     )
     deploy_parser.add_argument(
@@ -903,27 +918,24 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
         action="store_false",
         default=True,
         help=(
-            "Additive mode: reconcile only the entrypoint / state "
-            "files + /lib, leaving every other board file "
-            "(settings.toml, uploaded assets, hand-installed circup "
-            "libs) in place.  The default is clean-slate: the deploy "
-            "removes anything that isn't the new payload or a "
-            "device-required keep-set file (boot.py, boot_out.txt, "
-            "_chu_kv.msgpack); a board-resident settings.toml is "
-            "evicted (it competes with config-driven wifi).  Use "
-            "--no-wipe only when you deliberately hand-manage board "
-            "files."
+            "Remove old files only from /lib/ and the startup and "
+            "settings files (code.py, main.py, active.py, "
+            "runtime_config.msgpack).  Other files on the board stay, "
+            "such as settings.toml or images you copied over.  The "
+            "default removes every file this deploy does not copy, "
+            "except boot.py, boot_out.txt, and _chu_kv.msgpack (data "
+            "saved with chumicro_kvstore)."
         ),
     )
     deploy_parser.add_argument(
         "--wipe",
         action="store_true",
         help=(
-            "Erase the *entire* device filesystem before deploying, "
-            "the keep set (boot.py, boot_out.txt, _chu_kv.msgpack) "
-            "included.  Stricter than the clean-slate default (which "
-            "preserves the keep set); for corruption recovery.  No-op "
-            "in RAM mode (nothing in flash to wipe)."
+            "Erase the board's whole filesystem before copying, "
+            "boot.py, boot_out.txt, and _chu_kv.msgpack included.  Use "
+            "it to recover a board whose files are corrupted.  --wipe "
+            "does nothing in RAM mode, which writes nothing to the "
+            "board's storage."
         ),
     )
     _add_non_interactive_arg(deploy_parser)
@@ -931,12 +943,10 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
         "--skip-health-check",
         action="store_true",
         help=(
-            "Skip the pre-deploy fast health gate.  By default, deploy "
-            "runs `status`-equivalent checks (workspace.yml / "
-            "devices.yml shape) and aborts on "
-            "ERROR-level findings before sending bytes to the device. "
-            "Use this flag for power-user CLI runs or CI flows that "
-            "have already validated the workspace state externally."
+            "Skip the checks deploy runs first on workspace.yml, "
+            "secrets.toml, devices.yml, and projects/, the same checks "
+            "status prints.  An error in those checks stops a deploy "
+            "before anything reaches the board."
         ),
     )
     deploy_parser.add_argument(
@@ -944,10 +954,9 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
         choices=("circuitpython", "micropython"),
         default=None,
         help=(
-            "Override the deploy-time runtime filter.  Defaults to "
-            "the device's configured runtime; files marked for a "
-            "different runtime via __chumicro_runtimes__ are filtered "
-            "out.  Set this to override the auto-derived value."
+            "Runtime to build the file list for.  Defaults to the "
+            "board's runtime.  Files whose __chumicro_runtimes__ names "
+            "another runtime are left out."
         ),
     )
     deploy_mode_group = deploy_parser.add_mutually_exclusive_group()
@@ -956,11 +965,13 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
         choices=("ram", "flash"),
         default=None,
         help=(
-            "Override the device's deploy_mode for this run only.  The "
-            "requires_flash pre-flight still applies: a project that "
-            "imports a flagged library auto-promotes ram -> flash and "
-            "prints why.  The devices.yml deploy_mode field is the "
-            "persistent form of this setting."
+            "flash writes the files to the board's storage, where they "
+            "survive a reset.  ram runs them from memory, and a reset "
+            "clears them.  The flag sets the mode for this run only.  "
+            "deploy_mode in devices.yml sets it for every run.  deploy "
+            "switches ram to flash, and prints why, when the files "
+            "include a library marked as needing flash or any file "
+            "other than .py."
         ),
     )
     deploy_mode_group.add_argument(
@@ -968,10 +979,8 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
         choices=("ram", "flash"),
         default=None,
         help=(
-            "Set the mode for this run AND bypass the requires_flash "
-            "pre-flight: `ram` stays ram even when a flagged library "
-            "is in the import graph.  For debugging the auto-switch "
-            "behavior itself; prefer --deploy-mode otherwise."
+            "Same as --deploy-mode, and ram stays ram even where deploy "
+            "would switch to flash.  Meant for debugging that switch."
         ),
     )
     deploy_parser.add_argument(
@@ -982,12 +991,10 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
         default=None,
         metavar="SECONDS",
         help=(
-            "After a successful deploy, tail the board's serial output "
-            f"for SECONDS (default {_DEFAULT_TAIL_SECONDS:g} when the "
-            "value is omitted), then exit.  Replaces the old "
-            "`repl <project>` deploy-then-watch shortcut: one deploy "
-            "path, the watch is a flag on it.  Requires exactly one "
-            "(project, device) target."
+            "After the deploy, show the board's output for SECONDS "
+            f"({_DEFAULT_TAIL_SECONDS:g} when you give no number), then "
+            "exit.  The exit code is non-zero when a traceback appears.  "
+            "Needs exactly one project and one board."
         ),
     )
     deploy_parser.add_argument(
@@ -995,10 +1002,7 @@ def _add_deploy_parser(subparsers: argparse._SubParsersAction) -> None:
         dest="fail_on_traceback",
         action="store_false",
         default=True,
-        help=(
-            "With --tail: do not exit non-zero when a traceback is "
-            "detected in the tailed output."
-        ),
+        help="With --tail, exit 0 even when the output shows a traceback.",
     )
     deploy_parser.set_defaults(func=_cmd_deploy)
 
@@ -1007,15 +1011,20 @@ def _add_projects_parser(subparsers: argparse._SubParsersAction) -> None:
     """``projects``: list workspace projects (tree or flat view)."""
     projects_parser = subparsers.add_parser(
         "projects",
-        help="List the projects defined under the workspace's projects/ tree.",
+        help="List the projects under projects/.",
+        description=(
+            "Print the projects under projects/ as a tree, with nested "
+            "folders such as garage/ shown above the projects inside "
+            "them."
+        ),
     )
     _add_workspace_arg(projects_parser)
     projects_parser.add_argument(
         "--flat",
         action="store_true",
         help=(
-            "Print one slash-form path per line instead of the default "
-            "tree view (handy for shell pipelines)."
+            "Print one project path per line, such as garage/door_open, "
+            "in place of the tree.  Handy for scripts."
         ),
     )
     projects_parser.set_defaults(func=_cmd_projects)

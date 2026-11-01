@@ -3,9 +3,9 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-**A non-blocking HTTP/1.1 server with `@route`: serve requests while your LED keeps blinking.**
+**A web server for CircuitPython and MicroPython boards that answers requests while your LED keeps blinking.**
 
-Routing with `@server.route` (method dispatch, path parameters), bounded multi-connection, per-tick byte budgets, and a streaming request parser, all without blocking your main loop.  Serves TLS on every supported board pair except CircuitPython on RP2040 (CYW43 substrate limitation; documented inline).  Self-contained: no `chumicro-requests` dependency on the device.
+Write a function for each URL, mark it with `@server.route("/path")`, and call `server.handle()` from your `while True:` loop.  Each call accepts a waiting visitor, moves every open request a small step along, and returns within a few milliseconds, so the rest of your program keeps running while the board serves pages.  The server answers several clients at once, routes by method and path, reads JSON bodies, streams responses bigger than the board's memory, and serves HTTPS on the boards listed under [TLS server (HTTPS)](#tls-server-https).  The same code runs on CPython, so your routes run in tests on a laptop.
 
 <br clear="left">
 
@@ -24,37 +24,47 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_http_server
 pip install chumicro-http-server
 ```
 
-For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and details on PyPI naming, see the [ChuMicro install guide](https://chumicro.com/ChuMicro/guides/install/).
+The quick example joins wifi with `chumicro-wifi`.  Its `Runner` loop comes from `chumicro-runner`.  Install both the same way.
+
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
+
+Serve a page and a JSON echo route on port 8080:
 
 ```python
 from chumicro_http_server import HttpServer, build_response
 from chumicro_sockets import listener
 from chumicro_timing import ticks_ms
+from chumicro_wifi import WifiConfig, WifiService
 
+wifi = WifiService(WifiConfig(ssid="your-wifi-ssid", password="your-wifi-password"))
+
+# The server opens port 8080 on its first handle() call.
+# CircuitPython needs radio=, and MicroPython ignores it.
 server = HttpServer(
-    transport_factory=lambda: listener(host="0.0.0.0", port=8080),
+    transport_factory=lambda: listener("0.0.0.0", 8080, radio=wifi.adapter.radio),
 )
 
 @server.route("/")
-def index(request):
-    return build_response(200, html="<h1>Hello from a Pi Pico W</h1>")
+def home(request):
+    return build_response(200, html="<h1>Hello from your board</h1>")
 
-@server.route("/sensor", methods=["POST"])
-def sensor(request):
-    payload = request.json()
-    return build_response(201, json={"ok": True})
-
-@server.route("/widgets/<id>")
-def widget(request):
-    return build_response(200, json={"id": request.path_params["id"]})
+@server.route("/echo", methods=["POST"])
+def echo(request):
+    return build_response(200, json={"echoed": request.json()})
 
 while True:
-    now = ticks_ms()          # one timestamp per pass, shared by check and handle
-    if server.check(now):
-        server.handle(now)
+    now_ms = ticks_ms()
+    if wifi.check(now_ms):                       # join wifi, and rejoin after a drop
+        wifi.handle(now_ms)
+    if wifi.connected and server.check(now_ms):  # serve once the board has an address
+        server.handle(now_ms)
 ```
+
+Once `wifi.connected` is true, `wifi.ip` holds the board's address: open `http://<that address>:8080/` in a browser.
+
+`wifi` and `server` are services, objects a loop drives through two methods.  `check(now_ms)` returns `True` when the service has work to do.  `handle(now_ms)` does one small step of that work.  `now_ms` is the millisecond reading from `ticks_ms()`, taken once per pass and passed to both.  A visitor can arrive at any moment, so the server's `check()` always returns `True`.
 
 In a program with more going on, hand the loop to [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner):
 
@@ -62,31 +72,19 @@ In a program with more going on, hand the loop to [`chumicro-runner`](https://gi
 from chumicro_runner import Runner
 
 runner = Runner()
+runner.add(wifi)
 runner.add(server)
 
 while True:
-    now = runner.tick()
-    runner.wait(now)
+    now_ms = runner.tick()   # wifi and the server each take one small step
+    runner.wait(now_ms)      # sleep until a visitor connects or wifi needs attention
 ```
 
-`wait()` sleeps on the listening socket until a request arrives, which turns the loop from a busy spin into an idle one.
+`runner.wait(now_ms)` watches the listening socket, so the board sleeps between requests.
 
-## What's included
+## Streaming large responses
 
-| Symbol | Purpose |
-|---|---|
-| `HttpServer` | Runner-shaped HTTP/1.1 server; `check(now_ms)` / `handle(now_ms)`. |
-| `Request` | Per-request value object: `method`, `path`, `query`, `headers`, `body`, `json()`, `text()`. |
-| `Response` | Outbound response: `status_code`, `reason`, `headers`, `body`. |
-| `build_response(status, *, body, json, text, html, headers)` | Convenience builder with sensible Content-Type defaults. |
-| `streaming.build_streaming_response(status, *, source, content_length, headers)` | Opt-in `chumicro_http_server.streaming` submodule.  Serves a body larger than the heap from a fill-a-buffer `source(buffer) -> int` (Content-Length or chunked framing, fixed staging window). |
-| `RequestParser` | Streaming request parser (request line + headers + Content-Length body). |
-| `parse_query` / `split_target` | URL helpers. |
-| `ServerError` + subclasses | Typed exception hierarchy, independent of `chumicro_requests` so the server can ship without the client library. |
-
-Each request is served on a fresh accepted socket and `Connection: close` is added to every response.  HTTP/1.1 keep-alive and connection pooling are not supported.  Chunked request bodies are not supported either; use `Content-Length`.
-
-Need to return a body bigger than the heap (a log dump, a file, a long export)?  Return a **streaming response** from the opt-in `chumicro_http_server.streaming` submodule and the server drains it from a fill-a-buffer source one small window at a time, choosing Content-Length or chunked framing for you:
+A route can send a body bigger than the board's memory, such as a log dump, a file, or a long export.  It returns a streaming response from the `chumicro_http_server.streaming` submodule, which loads only when imported.  The server pulls the body from your function one small buffer at a time and picks Content-Length or chunked framing:
 
 ```python
 from chumicro_http_server.streaming import build_streaming_response, SOURCE_EOF
@@ -94,54 +92,58 @@ from chumicro_http_server.streaming import build_streaming_response, SOURCE_EOF
 @server.route("/log")
 def log_dump(request):
     def source(buffer):
-        n = read_next_block_into(buffer)   # your storage read; 0 <= n <= len(buffer)
-        return n if n else SOURCE_EOF      # -1 signals end of body
+        count = read_next_block_into(buffer)   # your storage read, 0 <= count <= len(buffer)
+        return count if count else SOURCE_EOF  # SOURCE_EOF (-1) ends the body
     return build_streaming_response(200, source=source)
 ```
 
-See the [user guide](https://chumicro.com/ChuMicro/http_server/stable/guide/#streaming-large-response-bodies) for the source contract, framing rules, fairness, and staging-window sizing.
+The [user guide](https://chumicro.com/ChuMicro/http_server/stable/guide/#streaming-large-response-bodies) covers the source contract, framing rules, fairness between connections, and buffer sizing.
+
+## What's included
+
+| Symbol | Description |
+|---|---|
+| `HttpServer` | The server.  Register routes with `@server.route(...)`, then call `check(now_ms)` and `handle(now_ms)` from your loop.  `HttpServer.from_config(config, radio=...)` builds one from settings a deploy put on the board |
+| `Request` | What a route receives: `method`, `path`, `query`, `path_params`, `headers`, `body`, `peer`, plus `json()` and `text()` |
+| `Response` | What a route returns: `status_code`, `reason`, `headers`, `body` |
+| `build_response(status, *, body, json, text, html, headers)` | Builds a `Response` and sets `Content-Type` to match `json=`, `text=`, or `html=` |
+| `streaming.build_streaming_response(status, *, source, content_length, headers)` | Sends a body bigger than the board's memory, filled one small buffer at a time by your `source(buffer)` function.  Lives in `chumicro_http_server.streaming` |
+| `RequestParser` | The incremental request parser the server runs on, for tests and custom servers |
+| `parse_query` / `split_target` | URL helpers: split `/path?a=1` into path and query, and parse the query into a dict |
+| `ServerError` and subclasses | Errors for malformed or oversized requests.  `HttpServer` handles them itself: an oversized request gets a `413`, `414`, or `431` response, and a malformed one is dropped |
+
+The server closes each connection after one response (`Connection: close`).  It reads request bodies sent with `Content-Length` and drops a chunked upload without answering.
 
 ## Where this fits
 
-Depends on [`chumicro-sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets) (TCP listener) and [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) (ticks).  Pairs with [`chumicro-websockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets) for combined HTTP + WS deployments.  Self-contained otherwise: the shared HTTP/1.1 primitives (case-insensitive header dict, charset parsing) are inlined locally, so a server-only board never ships [`chumicro-requests`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests).
+Depends on [`chumicro-sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets) for the listening socket, [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) for the millisecond clock, and [`chumicro-config`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config) for `from_config`.  All three install with this library.  Runs as a service on a [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) loop, as the quick example shows.  [`chumicro-wifi`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/wifi) joins the network, and [`chumicro-websockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets) adds WebSocket connections on the same board.
 
 ## Platform support
 
-Works on CPython, MicroPython, and CircuitPython.  Pure Python, no native extensions.
+Works on CPython, MicroPython, and CircuitPython, in pure Python.
 
 ### TLS server (HTTPS)
 
-`chumicro-http-server` itself is transport-agnostic: pass a TLS-wrapped
-listener from
-[`chumicro_sockets.ssl_context_with_cert_and_key_paths`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets)
-into `transport_factory` and the same `HttpServer` runs HTTPS.  Live
-verification across the supported board matrix:
+For HTTPS, build an SSL context from your certificate and key with [`chumicro_sockets.ssl_context_with_cert_and_key_paths`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets), then pass `tls=True, context=...` to `listener` inside your `transport_factory`.  The rest of the server stays the same.  Results on real boards:
 
-| Runtime + board | TLS server status | Notes |
+| Runtime + board | TLS server | Notes |
 |---|---|---|
-| CircuitPython on ESP32-S2 (Lolin S2) | ✅ Works | Bench-tested ~5 KB context (RSA-2048); each connection adds tens of KB during handshake, so leave headroom. |
-| CircuitPython on rp2 (Pi Pico W / Pi Pico 2 W) | ❌ Refused (`UnsupportedSSLConfigError`) | `chumicro_sockets.listener(tls=True)` raises up-front; the underlying CYW43 TLS path raises `OSError(32)` mid-handshake AND wedges the chip's station-mode state. Use ESP32-family or MicroPython on rp2. |
-| MicroPython on ESP32-S2 | ✅ Works | Hardware-accelerated handshake; ~1 KB heap. |
-| MicroPython on rp2 (Pi Pico W) | ✅ Works (RSA-2048 only) | DER-encoded key; ~25 KB handshake heap; ECC keys fail at context build. |
+| CircuitPython on ESP32-S2 (Lolin S2) | ✅ Works | RSA-2048 certificate.  Each handshake needs tens of KB of free memory, so leave headroom |
+| CircuitPython on rp2 (Pi Pico W / Pi Pico 2 W) | ❌ Refused (`UnsupportedSSLConfigError`) | `listener(tls=True)` raises up front.  The CYW43 wifi chip's TLS server path fails mid-handshake with `OSError(32)` and leaves wifi wedged until a USB power cycle.  Use an ESP32-family board, or MicroPython on rp2 |
+| MicroPython on ESP32-S2 | ✅ Works | Hardware-accelerated handshake, about 1 KB of heap |
+| MicroPython on rp2 (Pi Pico W) | ✅ Works (RSA-2048 only) | DER-encoded key.  About 25 KB of heap per handshake.  ECC keys fail when the context is built |
 
-> **Why the CP-on-rp2 row?**  The CYW43 stack's TLS server path raises `OSError(32)` mid-handshake and wedges the chip's station state until a USB power-cycle.  No upstream fix is in flight; for HTTPS server work on rp2, use MicroPython.
-
-The TLS handshake is synchronous inside `wrap_socket(..., server_side=True)`:
-the listener stalls until it completes (single-digit to tens of
-milliseconds on the supported board class with a local TLS client, longer
-on a slow uplink as TLS rounds-trip).  Once the handshake completes, the
-per-connection state machine resumes its runner-shaped,
-LED-blink-friendly progression.
+The board runs each TLS handshake in one go when it accepts the connection, so your loop pauses until the handshake finishes.  After that, the connection goes back to small steps per `handle()` call.
 
 ## Examples
 
 | Example | What it shows |
 |---|---|
-| `simple_server.py` | Single-board HTTP server with `GET /`, `GET /api/uptime`, `POST /api/echo` routes.  Drive it with `curl` from your laptop.  Cross-runtime (CP + MP); the runtime marker on the file gates hardware-only deploys.  For a two-physical-board demo see the workspace template's `two_board_handshake/` example. |
+| [`simple_server.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/http_server/examples/simple_server.py) | Serves an HTML page, a JSON status route, and a POST echo route, and prints a status line every 30 seconds while it waits for visitors.  Open it in a browser or drive it with `curl`.  CircuitPython and MicroPython |
 
-## Wiring wifi credentials
+### Running the examples
 
-The hardware examples need wifi credentials to join your network.  The library itself never reads TOML.  It takes a `transport_factory` and goes, so bringing wifi up and handing the server a connected transport is application-layer work.
+The example joins wifi through `helpers.py`, which sits beside it in `examples/`.  Set `WIFI_SSID` and `WIFI_PASSWORD` at the top of the example.  Copy it to the board as `code.py` on CircuitPython or `main.py` on MicroPython, together with `helpers.py` and the libraries it imports.  From a clone of the [ChuMicro repository](https://github.com/ChuMicro/ChuMicro), `chumicro-workspace deploy-example http_server simple_server` does the copying and takes the wifi settings from `secrets.toml`.  [Wiring wifi credentials](https://chumicro.com/ChuMicro/guides/wiring-wifi-credentials/) walks through both ways.
 
 ## Contributing
 

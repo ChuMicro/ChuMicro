@@ -33,13 +33,13 @@ Set a deadline, poll each tick, and get `True` once when time's up.  No `time.sl
 from {import_name} import Countdown
 from chumicro_timing import ticks_ms
 
-countdown = Countdown(period_ms=5000)    # fires once after 5 s
+countdown = Countdown(period_ms=5000)    # fires once, 5 s from now
 
 while True:
-    now = ticks_ms()
-    if countdown.fired(now):
-        print("time's up")               # prints "time's up" after ~5 seconds
-        break
+    now_ms = ticks_ms()
+    if countdown.fired(now_ms):
+        print("time's up")               # prints "time's up" every ~5 seconds
+        countdown.reset(now_ms)          # start the next 5 s countdown
 ```
 
 ## What's included

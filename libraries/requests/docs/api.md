@@ -1,20 +1,16 @@
 # API Reference
 
-## `chumicro_requests`
+`HttpClient`, under `chumicro_requests.client`, is the class to start with: each request method returns a `RequestHandle` that resolves to a `Response`.  `from chumicro_requests import HttpClient` loads the same class.  `chumicro_requests` holds the error types, `CaseInsensitiveDict`, and the wire helpers for code that frames its own HTTP.  `chumicro_requests.generators` runs a whole request inside a generator.
 
-The error types every call can raise, the case-insensitive header dict, and the wire helpers (`encode_request`, `parse_url`, `parse_charset`, `resolve_redirect_url`, `ResponseParser`) for code that frames its own HTTP.
+## `chumicro_requests`
 
 ::: chumicro_requests
 
 ## `chumicro_requests.client`
 
-`HttpClient` itself, the `RequestHandle` each call returns, the `Response` it resolves to, and the `WhenOversized` policy for bodies past `max_body_bytes`.  `from chumicro_requests import HttpClient` gives you the same class.
-
 ::: chumicro_requests.client
 
 ## `chumicro_requests.generators`
-
-Opt-in submodule for `yield from` flows driven by `Runner.add_generator`.  `fetch` runs a whole request top to bottom and returns the `Response`; `get` / `post` / `put` / `patch` / `delete` are the per-verb forms.  For a body too big for RAM, `stream` returns a `BodyReader` you pull one chunk per `yield from`.  Import it explicitly; a program that never uses a generator never loads it.
 
 ::: chumicro_requests.generators
 

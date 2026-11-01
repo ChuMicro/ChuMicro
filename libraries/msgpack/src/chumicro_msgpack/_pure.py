@@ -1,4 +1,4 @@
-"""Pure-Python msgpack encoder/decoder."""
+"""MessagePack encoder and decoder in pure Python, for runtimes without a built-in ``msgpack`` module."""
 
 import struct
 
@@ -11,9 +11,9 @@ except ImportError:
 _ZERO2 = b"\x00\x00"
 _ZERO4 = b"\x00\x00\x00\x00"
 
-# MicroPython on a Pi Pico W exhausts pystack near 17 nested containers; 8
-# stays clear.  Governs both halves: the encoder refuses what the decoder
-# could not read back.
+# MicroPython on a Pi Pico W runs out of pystack near 17 nested containers.
+# A cap of 8 stays clear of it. The encoder and decoder share the cap, so
+# packb refuses any value unpackb could not read back.
 _MAX_DEPTH = const(8)
 
 
@@ -24,7 +24,6 @@ def _append_packed(buffer: bytearray, fmt: str, value: object, zero: bytes) -> N
 
 
 def _encode(obj: object, buffer: bytearray, depth: int = 0) -> None:
-    # Refuse nesting the decoder's depth cap could not read back.
     if depth > _MAX_DEPTH:
         raise ValueError("msgpack nesting too deep")
     if obj is True:
@@ -276,7 +275,8 @@ def _decode_map(data: memoryview, offset: int, length: int, depth: int) -> tuple
     for _ in range(length):
         key, offset = _decode(data, offset, depth + 1)
         value, offset = _decode(data, offset, depth + 1)
-        # A list/dict key is valid msgpack but unhashable; raise ValueError, not TypeError.
+        # A list or dict key is valid msgpack but unhashable in Python. ValueError
+        # keeps every decode failure one exception type.
         if isinstance(key, (list, dict)):
             raise ValueError("msgpack map key is not hashable")
         result[key] = value
@@ -284,19 +284,27 @@ def _decode_map(data: memoryview, offset: int, length: int, depth: int) -> tuple
 
 
 def packb(obj: object) -> bytes:
-    """Pack *obj* to msgpack bytes.
+    """Pack ``obj`` into MessagePack bytes and return them.
+
+    ``packb`` packs ``None``, ``bool``, ``int``, ``float``, ``str``,
+    ``bytes``, ``bytearray``, ``list``, ``tuple``, and ``dict``, with each
+    value inside at most 8 nested lists, tuples, or dicts. A ``float`` packs
+    as 32 bits and keeps about 7 significant digits. A ``tuple`` packs as an
+    array and unpacks as a ``list``.
 
     Args:
-        obj: Python object to serialize.
+        obj: Value to pack.
 
     Returns:
-        Msgpack-encoded data.
+        The packed bytes.
 
     Raises:
-        ValueError: Nesting deeper than the depth cap.
-        OverflowError: An int, string, bytes, array, or map outside the
-            supported subset's ranges.
-        TypeError: An unsupported type.
+        TypeError: ``obj`` holds a type outside that list, such as a ``set``.
+        OverflowError: An integer lies outside ``-2**31`` to ``2**32 - 1``,
+            a ``str`` or ``bytes`` is longer than 65535 bytes, or a list or
+            dict holds more than 65535 items.
+        ValueError: A value sits inside more than 8 nested lists, tuples,
+            or dicts.
     """
     buffer = bytearray()
     _encode(obj, buffer)
@@ -304,17 +312,24 @@ def packb(obj: object) -> bytes:
 
 
 def unpackb(data: bytes | bytearray | memoryview) -> object:
-    """Unpack msgpack *data* to a Python object.
+    """Unpack the one MessagePack value in ``data`` and return it.
+
+    ``unpackb`` reads ``data`` in place through a ``memoryview``. Only the
+    ``str`` and ``bytes`` values it returns take new memory. It reads the
+    types ``packb`` writes and returns every array as a ``list``.
 
     Args:
-        data: Msgpack-encoded data.
+        data: The packed bytes, holding exactly one value.
 
     Returns:
-        Deserialized Python object.
+        The unpacked value.
 
     Raises:
-        ValueError: On truncated or over-length framing, nesting beyond the
-            decoder's depth bound, or bytes left over after one complete object.
+        ValueError: ``data`` ends inside a value, a length claims more bytes
+            than ``data`` holds, bytes remain after the value, a value sits
+            inside more than 8 nested arrays or maps, a map key is an array
+            or map, or a type byte lies outside what ``packb`` writes, such
+            as a 64-bit integer or float.
     """
     if not isinstance(data, memoryview):
         data = memoryview(data)
@@ -328,25 +343,35 @@ def unpackb(data: bytes | bytearray | memoryview) -> object:
 
 
 def pack(obj: object, stream: object) -> None:
-    """Pack *obj* to *stream* in msgpack format.
+    """Pack ``obj`` and write the bytes to ``stream`` in one ``write()`` call.
+
+    ``pack`` builds the whole packed value in memory first, so it needs as
+    much heap as ``packb``. It raises the errors ``packb`` raises.
 
     Args:
-        obj: Python object to serialize.
-        stream: Writable stream with a ``write()`` method.
+        obj: Value to pack.
+        stream: Object with a ``write(bytes)`` method, such as a file opened
+            ``"wb"`` or an ``io.BytesIO``.
     """
     stream.write(packb(obj))
 
 
 def unpack(stream: object) -> object:
-    """Unpack a single object from *stream*.
+    """Read the rest of ``stream`` and unpack the one MessagePack value it holds.
+
+    ``unpack`` calls ``stream.read()`` once and passes the bytes to
+    ``unpackb``. The stream holds exactly one value from its current
+    position to its end.
 
     Args:
-        stream: Readable stream with a ``read()`` method.
+        stream: Object with a ``read()`` method that returns the remaining
+            bytes, such as a file opened ``"rb"`` or an ``io.BytesIO``.
 
     Returns:
-        Deserialized Python object.
+        The unpacked value.
 
     Raises:
-        ValueError: Truncated framing, or bytes past the first object.
+        ValueError: The bytes fail any ``unpackb`` check, including bytes
+            left after the value.
     """
     return unpackb(stream.read())

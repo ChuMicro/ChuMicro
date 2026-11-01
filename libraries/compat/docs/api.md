@@ -2,6 +2,8 @@
 
 ## `chumicro_compat.functools`
 
+`chumicro_compat.functools` exports one name, `partial`, imported with `from chumicro_compat.functools import partial`.
+
 ::: chumicro_compat.functools
 
 ---

@@ -584,7 +584,14 @@ def _add_devices_parsers(subparsers: argparse._SubParsersAction) -> None:
     """
     add_device_parser = subparsers.add_parser(
         "add-device",
-        help="Probe a board and register it in devices.yml.",
+        help="Register the board plugged into USB in devices.yml.",
+        description=(
+            "Connect to the board, read its runtime, firmware version, "
+            "model, and unique id, and add an entry for it to "
+            "devices.yml.  The first board registered for each runtime "
+            "becomes that runtime's default board.  bootstrap runs the "
+            "same steps and then prints what to run next."
+        ),
     )
     _add_workspace_arg(add_device_parser)
     add_device_parser.add_argument(
@@ -592,22 +599,20 @@ def _add_devices_parsers(subparsers: argparse._SubParsersAction) -> None:
         nargs="?",
         default=None,
         help=(
-            "User-friendly device id (e.g. 'back-porch-mp').  Optional: "
-            "when omitted, a default is derived from the probe's "
-            "machine string + runtime suffix (e.g. "
-            "'raspberry-pi-pico-w-cp').  When the suggested id collides "
-            "with an existing entry in devices.yml, a numeric suffix "
-            "is appended (e.g. 'raspberry-pi-pico-w-cp-2')."
+            "Name for the board in devices.yml, such as back-porch.  "
+            "Without it, the name comes from the board's model and "
+            "runtime, such as raspberry-pi-pico-w-cp, with -2 added "
+            "when that name is already taken."
         ),
     )
     add_device_parser.add_argument(
         "--address",
         default=None,
         help=(
-            "Serial port path of the connected board.  Optional: when "
-            "omitted in interactive mode, the wizard auto-picks the "
-            "only detected port or prompts with a numbered list when "
-            "multiple are present.  Required under --non-interactive."
+            "Serial port the board is on, such as /dev/cu.usbmodem1101 "
+            "or COM3.  Without it, add-device uses the only port it "
+            "sees, or lists the ports and asks you to pick one.  "
+            "Required with --non-interactive."
         ),
     )
     add_device_parser.add_argument(
@@ -615,33 +620,36 @@ def _add_devices_parsers(subparsers: argparse._SubParsersAction) -> None:
         choices=("circuitpython", "micropython"),
         default=None,
         help=(
-            "Runtime to probe: picks the right Device facade for "
-            "probe_device.  Optional: when omitted, the runtime is "
-            "auto-detected by trying both transports against the "
-            "given address."
+            "Runtime the board runs.  Without it, add-device tries "
+            "both."
         ),
     )
     add_device_parser.add_argument(
         "--description",
         default=None,
-        help="Free-form note recorded under 'description:' (user-owned zone).",
+        help=(
+            "Note stored with the entry, such as 'kitchen window "
+            "sensor'.  Later commands keep it as you wrote it."
+        ),
     )
     add_device_parser.add_argument(
         "--force",
         action="store_true",
         help=(
-            "Overwrite an existing entry with this id: refreshes the "
-            "address and hardware-once fields from the live probe."
+            "Update the entry that already has this id.  add-device "
+            "stores the port and reads the firmware version and hardware "
+            "details from the board again.  Your description stays.  "
+            "Use it after you swap in a different board under the same "
+            "name."
         ),
     )
     add_device_parser.add_argument(
         "--demo",
         action="store_true",
         help=(
-            "After registering, chain into the built-in demo deploy "
-            "so a freshly registered board ships *something* in one "
-            "command.  Equivalent to running `demo --device <id>` "
-            "next."
+            "After registering, send the board a counting program and "
+            "show its first output, the same as running demo --device "
+            "<id> next."
         ),
     )
     _add_non_interactive_arg(add_device_parser)
@@ -649,7 +657,12 @@ def _add_devices_parsers(subparsers: argparse._SubParsersAction) -> None:
 
     probe_parser = subparsers.add_parser(
         "probe",
-        help="Print the runtime identity reported by the selected board.",
+        help="Ask a registered board which runtime and firmware it runs.",
+        description=(
+            "Connect to the selected board and print the runtime, "
+            "firmware version, model, and unique id it reports.  "
+            "devices.yml stays as it is."
+        ),
     )
     _add_workspace_arg(probe_parser)
     _add_device_selector(probe_parser)
@@ -657,39 +670,48 @@ def _add_devices_parsers(subparsers: argparse._SubParsersAction) -> None:
 
     discover_parser = subparsers.add_parser(
         "discover",
-        help="List the serial ports the host currently sees.",
+        help="List the serial ports this computer sees, to find a board.",
+        description=(
+            "Print each serial port with its description.  Run it before "
+            "and after plugging a board in: the line that appears is the "
+            "board."
+        ),
     )
     discover_parser.set_defaults(func=_cmd_discover)
 
     devices_parser = subparsers.add_parser(
         "devices",
-        help="Print every entry in devices.yml.",
+        help="List the boards registered in devices.yml.",
+        description=(
+            "Print one line per registered board: its id, its runtime, "
+            "and its serial port."
+        ),
     )
     _add_workspace_arg(devices_parser)
     devices_parser.set_defaults(func=_cmd_devices)
 
     remove_device_parser = subparsers.add_parser(
         "remove-device",
-        help="Delete a device entry from devices.yml.",
+        help="Delete a board's entry from devices.yml.",
         description=(
-            "Delete one entry by id and null any defaults: reference "
-            "to it so the file stays loadable.  Destructive: it drops "
-            "user-owned metadata (description, deploy_mode, ...) that "
-            "no probe can rebuild, so it is gated behind --yes.  No "
-            "board needs to be connected."
+            "Delete one board's entry by id.  A default in devices.yml "
+            "that named the board is cleared, so the file stays valid.  "
+            "The board can stay unplugged.  The description and "
+            "deploy_mode you set on the entry are lost, so the command "
+            "needs --yes."
         ),
     )
     _add_workspace_arg(remove_device_parser)
     remove_device_parser.add_argument(
-        "id", help="Device id to delete (must match an entry in devices.yml).",
+        "id",
+        help="Id of the board to delete, as the devices command lists it.",
     )
     remove_device_parser.add_argument(
         "--yes",
         action="store_true",
         help=(
-            "Confirm the deletion.  Without this flag the command "
-            "exits 2 without touching the file so a typoed id cannot "
-            "accidentally drop an entry."
+            "Confirm the deletion.  Without it, the command exits 2 and "
+            "leaves devices.yml as it was."
         ),
     )
     _add_non_interactive_arg(remove_device_parser)
@@ -697,28 +719,30 @@ def _add_devices_parsers(subparsers: argparse._SubParsersAction) -> None:
 
     reset_device_parser = subparsers.add_parser(
         "reset-device",
-        help="Rebuild a device entry from a fresh probe (full replace).",
+        help="Rebuild a board's devices.yml entry from the board itself.",
         description=(
-            "Re-probe the connected board and rewrite the entry from "
-            "silicon, keeping the id (and its defaults: binding) but "
-            "dropping accumulated user-owned drift (description, "
-            "deploy_mode, serial_baudrate) and re-deriving the "
-            "hardware-once zone.  The replace counterpart to "
-            "`add-device --force` (which updates in place).  Gated "
-            "behind --yes; the board must be connected (probe failure "
-            "steers to `remove-device` / `add-device`)."
+            "Read the connected board again and write its entry from "
+            "scratch.  The id stays, and so does any default that names "
+            "it.  The description, deploy_mode, and serial_baudrate you "
+            "set are dropped, and the hardware details are read fresh "
+            "from the board.  add-device --force updates an entry and "
+            "keeps those fields.  The board must be plugged in, and the "
+            "command needs --yes.  remove-device drops the entry of a "
+            "board you no longer have."
         ),
     )
     _add_workspace_arg(reset_device_parser)
     reset_device_parser.add_argument(
-        "id", help="Device id to rebuild (must match an entry in devices.yml).",
+        "id",
+        help="Id of the board to rebuild, as the devices command lists it.",
     )
     reset_device_parser.add_argument(
         "--address",
         default=None,
         help=(
-            "Serial port to probe.  Optional: defaults to the entry's "
-            "stored address (pass this when the board moved ports)."
+            "Serial port to read the board on.  Defaults to the port "
+            "stored in the entry.  Pass it when the board moved to "
+            "another port."
         ),
     )
     reset_device_parser.add_argument(
@@ -726,17 +750,17 @@ def _add_devices_parsers(subparsers: argparse._SubParsersAction) -> None:
         choices=("circuitpython", "micropython"),
         default=None,
         help=(
-            "Pin the runtime to probe.  Optional: when omitted the "
-            "runtime is re-inferred by trying both transports, because a "
-            "reset is exactly when firmware may have been reflashed."
+            "Runtime the board runs.  Without it, the command tries "
+            "both, which catches a board reflashed with the other "
+            "runtime."
         ),
     )
     reset_device_parser.add_argument(
         "--yes",
         action="store_true",
         help=(
-            "Confirm the rebuild.  Without this flag the command exits "
-            "2 without touching the file or the board."
+            "Confirm the rebuild.  Without it, the command exits 2 and "
+            "leaves devices.yml and the board as they were."
         ),
     )
     _add_non_interactive_arg(reset_device_parser)
@@ -752,7 +776,12 @@ def _add_rename_parser(subparsers: argparse._SubParsersAction) -> None:
     """
     rename_parser = subparsers.add_parser(
         "rename",
-        help="Rename a project directory or a device id.",
+        help="Rename a project folder or a board's id.",
+        description=(
+            "Rename a project folder with --project, or a board's id in "
+            "devices.yml with --device.  A renamed project reaches the "
+            "board on its next deploy."
+        ),
     )
     _add_workspace_arg(rename_parser)
     rename_target = rename_parser.add_mutually_exclusive_group(required=True)
@@ -761,13 +790,19 @@ def _add_rename_parser(subparsers: argparse._SubParsersAction) -> None:
         nargs=2,
         metavar=("OLD", "NEW"),
         default=None,
-        help="Rename projects/OLD/ to projects/NEW/.",
+        help=(
+            "Rename projects/OLD/ to projects/NEW/.  A nested NEW, such "
+            "as garage/door_open, gets its parent folders created."
+        ),
     )
     rename_target.add_argument(
         "--device",
         nargs=2,
         metavar=("OLD", "NEW"),
         default=None,
-        help="Rename a devices.yml entry id (also rewrites defaults: references).",
+        help=(
+            "Change a board's id in devices.yml from OLD to NEW, along "
+            "with any default that names it."
+        ),
     )
     rename_parser.set_defaults(func=_cmd_rename)

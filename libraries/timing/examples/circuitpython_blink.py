@@ -1,49 +1,50 @@
-"""Periodic LED blink on CircuitPython.
+"""Blink the onboard LED once a second without pausing the loop, on CircuitPython.
 
-Toggles the onboard LED once per second using a non-blocking
-``Rate`` timer (drift-free, phase-aligned cadence).  Prints a line
-on each toggle so a serial console (or a sweep harness) can verify
-the loop without watching the LED itself.
+The onboard LED stays on for a second, then off for a second, and the serial
+console prints each change.  ``Rate`` says when a second has passed, so the
+loop never sleeps and anything you add to it keeps running.  This is
+Arduino's BlinkWithoutDelay, with ``ticks_ms()`` in place of ``millis()``.
 
-Setup:
-1. Install ``chumicro_timing`` (``circup install chumicro_timing``
-   or copy the package to ``lib/``).
-2. No extra wiring needed.  Uses the built-in LED (``board.LED``).
-   Works on most CircuitPython boards (Feather, QT Py, Metro, etc.).
-3. Save this file as ``code.py`` on the board.
+Wiring: none.  ``board.LED`` is the onboard LED on a Pi Pico W and on ESP32-S2
+boards such as the Lolin S2 Mini.
 
 Example output::
 
-    Running LED blink (1 Hz)...
+    Blinking the onboard LED once a second.
 
-      blink!
-      blink!
+      LED on
+      LED off
+      LED on
       ...
+
+Setup:
+1. Install the library: ``circup install chumicro_timing``.
+2. Save this file as ``code.py`` on the CIRCUITPY drive.
 
 Runs on CircuitPython.
 """
 
-#: CircuitPython-only.  Uses ``board`` + ``digitalio`` (CP API).
-#: Pair: ``micropython_blink.py`` for the MP equivalent (``machine.Pin``).
+# ChuMicro's example tools read this line: this file needs CircuitPython.
 __chumicro_runtimes__ = ("circuitpython",)
 
 import board
 import digitalio
 from chumicro_timing import Rate, ticks_ms
 
-# Set up the onboard LED as a digital output.
 led = digitalio.DigitalInOut(board.LED)
 led.direction = digitalio.Direction.OUTPUT
 
-# Create a drift-free cadence that fires once per second.
-beat = Rate(1000, ticks_ms())
+# A timer that comes due every 1000 ms, counting from now.
+every_second = Rate(1000, ticks_ms())
 
-print("Running LED blink (1 Hz)...\n")
+print("Blinking the onboard LED once a second.\n")
 
 while True:
     now = ticks_ms()
 
-    # due() returns True at most once per period, staying phase-aligned.
-    if beat.due(now):
+    # due() is True once each time a second has passed, and False otherwise.
+    if every_second.due(now):
         led.value = not led.value
-        print("  blink!")
+        print("  LED on" if led.value else "  LED off")
+
+    # Nothing above waits, so code you add here runs on every pass.

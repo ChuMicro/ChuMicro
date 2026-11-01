@@ -1,88 +1,96 @@
-"""Periodic HTTP GET on a real CircuitPython / MicroPython board.
+"""Fetch a web page every 30 seconds without ever stopping the loop.
 
-Brings wifi up via the local ``helpers`` module, fetches a configured
-URL every ``POLL_INTERVAL_S`` seconds, prints the status code + body
-length.  Demonstrates the runner-shaped client driving real network
-I/O while a simple LED-style counter keeps incrementing, proof that
-the in-flight request never block-calls the loop.
+The board joins your wifi, then asks ``http://example.com/`` for its
+page every 30 seconds and prints the HTTP status code and how many
+bytes came back.  A fetch that fails (wifi dropped, server down, no
+answer within 10 seconds) prints the reason, and the next round tries
+again.  The loop runs until you unplug the board.
 
-Configuration
-=============
+If you have used ``adafruit_requests``, you know
+``response = requests.get(url)``, which holds the whole board on that
+line until the server answers.  ``client.get(url)`` returns at once
+with a request object instead.  The ``while True`` loop at the bottom
+calls ``client.handle(now_ms)`` on every pass.  Each call moves the
+request one small step and returns, and ``request.done`` turns
+``True`` when the answer is in.  Anything else you put in that loop
+keeps running while the server works on its answer and while the page
+downloads.
 
-Reads the deployed ``runtime_config.msgpack`` (baked from
-``secrets.toml`` + per-example ``examples/config.toml`` by the
-deploy pipeline) via the flat-key API:
+Before you run it:
 
-* WiFi (read by ``helpers.wifi_up``): ``wifi.ssid`` / ``wifi.password``.
-* HTTP (read by ``HttpClient.from_config``): ``requests.default_timeout_ms``
-  / ``requests.default_max_redirects`` / ``requests.user_agent`` /
-  ``requests.max_body_bytes``, all optional with library defaults.
-* App-level (this example's own concerns, not the library's):
-  ``periodic_get.url``.
+1. Set ``WIFI_SSID`` and ``WIFI_PASSWORD`` below.  When you deploy with
+   ``chumicro-workspace``, the ``ssid`` and ``password`` under
+   ``[wifi]`` in your ``secrets.toml`` are used instead.
+2. Deploy it::
 
-When ``runtime_config.msgpack`` isn't present (raw single-file
-deploys), wifi creds and the target URL fall back to the placeholder
-constants below (edit them first).
+       chumicro-workspace deploy-example requests periodic_get --device <id>
 
-Deploying
-=========
-
-Deploy with ``chumicro-workspace``::
-
-    chumicro-workspace deploy-example requests periodic_get --device <id>
-
-Example output::
+What you will see::
 
     WIFI_OK ip=10.0.0.42
-    Polling http://example.com/ every 30 s
-    [1] status=200 bytes=1256 led_ticks=87
-    [2] status=200 bytes=1256 led_ticks=89
+    Fetching http://example.com/ every 30 s
+    [1] status=200 bytes=577
+    [2] status=200 bytes=577
+    [3] status=200 bytes=577
+
+A round that fails prints the reason in place of the status, for
+example ``[4] failed: request to 'http://example.com/' timed out after
+deadline``.
+
+Try pointing ``URL`` at a JSON API and printing ``response.json()``.
 """
 
-#: Cross-runtime: wifi-up via :mod:`helpers` dispatches per
-#: ``sys.implementation.name`` (CP / MP) and the HTTP client is
-#: pure-Python.
+# Runs on CircuitPython and MicroPython boards.  helpers.wifi_up picks
+# the right wifi calls for each.
 __chumicro_runtimes__ = ("circuitpython", "micropython")
 
-import time
-
 from chumicro_requests import HttpClient
-from helpers import runtime_config, ticks_add, ticks_diff, ticks_ms, wifi_up
+from chumicro_sockets.sockets_factory import connector_factory
+from chumicro_timing import Rate, ticks_ms
+from helpers import wifi_up
 
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 - replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 - replace before deploying
-TARGET_URL = "http://example.com/"
-POLL_INTERVAL_S = 30
+URL = "http://example.com/"
+FETCH_EVERY_S = 30
 
-config = runtime_config()
+# Join wifi.  wifi_up waits until the board has an IP address.
 radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)
 print(f"WIFI_OK ip={ip}")
 
-target_url = config.get("periodic_get.url", TARGET_URL)
-client = HttpClient.from_config(config, radio=radio)
-print(f"Polling {target_url} every {POLL_INTERVAL_S} s")
+# One client makes every request.  connector_factory tells it how to
+# open a network connection through this board's wifi radio.
+client = HttpClient(transport_factory=connector_factory(radio=radio))
+print(f"Fetching {URL} every {FETCH_EVERY_S} s")
 
+# Start the first fetch now.  get() returns straight away; the loop
+# below carries the request through to the end.
+fetch_number = 1
+request = client.get(URL)
+fetch_timer = Rate(FETCH_EVERY_S * 1000, ticks_ms())
 
-attempt = 0
 while True:
-    attempt += 1
-    request = client.get(target_url)
-    led_counter = 0
-    while not request.done:
-        if client.check(ticks_ms()):
-            client.handle(ticks_ms())
-        led_counter += 1
-        time.sleep(0.02)
+    now_ms = ticks_ms()
 
-    if request.error is not None:
-        print(f"[{attempt}] ERROR={request.error!r}")
-    else:
-        response = request.result
-        print(
-            f"[{attempt}] status={response.status_code} "
-            f"bytes={len(response.body)} led_ticks={led_counter}",
-        )
+    # check() is True while a request is in flight.  handle() moves it
+    # one small step (connect, send, or read what has arrived) and
+    # returns without waiting for the server.
+    if client.check(now_ms):
+        client.handle(now_ms)
 
-    next_due = ticks_add(ticks_ms(), POLL_INTERVAL_S * 1000)
-    while ticks_diff(next_due, ticks_ms()) > 0:
-        time.sleep(0.05)
+    # The request finished: print what came back, or why it failed.
+    if request is not None and request.done:
+        if request.error is not None:
+            print(f"[{fetch_number}] failed: {request.error}")
+        else:
+            response = request.response
+            print(f"[{fetch_number}] status={response.status_code} bytes={len(response.body)}")
+        request = None
+
+    # Every FETCH_EVERY_S seconds, start the next fetch.
+    if request is None and fetch_timer.due(now_ms):
+        fetch_number += 1
+        request = client.get(URL)
+
+    # Anything else you add here, such as blinking an LED or reading a
+    # button, runs on every pass, including while a page downloads.

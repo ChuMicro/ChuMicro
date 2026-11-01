@@ -1,6 +1,6 @@
 site_name: chumicro-requests
 site_description: >-
-  Non-blocking HTTP/1.1 client for CircuitPython, MicroPython, and CPython.  Fetch a URL over TLS while your LED keeps blinking.
+  Non-blocking HTTP/1.1 client for CircuitPython, MicroPython, and CPython.  Fetch web pages and call web APIs while your main loop keeps running.
 site_url: https://chumicro.com/ChuMicro/requests/
 repo_url: https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests
 repo_name: Source

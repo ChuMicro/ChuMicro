@@ -1,1 +1,4 @@
-"""Cross-runtime compatibility polyfills for CPython, MicroPython, and CircuitPython."""
+"""Standard-library features under their CPython names on CPython, MicroPython, and CircuitPython.
+
+``chumicro_compat.functools`` provides ``partial``.
+"""

@@ -177,9 +177,12 @@ class TestFakeRunnerSurface:
         connector.handle(0)
         assert connector.state == STATE_AWAITING_TCP
 
-    def test_next_deadline_is_none(self) -> None:
+    def test_next_deadline_is_due_now_only_while_awaiting_dns(self) -> None:
         connector = FakeSocketConnector(actions=["dns_ok", "tcp_ok"])
-        assert connector.next_deadline(0) is None
+        assert connector.next_deadline(7) == 7
+        connector.tick(0)
+        assert connector.state == STATE_AWAITING_TCP
+        assert connector.next_deadline(7) is None
 
     def test_cancel_transitions_to_failed(self) -> None:
         connector = FakeSocketConnector(actions=["dns_ok"])

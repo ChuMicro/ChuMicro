@@ -268,9 +268,12 @@ class Deployer:
         5. Hand off to the normal :meth:`deploy_files` for the actual
            write + execute.
 
-        Out-of-scope files (user-uploaded images, hand-edited
-        ``settings.toml``, etc.) are never touched; see
-        :func:`chumicro_deploy.protocol.is_in_deploy_scope` for the rule.
+        With ``clean=True`` (the default) the stale set covers the whole
+        device minus the keep set, so user-uploaded images and a
+        hand-edited ``settings.toml`` are removed too.  With
+        ``clean=False`` only files inside the deploy scope are diffed
+        and everything else survives; see
+        :func:`chumicro_deploy.protocol.is_in_deploy_scope` for that rule.
 
         Mode-aware: in RAM-mode deploys (CP RAM, MP mount) the
         transport's ``list_files_in_scope`` returns an empty list and

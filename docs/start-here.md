@@ -4,77 +4,117 @@ title: "Start here: from a new board to your code running on it"
 
 # Start here
 
-This page goes from a board still in its packaging to your own code running on it, on your own wifi. It takes about fifteen minutes, and every command runs on your laptop.
+Every command on this page runs in a terminal on your laptop.
 
-You need a board (an ESP32 or a Raspberry Pi Pico W are the usual starting points), a USB cable that carries data rather than only power, and Python 3.11 or newer on your laptop.
+You need:
 
-## 1. Get the workbench
+- A board, such as a Raspberry Pi Pico W or an ESP32 development board.
+- A USB cable that carries data as well as power.  A charge-only cable leaves the board invisible to your laptop.
+- Python 3.11 or newer on your laptop.
 
-The [workbench template](https://github.com/ChuMicro/ChuMicro-Workbench-Template) is a whole project you copy. It holds your code, keeps track of your boards, deploys to them, and runs your tests. Press **Use this template** on that page to make your own copy on GitHub, then clone it. Or copy it straight down and start a fresh history:
+[Coming from Arduino](coming-from-arduino.md) maps Arduino's `setup()` and `loop()`, and the `time.sleep()` of Adafruit Learn guides, onto the code below.  [Glossary](glossary.md) defines the ChuMicro words on this page, such as *deploy* and `devices.yml`.
+
+## 1. Put CircuitPython or MicroPython on the board
+
+ChuMicro runs on CircuitPython 10.1 or newer, or MicroPython 1.27 or newer.  If your board already runs one of those, skip to step 2.
+
+Install the runtime from its own site:
+
+- **CircuitPython**: find your board at [circuitpython.org/downloads](https://circuitpython.org/downloads).  A Pico W takes a `.uf2` file.  Hold the BOOTSEL button while you plug the board in, then drag the file onto the `RPI-RP2` drive that appears.  Many ESP32 boards have an **Open Installer** button on their page that flashes the board from your browser.
+- **MicroPython**: find your board at [micropython.org/download](https://micropython.org/download/) and follow the steps on its page.
+
+Either runtime works.  Code written for one runs on the other once its pin lines change.  [Getting firmware onto a new board](troubleshooting/firmware-onto-a-new-board.md) covers boards that will not take a flash.
+
+## 2. Get the workbench
+
+The [workbench template](https://github.com/ChuMicro/ChuMicro-Workbench-Template) is a folder for your board projects.  Its `run.py` keeps track of your boards, copies code onto them, and runs your tests.
+
+For a copy on GitHub, press **Use this template** on the template's page and clone your new repository.  For a copy on your laptop only, clone the template and start a fresh history:
 
 ```bash
 git clone --depth 1 https://github.com/ChuMicro/ChuMicro-Workbench-Template my-workspace
 cd my-workspace
 rm -rf .git && git init          # the history is yours from here
-python3 run.py setup             # creates a virtual environment, installs the tooling
 ```
 
-`run.py` is a wrapper that re-executes inside the workspace's virtual environment, so `python3 run.py <command>` works from a clean shell without activating anything first.
-
-## 2. Put a runtime on the board
-
-A new board usually arrives without CircuitPython or MicroPython on it. Plug it in and let the workbench install one:
+Then install the tools from inside the folder:
 
 ```bash
-python3 run.py install-firmware
+python3 run.py setup             # creates a virtual environment and installs the tools
 ```
 
-This handles both styles of board: the ones that expose a drive you drop a UF2 file onto (Pico and friends) and the ones that need esptool over serial (ESP32 and friends). It asks which runtime you want and fetches the right build for your board. Pass `--help` for the flags, including `--runtime`, `--method`, and `--url` if you want to point it at a specific firmware file.
-
-If your board already runs CircuitPython or MicroPython, skip this step.
+`setup` builds a virtual environment in `my-workspace/.venv`: a private Python with the tools installed in it.  `run.py` switches into it on every command, so `python3 run.py <command>` works from a fresh terminal with nothing to activate.  `setup` also creates `secrets.toml` and `devices.yml`, two files git ignores.
 
 ## 3. Register the board
+
+Plug the board in and run:
 
 ```bash
 python3 run.py bootstrap
 ```
 
-This asks which serial port your board is on, works out which runtime it is running, and writes it into `devices.yml` so later commands know what "the board" means. From now on you can name it, or leave it out and get the active one.
+`bootstrap` finds the board's serial port and works out whether the board runs CircuitPython or MicroPython.  It records both in `devices.yml`.  When the laptop sees several serial ports, `bootstrap` asks which one is the board.  From then on, every command uses that board unless you name another with `--device`.
 
-Two things that go wrong here have their own pages: [the board does not appear](troubleshooting/board-not-found.md), and on a Mac, [CIRCUITPY not mounting](troubleshooting/macos-circuitpy.md).
+[Board not found](troubleshooting/board-not-found.md) covers a board that does not appear.  [CIRCUITPY on macOS](troubleshooting/macos-circuitpy.md) covers a CIRCUITPY drive that will not mount on a Mac.
 
-## 4. Make a project and send it over
+## 4. Write a blink and send it over
 
-```bash
-python3 run.py new blinker      # scaffolds projects/blinker/
-python3 run.py deploy blinker   # copies it to the board and runs it
-```
-
-Your code lives on your laptop under version control and gets copied to the board when you ask. Editing straight onto a CIRCUITPY drive wears the flash out and loses work when the cable moves; this way the board holds a copy and your laptop holds the original.
-
-Deploys write to flash and verify every file by checksum. While you are iterating you can switch a board to RAM deploys, which write nothing to flash at all.
-
-To watch what the board prints:
+Create a project and fetch the timing library it uses:
 
 ```bash
-python3 run.py deploy blinker --tail 30    # ship it, then watch for 30 seconds
-python3 run.py repl                        # or open an interactive REPL
+python3 run.py new blinker                    # creates projects/blinker/
+python3 run.py library add chumicro_timing    # fetches the library into the workspace
 ```
 
-## 5. Add a library
+Open `projects/blinker/app.py` and replace everything in it with this:
 
-Say the project needs wifi:
+```python
+import board
+import digitalio
+from chumicro_timing import Rate, ticks_ms
+
+
+def run():
+    led = digitalio.DigitalInOut(board.LED)
+    led.direction = digitalio.Direction.OUTPUT
+    blink = Rate(500, ticks_ms())       # due every 500 ms
+    print("blinker: running")
+
+    while True:                         # set up once, then loop until the power goes
+        now = ticks_ms()
+        if blink.due(now):              # is it time yet?
+            led.value = not led.value
+            print("blink")
+```
+
+The deploy below writes a three-line `code.py` on CircuitPython, or `main.py` on MicroPython, that calls `run()` when the board starts.  Your program goes inside `run()`: setup first, then a `while True:` loop that never ends.  The loop has no `time.sleep()` in it.  `blink.due(now)` answers "is it time yet?" and returns straight away.  Anything you add to the loop later gets a turn on every pass.
+
+That code is CircuitPython.  On MicroPython, change the LED lines:
+
+- Replace `import board` and `import digitalio` with `from machine import Pin`.
+- Build the LED with `led = Pin("LED", Pin.OUT)` on a Pico W, or `led = Pin(2, Pin.OUT)` on many ESP32 boards.
+- Flip it with `led.value(not led.value())`.
+
+Send the project to the board and watch what it prints:
 
 ```bash
-python3 run.py library add chumicro_wifi
-python3 run.py deploy blinker
+python3 run.py deploy blinker --tail 30     # copy it over, then show the output for 30 seconds
 ```
 
-The library lands in the workspace, and the deploy carries it to the board along with your code. [Installing libraries](install.md) covers doing this outside a workspace, using circup, mip, or pip directly.
+The LED blinks.  The terminal prints `blink` twice a second.  `deploy` copies your project and every library it imports onto the board, then restarts the board.  Your files stay on your laptop under version control, so a cable that comes loose mid-copy costs one more run of `deploy`.
 
-## 6. Give it your wifi password
+To see the output again later, or to type at the board's Python prompt:
 
-Network examples read your wifi name and password from `secrets.toml` in the workspace root, which is gitignored. The deploy bakes it onto the board, so credentials stay out of your code and out of your git history.
+```bash
+python3 run.py repl --tail 30    # show the board's output for 30 seconds
+python3 run.py repl              # an interactive prompt on the board
+```
+
+[Three steps, one idea each](https://github.com/ChuMicro/ChuMicro#three-steps-one-idea-each) adds a button and then WiFi to this same loop.
+
+## 5. Put the board on your WiFi
+
+Network projects read your WiFi name and password from `secrets.toml` in the workspace folder.  `setup` created that file with placeholder values.  Replace them with your own:
 
 ```toml
 [wifi]
@@ -82,11 +122,23 @@ ssid = "your-network"
 password = "your-password"
 ```
 
-[Wiring wifi credentials](wiring-wifi-credentials.md) covers the details, including boards with more than one network to try.
+The template's `examples/wifi_only` joins your network and prints its status every five seconds.  Copy it into a project of your own, fetch the libraries it imports, and deploy it:
+
+```bash
+python3 run.py new my_wifi --from examples/wifi_only
+python3 run.py library add chumicro_runner
+python3 run.py library add chumicro_wifi
+python3 run.py deploy my_wifi --tail 30
+```
+
+The board prints `wifi: connecting` until it joins.  Then it prints `wifi: connected at` followed by its address.  Unplug your router, and the board prints `wifi: reconnecting`.  Plug the router back in, and the board rejoins on its own.  [Wiring WiFi credentials](wiring-wifi-credentials.md) shows how the password reaches the board, adds MQTT broker settings to the same file, and lists every key the libraries read.
 
 ## Where to go next
 
+- [Build a WiFi temperature sensor](tutorial-wifi-sensor.md) grows a blink, one step at a time, into a board that publishes its temperature over MQTT.
+- [How it works](how-it-works.md) builds from a plain `while True:` loop up to a runner and a deploy.
+- The template's `examples/` folder holds more projects to copy the same way: `periodic_get` for a timed web request, `telemetry_publisher` for MQTT readings, and `two_board_handshake` for two boards talking over HTTP.  `python3 run.py new <name> --from examples/<example>` copies one into `projects/`.  The template's README walks through a full sensor project.
 - [Questions people ask](faq.md): why a board freezes on the network, whether these libraries use async, what they cost in flash, and how to test without hardware.
 - [The library reference](https://chumicro.com/ChuMicro/): every library, with its own guide and API pages.
-- [Troubleshooting](troubleshooting/README.md): keyed to the symptom you are looking at.
-- The template's own README walks a full reference project: a wifi-to-MQTT sensor node with a boot counter that survives a power cut, and the flow for more than one board.
+- [Troubleshooting](troubleshooting/README.md): pages organized by the symptom on your screen.
+- Newer firmware later on: `python3 run.py install-firmware --method uf2` on a Pico, or `--method esptool` on an ESP32, flashes the latest stable release onto the registered board.

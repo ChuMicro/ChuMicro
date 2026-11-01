@@ -1,34 +1,63 @@
-"""Read the device's runtime config and pull typed sections out of it.
+"""``RuntimeConfig`` looks up settings, and ``load_section`` builds objects from them.
 
-:class:`RuntimeConfig` wraps it for lookups; :func:`load_section` and
-:func:`try_load_section` build typed sections.
+``RuntimeConfig`` answers lookups by dotted key such as ``"wifi.ssid"``.
+``load_section`` and ``try_load_section`` build an instance of a class from
+the settings under one prefix. ``MissingConfigKey`` and
+``InvalidConfigType`` report a missing setting and an unusable config.
 """
 
 
 class ConfigError(Exception):
-    """Base class for every ``chumicro-config`` error."""
+    """Base class of ``MissingConfigKey`` and ``InvalidConfigType``.
+
+    ``except ConfigError:`` catches both.
+    """
 
 
 class MissingConfigKey(ConfigError):
-    """A required config key was not present."""
+    """Raised when a required setting is missing.
+
+    ``config[key]``, ``RuntimeConfig.require``, and ``load_section`` raise
+    it. ``MissingConfigKey`` subclasses ``ConfigError`` only, so
+    ``except KeyError:`` misses it.
+    """
 
     # Not a KeyError subclass: MicroPython forbids multiple Exception inheritance.
 
 
 class InvalidConfigType(ConfigError):
-    """A config value had the wrong shape, usually not a dict."""
+    """Raised when the settings object or settings file is unusable.
+
+    ``load_section`` raises it for a ``config`` that is ``None`` or neither a
+    ``RuntimeConfig`` nor a ``dict``. ``load_runtime_config`` raises it for a
+    file that is not valid msgpack or does not unpack to a dict.
+    """
 
 
 class RuntimeConfig:
-    """Dict-like lookup over the deployed runtime config."""
+    """Settings lookup by dotted key, such as ``config["wifi.ssid"]``.
+
+    ``RuntimeConfig(dict)`` builds one from a dict, so code runs without a
+    settings file. ``config[key]`` works like ``require``, and
+    ``key in config`` reports whether a setting exists.
+
+    Args:
+        data: Settings dict with dotted keys. ``None`` gives an empty config.
+    """
 
     def __init__(self, data: dict | None = None) -> None:
         self._data: dict = data if data is not None else {}
 
     def get(self, key: str, default: object = None) -> object:
+        """Return the setting for ``key``, or ``default`` when it is missing."""
         return self._data.get(key, default)
 
     def require(self, key: str) -> object:
+        """Return the setting for ``key``.
+
+        Raises:
+            MissingConfigKey: ``key`` has no setting.
+        """
         if key not in self._data:
             raise MissingConfigKey(
                 f"required config key {key!r} is missing",
@@ -50,21 +79,32 @@ def load_section(
     required: tuple = (),
     optional: dict | None = None,
 ) -> object:
-    """Build *target_class* from flat config keys sharing a *prefix*.
+    """Build a ``target_class`` instance from the settings under ``prefix``.
+
+    ``load_section`` reads the setting ``"<prefix>.<name>"`` for each name in
+    ``required`` and ``optional``, then calls ``target_class(**values)`` with
+    each bare name as a keyword argument. A missing optional setting takes its
+    default. ``load_section`` ignores settings outside the two lists and
+    passes values through unconverted, so ``"1883"`` stays a string. A
+    class's ``from_config(config)`` class method is the usual caller.
 
     Args:
-        target_class: Class to build from the collected keyword args.
-        config: A :class:`RuntimeConfig` or plain dict to read from.
-        prefix: Dotted prefix shared by this section's keys.
-        required: Key names that must be present.
-        optional: Key names mapped to the fallback used when absent.
+        target_class: Class to build. Its ``__init__`` takes each name in
+            ``required`` and ``optional`` as a keyword argument.
+        config: A ``RuntimeConfig`` or a plain ``dict`` with dotted keys.
+        prefix: Section name, such as ``"wifi"``. An empty string reads each
+            name as a bare key.
+        required: Names whose settings must exist.
+        optional: Names mapped to the default used when the setting is
+            missing.
 
     Returns:
-        An instance of *target_class*.
+        The new ``target_class`` instance.
 
     Raises:
-        MissingConfigKey: A required key is missing.
-        InvalidConfigType: *config* is ``None`` or not a config/dict.
+        MissingConfigKey: A name in ``required`` has no setting.
+        InvalidConfigType: ``config`` is ``None`` or neither a
+            ``RuntimeConfig`` nor a ``dict``.
     """
     if config is None:
         raise InvalidConfigType(
@@ -105,18 +145,28 @@ def try_load_section(
     required: tuple = (),
     optional: dict | None = None,
 ) -> object | None:
-    """Like :func:`load_section`, but return ``None`` instead of raising.
+    """Build a ``target_class`` instance like ``load_section``, or return ``None``.
+
+    ``try_load_section`` returns ``None`` wherever ``load_section`` raises
+    ``MissingConfigKey`` or ``InvalidConfigType``: ``config`` is ``None`` or
+    the wrong type, or a required setting is missing. It suits a feature that
+    runs only when its settings exist. An error raised by ``target_class``
+    itself still propagates.
 
     Args:
-        target_class: Class to build from the collected keyword args.
-        config: A :class:`RuntimeConfig` or plain dict, or ``None``.
-        prefix: Dotted prefix shared by this section's keys.
-        required: Key names that must be present.
-        optional: Key names mapped to the fallback used when absent.
+        target_class: Class to build. Its ``__init__`` takes each name in
+            ``required`` and ``optional`` as a keyword argument.
+        config: A ``RuntimeConfig``, a plain ``dict`` with dotted keys, or
+            ``None``.
+        prefix: Section name, such as ``"mqtt"``. An empty string reads each
+            name as a bare key.
+        required: Names whose settings must exist.
+        optional: Names mapped to the default used when the setting is
+            missing.
 
     Returns:
-        An instance of *target_class*, or ``None`` when the section is
-        not configured.
+        The new ``target_class`` instance, or ``None`` when ``config`` is
+            unusable or a required setting is missing.
     """
     try:
         return load_section(

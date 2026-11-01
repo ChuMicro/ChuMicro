@@ -2,11 +2,11 @@
 
 ## Overview
 
-`chumicro-http-server` is a non-blocking HTTP/1.1 server that runs on CircuitPython, MicroPython, and CPython.  Each connection is a state machine the server advances one chunk per tick: an LED keeps blinking, a control loop keeps running, sensor reads keep happening, all while requests are being served.  Built on `chumicro-sockets` (TCP listener + accepted client sockets) and `chumicro-timing` (ticks) only; no `async`, no threads, no `chumicro-requests` dependency on the device.
+`chumicro-http-server` serves web pages and JSON from a CircuitPython or MicroPython board, and from CPython for tests.  `@server.route` registers a function for each URL.  The main loop calls `server.handle(now_ms)` on every pass.  Each call accepts a waiting visitor and moves every open request one small step along: it reads some bytes, runs the route once the request is complete, or sends some bytes.  The call then returns, usually within a few milliseconds, so an LED blink, a sensor read, or a wifi check in the same loop keeps running while the board serves.
 
 ## Getting started
 
-A minimal, hello-world server with one route:
+This server answers on two routes and joins wifi with `chumicro-wifi`:
 
 ```python
 from chumicro_http_server import HttpServer, build_response
@@ -14,54 +14,82 @@ from chumicro_sockets import listener
 from chumicro_timing import ticks_ms
 from chumicro_wifi import WifiConfig, WifiService
 
-wifi = WifiService(WifiConfig(ssid="home-wifi", password="secret"))
+wifi = WifiService(WifiConfig(ssid="your-wifi-ssid", password="your-wifi-password"))
 
+# The server opens port 8080 on its first handle() call.
+# CircuitPython needs radio=, and MicroPython ignores it.
 server = HttpServer(
-    # radio= is the CircuitPython radio handle; MicroPython and CPython ignore it.
-    transport_factory=lambda: listener(
-        host="0.0.0.0", port=8080, radio=wifi.adapter.radio,
-    ),
+    transport_factory=lambda: listener("0.0.0.0", 8080, radio=wifi.adapter.radio),
 )
 
 @server.route("/")
-def index(request):
-    return build_response(200, html="<h1>Hello from a Pi Pico W</h1>")
+def home(request):
+    return build_response(200, html="<h1>Hello from your board</h1>")
+
+@server.route("/echo", methods=["POST"])
+def echo(request):
+    return build_response(200, json={"echoed": request.json()})
 
 while True:
-    now = ticks_ms()
-    if wifi.check(now):
-        wifi.handle(now)
-    if server.check(now):
-        server.handle(now)
+    now_ms = ticks_ms()
+    if wifi.check(now_ms):                       # join wifi, and rejoin after a drop
+        wifi.handle(now_ms)
+    if wifi.connected and server.check(now_ms):  # serve once the board has an address
+        server.handle(now_ms)
 ```
 
-Build your server at startup. The first `HttpServer` reference imports the server module, so let that one-time cost land on a fresh heap.
+Once `wifi.ip` holds an address, open `http://<board address>:8080/` in a browser.
 
-`transport_factory` is a callable: the listener opens lazily on the first `handle()` call so construction is side-effect-free and unit-testable against a `FakeSocket`.
+- `ticks_ms()` returns a millisecond counter.  The loop reads it once per pass and hands the same value to every service.
+- `check(now_ms)` and `handle(now_ms)` are the two calls every ChuMicro [service](https://chumicro.com/ChuMicro/runner/stable/guide/#services) answers.  The server's `check()` always returns `True`, because a visitor can arrive at any moment.
+- `wifi.connected` holds the server back until the board has an address, since the listening socket opens only after that.
+- `transport_factory` is the function the server calls to open its listening socket.  The server calls it on the first `handle()`, so creating an `HttpServer` touches no network.  [Bring your own transport](#bring-your-own-transport) covers listeners other than `chumicro_sockets.listener`.
+
+This loop runs flat out.  A `time.sleep(0.01)` at the bottom of the loop rests the CPU, as [`examples/simple_server.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server/examples/simple_server.py) does.  A `Runner` sleeps until there is work ([Runner pattern](#runner-pattern)).
+
+Create the server at startup.  The first use of `HttpServer` loads the server code, a large import that needs a large free block of memory.  A board has its largest free blocks right after it starts.
+
+## Settings from a deploy
+
+`HttpServer.from_config(config, radio=radio)` builds the server from a flat settings dict, such as the one `chumicro_config.load_runtime_config()` reads after a ChuMicro deploy.  Every key is optional:
+
+| Key | Default |
+|---|---|
+| `http_server.bind_host` | `"0.0.0.0"`, every interface |
+| `http_server.bind_port` | `8080` |
+| `http_server.tls.cert_path` and `http_server.tls.key_path` | Unset, so the server speaks plain HTTP.  Set both to serve HTTPS.  Setting only one raises `MissingConfigKey`. |
+
+`http_server.max_connections`, `http_server.request_timeout_ms`, `http_server.max_request_body_bytes`, `http_server.max_request_line_bytes`, `http_server.max_headers_bytes`, and `http_server.stream_buffer_size` each set the constructor knob of the same name, described under [Limits and per-call budgets](#limits-and-per-call-budgets).
+
+`radio=` is `wifi.radio` on CircuitPython, or `wifi.adapter.radio` from a `WifiService`.  MicroPython ignores it.  Any other keyword, such as `handler=`, `ticks=`, `recv_budget_per_tick=`, or `transport_factory=`, goes straight to the constructor and wins over the matching setting.  `examples/simple_server.py` builds its server this way, from an empty dict when nothing was deployed.
 
 ## Runner pattern
 
-`HttpServer` implements the runner contract (`check(now_ms)` / `handle(now_ms)`).  Register it with `chumicro_runner.Runner` and it gets ticked alongside your other services:
+`HttpServer` registers with a [`chumicro-runner`](https://chumicro.com/ChuMicro/runner/stable/guide/) `Runner` like any other service.  This loop replaces the one in [Getting started](#getting-started) and prints the board's address every 30 seconds:
 
 ```python
 from chumicro_runner import Runner
 
+def report(now_ms):
+    print("serving at", wifi.ip)
+
 runner = Runner()
+runner.add(wifi)
 runner.add(server)
-runner.add_periodic(led_blink, period_ms=500)
+runner.add_periodic(report, period_ms=30_000)
 
 while True:
-    now_ms = runner.tick()   # every registered service takes one small step
-    runner.wait(now_ms)      # then the CPU parks until the next event or deadline
+    now_ms = runner.tick()   # every registered job takes one small step
+    runner.wait(now_ms)      # then the board sleeps until a request arrives or report is due
 ```
 
-`runner.wait(now_ms)` is what turns the loop above from a busy-spin into an idle one: it sleeps on the listening socket until a request arrives or the next blink is due.
+`runner.wait()` sleeps on the listening socket until a request arrives or the next `report` is due.  While a request is in progress, the server asks to be woken at least every 20 ms so the request keeps moving.
 
-`check(now_ms)` always returns `True` (the accept loop runs on every tick); `handle(now_ms)` does at most one tick of progress, capped by the per-connection budgets below.
+This loop drops the `wifi.connected` check.  When the server tries to open its socket before the board has an address, `tick()` catches the error.  The server tries again on its next step.
 
 ## Routing
 
-`@server.route(path, methods=...)` registers a handler:
+`@server.route(path, methods=...)` registers a function for a path.  `methods` defaults to `("GET",)`.
 
 ```python
 @server.route("/")                                # GET /
@@ -80,35 +108,36 @@ def temp(request):
     return build_response(200, json={"temp_c": 21.5})
 ```
 
-Two route shapes are supported:
+A path takes one of two forms:
 
-* **Exact match**: `"/api/widgets"`.  O(1) lookup.
-* **Single trailing parameter**: `"/widgets/<id>"`.  The matched segment populates `request.path_params["id"]`.  Multi-parameter routes (`/users/<uid>/posts/<pid>`) are not supported.
+* **Exact**: `"/api/widgets"` matches that path only.
+* **One trailing parameter**: `"/widgets/<id>"` matches `/widgets/7` and puts `"7"` in `request.path_params["id"]`.  The parameter covers one segment, so `/widgets/7/parts` falls through to the next rule.  The server matches a `<name>` in any earlier segment as literal text, so `/users/<uid>/posts/<pid>` matches no real request.
 
-Method dispatch:
+When a request arrives, the server answers it one of three ways:
 
-* Path matched, method matched → handler runs.
-* Path matched, method not registered → automatic `405 Method Not Allowed` with an `Allow:` header.
-* Path not matched → 404, or fall through to a bare `handler=` callable if you set one (catch-all, useful for a static-file fallback or single-page app).
+* A route matches the path and the method.  The server calls the route's function.
+* A route matches the path but not the method.  The server answers `405 Method Not Allowed`, with an `Allow:` header listing the methods that path takes.
+* No route matches the path.  The server answers `404`, or calls the catch-all `handler=` function passed to `HttpServer(...)`.  A catch-all suits a static-file fallback or a single-page app.
+
+An exact route wins over a parameter route.  Registering the same path and method twice keeps the last function.
 
 ## `Request` and `Response`
 
-The handler signature is `(Request) -> Response`.
+A route receives a `Request` and returns a `Response`.
 
-`Request` exposes:
-
-| Attribute | Purpose |
+| `Request` attribute | Holds |
 |---|---|
 | `request.method` | `"GET"`, `"POST"`, … |
-| `request.path` | Path before `?`. |
-| `request.query` | `CaseInsensitiveDict` from the query string.  Keys fold case, so `?Foo=1&foo=2` collapses into one entry with the values joined by `", "`. |
-| `request.path_params` | `dict` of `<param>` segments. |
-| `request.headers` | Case-insensitive dict. |
-| `request.body` | Raw `bytes` (or `b""` for body-less requests). |
-| `request.text()` | Body decoded per `Content-Type`'s charset. Only UTF-8 decodes on every runtime.  MicroPython and CircuitPython ship a UTF-8-only `str` codec, so a declared non-UTF-8 charset raises or mis-decodes there. |
-| `request.json()` | Body parsed via `json.loads`: UTF-8 in, Python types out. |
+| `request.path` | The path, without the `?query` part. |
+| `request.query` | `CaseInsensitiveDict` of the query string, with percent-encoding left as sent.  Keys ignore case, so `?Foo=1&foo=2` becomes one entry with the values joined by `", "`. |
+| `request.path_params` | `dict` of the `<param>` segment, when the route has one. |
+| `request.headers` | Case-insensitive dict of request headers. |
+| `request.body` | Raw `bytes`, or `b""` for a request with no body. |
+| `request.peer` | `(host, port)` of the client. |
+| `request.text()` | The body decoded with the charset named in `Content-Type`, or UTF-8 when none is named.  MicroPython and CircuitPython decode UTF-8 only, so another declared charset raises or mis-decodes there. |
+| `request.json()` | The body parsed with `json.loads`. |
 
-`build_response(status, *, body=None, json=None, text=None, html=None, headers=None)` is the convenience builder: pass exactly one of `body=` / `json=` / `text=` / `html=` and it sets the right `Content-Type`:
+`build_response(status, *, body=None, json=None, text=None, html=None, headers=None)` builds a `Response`.  It takes at most one of `body=`, `json=`, `text=`, or `html=`.  It sets the `Content-Type` that matches:
 
 ```python
 build_response(200, json={"ok": True})         # application/json
@@ -118,38 +147,40 @@ build_response(200, body=b"\x00\x01\x02")      # raw bytes, no Content-Type set
 build_response(204)                            # no body
 ```
 
-For full control, construct `Response` directly: its arguments are keyword-only and `reason` is required, and `body` must be `bytes` (a `str` body is rejected as a 500 at send time):
+For full control, construct `Response` directly.  Its arguments are keyword-only.  `reason` and `headers` are required.  `body` must be `bytes`, because a `str` body turns into a `500` when the server sends it:
 
 ```python
 Response(status_code=200, reason="OK", headers={"X-Trace": "abc"}, body=b"raw")
 ```
 
-## Tick-fairness knobs
+When a route raises, the server answers `500 Internal Server Error` with the exception message as the body.  The server carries on serving.  A route that returns anything other than a `Response`, such as one that forgot its `return`, also gets a `500`.
 
-The constructor exposes per-connection budgets so you can tune for your workload:
+## Limits and per-call budgets
+
+The constructor takes limits that keep one client from taking over the board's memory or time.  Each "per tick" budget applies once per `handle()` call:
 
 | Knob | Default | What it bounds |
 |---|---|---|
-| `max_connections` | `4` | Cap on simultaneous in-flight connections.  Sized for Pi Pico W heap. |
-| `request_timeout_ms` | `10000` | Per-connection deadline.  Stalled clients get the socket closed. |
-| `recv_budget_per_tick` | `1024` | Bytes drained per connection per `handle()`.  Bounds tick latency under big uploads. |
-| `send_budget_per_tick` | `4096` | Bytes flushed per connection per `handle()`.  Higher than recv so small responses drain in one tick. |
-| `max_request_body_bytes` | `16 KB` | Cap on a single buffered request body.  Requests declaring a larger `Content-Length` get a `413 Payload Too Large` response and no body bytes are allocated.  Within the cap, the body buffer is sized-to-fit at headers-complete time (one `bytearray(content_length)` allocation per request), freed when the response drains. |
-| `max_request_line_bytes` | `1 KB` | Cap on the request-line length (method + target + version).  A request line that reaches the cap without a CRLF gets a `414 URI Too Long` response, so a no-CRLF dribble can't grow the parse buffer past the cap before the request times out. |
-| `max_headers_bytes` | `4 KB` | Cap on the total header-section bytes (every header line plus its CRLF).  Headers exceeding the cap get a `431 Request Header Fields Too Large` response. |
-| `stream_buffer_size` | `1 KB` | Staging-window size for a streaming response (see [Streaming large response bodies](#streaming-large-response-bodies)).  Allocated lazily (only a connection that streams pays it) and reused for the whole transfer, so it is the entire per-stream RAM cost regardless of body size. |
+| `max_connections` | `4` | Connections in progress at once, sized for a Pi Pico W's heap.  The server stops accepting while all are busy. |
+| `request_timeout_ms` | `10000` | Time a connection may take from accept to last byte sent.  A stalled client gets its socket closed. |
+| `recv_budget_per_tick` | `1024` | Bytes read per connection per `handle()`, so a big upload cannot stretch one call. |
+| `send_budget_per_tick` | `4096` | Bytes sent per connection per `handle()`.  It is larger than the read budget so a small response goes out in one call. |
+| `max_request_body_bytes` | `16 KB` | Largest request body.  A request declaring a bigger `Content-Length` gets `413 Payload Too Large` before any body memory is allocated.  A body within the cap gets one buffer of exactly its size, freed once the response is sent. |
+| `max_request_line_bytes` | `1 KB` | Longest request line: method, target, and version.  A line that reaches the cap without ending gets `414 URI Too Long`, so a client dribbling bytes cannot grow it further. |
+| `max_headers_bytes` | `4 KB` | Total size of the header lines.  More gets `431 Request Header Fields Too Large`. |
+| `stream_buffer_size` | `1 KB` | Buffer for a [streaming response](#streaming-large-response-bodies).  Only a connection that streams allocates one.  That buffer is the whole memory cost of the stream, whatever the body size. |
 
-Defaults are conservative; the per-tick budgets keep an LED blink visible even with a chatty client and a big POST body.
+The read and send budgets keep an LED blink steady while a client uploads a big POST body.
 
 ## Connection lifetime
 
-Each request is served on a fresh accepted socket; every response includes `Connection: close` and the socket is closed once the response drains.  HTTP/1.1 keep-alive and connection pooling are not supported.  Chunked request bodies are not supported either; use `Content-Length`.
+The server answers one request per connection.  Every response carries `Connection: close`.  The socket closes once the response has gone out, so each request opens a new connection.  A request body must come with `Content-Length`.  The server drops a chunked upload without an answer.
 
 ## Streaming large response bodies
 
-A normal `Response` holds its whole body in RAM.  When the body is bigger than the heap (a sensor-log dump, a file off storage, a long CSV export), return a **streaming response** instead: the server pulls the body from a callable one small window at a time and drains it to the client across ticks, so a 264 KB board can serve a body of any size at a fixed RAM cost.
+A normal `Response` holds its whole body in memory.  When the body would not fit, as with a sensor-log dump, a file from storage, or a long CSV export, a route returns a **streaming response**.  The server pulls the body from a function one small buffer at a time and sends it across many `handle()` calls.  A Pi Pico W with 264 KB of RAM serves a body of any size for the cost of one buffer.
 
-Streaming lives in an opt-in submodule (like `chumicro_requests.generators`); import it explicitly.  A server that never streams never loads its code:
+Streaming lives in a separate submodule, so a server that never streams never loads its code:
 
 ```python
 from chumicro_http_server.streaming import build_streaming_response, SOURCE_EOF
@@ -157,15 +188,15 @@ from chumicro_http_server.streaming import build_streaming_response, SOURCE_EOF
 
 ### The byte source
 
-You supply a **source**, a fill-a-buffer callable `source(buffer) -> int`.  Each tick the server hands it the staging buffer; the source writes body bytes into it and returns what it did:
+A streaming response takes a **source**, a function `source(buffer) -> int`.  Each time the server is ready for more, it hands the source a buffer.  The source writes body bytes into it and returns one of these:
 
 | Return | Meaning |
 |---|---|
 | `n > 0` | Wrote `n` body bytes into `buffer[:n]` (`1 <= n <= len(buffer)`). |
-| `0` | No bytes ready this tick, but the body is **not** finished, so the server retries on a later tick.  Use this only for a source that can genuinely be empty for a tick (a sensor sampled asynchronously). |
-| `SOURCE_EOF` (`-1`) | End of body.  The server finalizes the framing and closes. |
+| `0` | No bytes are ready yet and the body continues, so the server asks again on a later call.  This suits a source that can run dry for a moment, such as a sensor sampled in the background. |
+| `SOURCE_EOF` (`-1`) | End of body.  The server finishes the framing and closes. |
 
-The `0`-vs-`SOURCE_EOF` split is the whole contract: `0` means "ask again", `-1` means "done".  A source over a log or file that always has bytes until it runs out never returns `0`: it returns positive counts and then `SOURCE_EOF`.  A five-line generator that emits a list of records, chunking each to the buffer:
+A source reading a log or a file has bytes until it runs out.  It returns positive counts, then `SOURCE_EOF`.  This source serves a list of records, cutting each to fit the buffer:
 
 ```python
 def make_source(records):
@@ -188,46 +219,50 @@ def log_dump(request):
     return build_streaming_response(200, source=make_source(read_log_records()))
 ```
 
-### Framing: Content-Length vs chunked
+### Framing: Content-Length or chunked
 
-The server picks the framing from whether you know the total length:
+The server picks the framing from whether the total length is known:
 
-* **Known total**: pass `content_length=`.  The server sends a `Content-Length` header and frames the body raw.  Your source must then produce exactly that many bytes before `SOURCE_EOF`; a mismatch breaks framing and closes the connection.
-* **Unknown total**: leave `content_length` unset (the default).  The server uses `Transfer-Encoding: chunked`, so you don't need to know the size up front.  Chunk framing is written into the staging buffer in place, with no per-chunk allocation.
+* **Known total**: pass `content_length=`.  The server sends a `Content-Length` header and the body as is.  The source must then produce exactly that many bytes before `SOURCE_EOF`.  A mismatch closes the connection.
+* **Unknown total**: leave `content_length` unset, the default.  The server uses `Transfer-Encoding: chunked`, which needs no size up front.  The chunk framing is written into the same buffer, with no allocation per chunk.
 
 ```python
 build_streaming_response(200, source=src, content_length=file_size)  # Content-Length
 build_streaming_response(200, source=src)                            # chunked
 ```
 
-Do not set `Content-Length` / `Transfer-Encoding` / `Connection` in `headers=` yourself; the server owns framing.  Other headers (e.g. `Content-Type`) are yours to set.
+The server sets `Content-Length`, `Transfer-Encoding`, and `Connection` itself, so leave them out of `headers=`.  Set any other header, such as `Content-Type`, in `headers=`.
 
-### RAM, fairness, and timeouts
+### Memory, fairness, and timeouts
 
-* **Fixed staging window.**  Each streaming connection allocates one `stream_buffer_size`-byte buffer (default 1 KB, constructor knob), reused for the whole transfer: the entire per-stream RAM cost, independent of body size.  It is minted lazily, so a buffered response never allocates one.  A stalled client never grows it: the source is polled for the next fill only after the current one has fully drained to the socket.
-* **Per-tick fairness.**  A streamed send is bounded by the same `send_budget_per_tick` a buffered response uses, so one large download can't starve other connections: every connection gets at most one budget slice per `handle()` tick.
-* **Timeout.**  `request_timeout_ms` bounds the whole streamed send, and a client that stops reading (sends keep returning EAGAIN) is closed when the deadline fires.  Size `request_timeout_ms` for your largest streamed response, the same way `chumicro_requests`' streamed reads size their `timeout_ms` for the download.
+* **One fixed buffer.**  Each streaming connection allocates one `stream_buffer_size`-byte buffer and reuses it for the whole transfer, whatever the body size.  A buffered response allocates none.  A slow client cannot grow the buffer, because the server asks the source for more only after the previous bufferful has gone out.
+* **Fair steps.**  A streamed send is capped by the same `send_budget_per_tick` as a buffered response, so one large download leaves time for the other connections.
+* **Timeout.**  `request_timeout_ms` covers the whole streamed send.  The server closes a client that stops reading once that time runs out.  Size `request_timeout_ms` for the largest streamed response.
 
-### Handler failures mid-stream
+### Source failures mid-stream
 
-Once the first body byte is on the wire the response is committed; an error page can no longer be spliced in.  So if your source raises mid-stream, or under-/over-runs a declared `Content-Length`, the connection is closed (the client sees a truncated body) and the failure goes through the server's normal fail-and-close path.  Do all the work that can fail (opening the file, the first query) before you return the `StreamingResponse`, where it can still become a clean `500`.
+Once the first body byte is on the wire, the status line has gone out, so an error page can no longer replace it.  A source that raises mid-stream, or that produces fewer or more bytes than a declared `Content-Length`, makes the server close the connection.  The client then sees a truncated body.  Do the work that can fail, such as opening the file or running the first query, before returning the streaming response.  A failure there still becomes a clean `500`.
 
 ## Bring your own transport
 
-`HttpServer` doesn't care which library produces its listener.  The `transport_factory` you pass is a zero-arg callable returning any object exposing the three-method contract:
+`HttpServer` works with any listener.  `transport_factory` is a function that takes no arguments and returns a listener with these methods:
 
 | Method | Contract |
 |---|---|
-| `accept() -> (socket, address)` | Returns the next accepted client (a TCP-shaped object with `recv_into` / `send` / `close` / `setblocking`) plus the peer's address.  Raises `OSError(EAGAIN \| EWOULDBLOCK)` when no connection is pending. |
-| `close() -> None` | Stops accepting new connections. |
-| `setblocking(flag) -> None` | Best-effort.  Absence is tolerated. |
+| `accept() -> (socket, address)` | Returns the next client and its address.  Raises `OSError(EAGAIN)` when nobody is waiting. |
+| `close() -> None` | Stops accepting connections. |
+| `setblocking(flag) -> None` | Optional.  The server calls it when present. |
 
-Each accepted socket must in turn expose `recv_into(buffer, nbytes) -> int`, `send(payload) -> int`, `close() -> None`, and best-effort `setblocking(flag)`, the same shape every other chumicro library expects from a TCP-like object.
+Each accepted socket needs `recv_into(buffer, nbytes) -> int`, `send(payload) -> int`, `close() -> None`, and optionally `setblocking(flag)`.
 
-`chumicro_sockets.listener` is one valid producer.  Stdlib `socket.socket` bound + listening after `setblocking(False)` is another:
+`chumicro_sockets.listener` is one such listener.  A stdlib `socket.socket`, bound, listening, and set non-blocking, is another.  This program serves one page from a laptop through it:
 
 ```python
 import socket as stdlib_socket
+import time
+
+from chumicro_http_server import HttpServer, build_response
+from chumicro_timing import ticks_ms
 
 def make_listener():
     listener = stdlib_socket.socket(stdlib_socket.AF_INET, stdlib_socket.SOCK_STREAM)
@@ -237,23 +272,32 @@ def make_listener():
     listener.setblocking(False)
     return listener
 
-server = HttpServer(transport_factory=make_listener, handler=...)
+server = HttpServer(transport_factory=make_listener)
+
+@server.route("/")
+def home(request):
+    return build_response(200, text="served through a stdlib socket")
+
+while True:
+    now_ms = ticks_ms()
+    if server.check(now_ms):
+        server.handle(now_ms)
+    time.sleep(0.01)
 ```
 
-If you supply your own listener and want `chumicro_sockets` dropped from the deploy entirely, add a module-level constant to your entrypoint and the chumicro-workspace deployer will filter the default factory out of the import graph:
+A program that supplies its own listener can keep `chumicro-sockets` off the board with one line in `code.py` or `app.py`:
 
 ```python
-# code.py / app.py
 __chumicro_skip_factories__ = ("sockets_factory",)
 ```
 
-Family form (the bare stem) or exact path (`"chumicro_sockets.sockets_factory"`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `HttpServer.from_config(...)` when `chumicro_sockets.sockets_factory` is missing (either skipped at deploy time or not installed by `circup` / `mip`) raises `RuntimeError` naming the bypass kwarg.
+[Slimming your deploy](https://chumicro.com/ChuMicro/guides/contributing/slimming-your-deploy/) explains the line.  On a board without `chumicro_sockets.sockets_factory`, `HttpServer.from_config(...)` raises `RuntimeError` asking for `transport_factory=`.
 
-`chumicro-http-server` adopts cleanly on its own: pass your own `transport_factory`, set `ticks=` to your clock, drive the server from a plain `while` loop instead of `chumicro_runner`, and unit-test it against a `FakeSocket` with no board attached.
+With its own `transport_factory`, its own clock as `ticks=`, and `handle()` called from a plain `while` loop, the server needs no other ChuMicro library.  Unit tests drive routes through a fake listener with no board attached ([Testing Helpers](testing.md)).
 
 ## TLS server (HTTPS)
 
-`HttpServer` is transport-agnostic: its `transport_factory` returns whatever listener you give it.  For HTTPS, build a TLS-wrapped listener via [`chumicro_sockets.ssl_context_with_cert_and_key_paths`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets):
+For HTTPS, hand the server a TLS listener.  [`chumicro_sockets.ssl_context_with_cert_and_key_paths`](https://chumicro.com/ChuMicro/sockets/stable/guide/#accepting-connections) builds an SSL context from a certificate file and a key file:
 
 ```python
 from chumicro_sockets import (
@@ -262,45 +306,53 @@ from chumicro_sockets import (
 )
 
 ssl_context = ssl_context_with_cert_and_key_paths(
-    "/cert.pem",     # CP needs paths, not bytes
-    "/key.der",      # MP rp2 needs DER (no PEM_PARSE_C in firmware)
+    "/cert.pem",     # CircuitPython needs file paths, not bytes
+    "/key.der",      # MicroPython on rp2 needs a DER key
 )
 
 def open_listener():
-    # wifi is the WifiService from the quick example; only CircuitPython
-    # reads the radio handle.
+    # wifi is the WifiService from Getting started.
     return listener(
-        host="0.0.0.0", port=8443,
+        "0.0.0.0", 8443,
         tls=True, context=ssl_context, radio=wifi.adapter.radio,
     )
 
 server = HttpServer(transport_factory=open_listener)
 ```
 
-Per-board status from live verification:
+With `from_config`, the `http_server.tls.cert_path` and `http_server.tls.key_path` settings build the same TLS listener.
+
+Tested on real boards:
 
 | Runtime + board | TLS server | Notes |
 |---|---|---|
-| CircuitPython on ESP32-S2 | ✅ Works | Bench-tested ~5 KB heap for `SSLContext` + `load_cert_chain` + `wrap_socket(server_side=True)` on a listening socket (RSA-2048 self-signed cert).  Each incoming connection adds heap during handshake, so leave tens of KB of headroom. |
-| CircuitPython on rp2 (Pi Pico W / Pi Pico 2 W) | ❌ Refused (`UnsupportedSSLConfigError`) | `wrap_socket(server_side=True) + accept()` raises `OSError(32)` mid-handshake AND wedges the CYW43 chip's station-mode state until USB power-cycle. Use ESP32-family for HTTPS on CP. |
-| MicroPython on ESP32-S2 / S3 | ✅ Works | Hardware-accelerated; ~1 KB heap. |
-| MicroPython on rp2 (Pi Pico W) | ✅ Works (RSA-2048 only) | DER-encoded key required; ECC keys fail at context build. |
+| CircuitPython on ESP32-S2 (Lolin S2) | ✅ Works | RSA-2048 certificate.  The SSL context takes about 6 KB of heap.  Each handshake needs tens of KB more, so leave headroom. |
+| CircuitPython on rp2 (Pi Pico W / Pi Pico 2 W) | ❌ Refused (`UnsupportedSSLConfigError`) | `listener(tls=True)` raises up front.  The `chumicro-sockets` [quirks table](https://chumicro.com/ChuMicro/sockets/stable/guide/#runtime-and-chip-quirks) gives the reason.  Use an ESP32-family board, or MicroPython on rp2. |
+| MicroPython on ESP32-S2 / S3 | ✅ Works | Hardware-accelerated handshake, about 1 KB of heap. |
+| MicroPython on rp2 (Pi Pico W) | ✅ Works (RSA-2048 only) | DER-encoded key, about 25 KB of heap per handshake.  An ECC key fails when the context is built. |
 
-The TLS handshake is synchronous inside `wrap_socket(..., server_side=True)`: the listener stalls until the handshake completes (single-digit to tens of milliseconds on the supported board class with a local TLS client; longer on a slow uplink as TLS rounds-trip).  After the handshake, the server's per-connection state machine resumes its runner-friendly progression.
+The board runs each TLS handshake in one go when it accepts the connection, so the loop pauses until the handshake finishes.  After that, the connection goes back to small steps per `handle()` call.  A client that fails its handshake is dropped and counted in `server.accept_errors`.  The server keeps listening.
 
 ## Memory notes
 
-Connection state is bounded by `max_connections`; each connection holds its receive buffer (a scratch chunk capped at 512 B, so a `recv_budget_per_tick` above 512 is satisfied by several `recv_into` calls per tick), the parsed `Request`, and the encoded `Response` until drained (the request parser and its body copy are released the moment the `Request` is built, so the body is held once through the send phase).  Nothing else allocates per-tick steady-state.  A streaming response adds one `stream_buffer_size` window (default 1 KB) per streaming connection, minted lazily and reused for the transfer: a body of any size costs that fixed window, never the whole body.  The shared `chumicro-requests` HTTP/1.1 wire primitives (case-insensitive header dict, charset parsing) are inlined into `chumicro_http_server._wire` so a server-only board doesn't ship the client library.  The streamed-body framing code lives in the opt-in `chumicro_http_server.streaming` submodule, loaded only when a handler actually streams, so a buffered-only server never pays its footprint.
+- `max_connections` bounds the per-connection memory.  Each connection holds a read buffer of at most 512 B, the parsed `Request`, and the encoded `Response` until it has gone out.  A `recv_budget_per_tick` above 512 is met with several reads per call.
+- The server holds the request body once.  The parser releases its copy as soon as the `Request` is built.
+- A streaming response adds one `stream_buffer_size` buffer per streaming connection, allocated on first use and reused for the whole transfer.
+- The streaming code sits in the `chumicro_http_server.streaming` submodule and loads only when a route streams.
+
+## Testing
+
+`chumicro_http_server.testing` ships `FakeListener` and `request_bytes`, so a unit test pushes a request through the routes with no network, no port, and no board.  [Testing Helpers](testing.md) has worked examples.
 
 ## Platform notes
 
-Works identically on CPython, MicroPython, and CircuitPython.  The `chumicro-sockets` listener provides the platform-specific socket plumbing; the server just consumes the resulting non-blocking socket.
+The server works the same on CPython, MicroPython, and CircuitPython.  `chumicro-sockets` handles each runtime's socket differences.  The server uses the non-blocking socket it hands back.  [TLS server (HTTPS)](#tls-server-https) lists the boards that serve HTTPS.
 
 ## Examples
 
 | Example | What it shows |
 |---|---|
-| [`examples/simple_server.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server/examples/simple_server.py) | Single-board HTTP server with `GET /`, `GET /api/uptime`, `POST /api/echo` routes; drive it with `curl` from your laptop.  Cross-runtime (CP + MP); runtime marker gates hardware-only deploys. |
+| [`examples/simple_server.py`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server/examples/simple_server.py) | Serves an HTML page, a JSON status route, and a POST echo route, and prints a status line every 30 seconds while it waits for visitors.  Open it in a browser or drive it with `curl`.  Runs on CircuitPython and MicroPython. |
 
 ---
 

@@ -42,6 +42,7 @@ ends (~3.5 minutes after start).  This script exits after the verdict
 arrives or after ``--timeout`` seconds.
 """
 
+# noqa: CHU038 - laptop-side benchmark companion: waits for one verdict, then exits
 import argparse
 import sys
 import time

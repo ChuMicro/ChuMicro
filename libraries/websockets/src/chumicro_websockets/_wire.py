@@ -33,31 +33,62 @@ def _sha1_digest(data: bytes) -> bytes:
 
 
 class WebSocketError(Exception):
-    """Base class for every chumicro-websockets failure."""
+    """Base class of the exceptions ``chumicro_websockets`` defines.
+
+    ``last_error`` on a ``WebSocketClient`` or ``Connection`` holds one of
+    them, or ``None``.
+    """
 
 
 class WebSocketProtocolError(WebSocketError):
-    """Peer sent bytes that RFC 6455 requires closing the connection on."""
+    """Error in ``last_error`` when the other end breaks the WebSocket protocol or the socket fails.
+
+    The connection stores it for a malformed frame, text that is not valid
+    UTF-8, a TCP connection dropped without a CLOSE frame, and a socket error
+    during a send or receive.
+    """
 
 
 class WebSocketHandshakeError(WebSocketError):
-    """The opening handshake failed (bad status, headers, or HTTP framing)."""
+    """Error in ``last_error`` when the opening handshake fails.
+
+    The client stores it when the server's reply is not a valid
+    ``101 Switching Protocols`` or the server closes mid-handshake.  A
+    server ``Connection`` stores it when the client's upgrade request is
+    malformed or asks for a path other than ``accept_path``.
+    """
 
 
 class WebSocketURLError(WebSocketError):
-    """URL doesn't parse as a supported ``ws://`` / ``wss://`` URL."""
+    """Raised by ``WebSocketClient.connect()`` and ``parse_ws_url()`` for a URL they cannot use.
+
+    The URL must start with ``ws://`` or ``wss://``, name a host, and carry
+    any port as a number from 1 to 65535.
+    """
 
 
 class WebSocketTimeoutError(WebSocketError):
-    """A per-phase timeout elapsed (handshake, close, or pong-after-ping)."""
+    """Error in ``last_error`` when the opening handshake, the closing handshake, or a PONG takes too long.
+
+    ``handshake_timeout_ms``, ``close_timeout_ms``, and ``pong_timeout_ms``
+    set the three limits.
+    """
 
 
 class WebSocketBackpressureError(WebSocketError):
-    """The TX queue overflowed before the runner could drain it."""
+    """Raised by ``send_text()``, ``send_binary()``, or ``send_ping()`` when the send queue is full.
+
+    The queue holds ``max_tx_queue_size`` messages.  Later ``handle()`` calls
+    write the queue out.  The same call succeeds once there is room.
+    """
 
 
 class WebSocketStateError(WebSocketError):
-    """Caller invoked an operation that requires a different session state."""
+    """Raised for a call made in the wrong state, such as a send before ``OPEN`` or a second ``connect()``.
+
+    A ``WebSocketClient`` also stores one in ``last_error`` when its TCP or
+    TLS connection fails to open.
+    """
 
 
 #: RFC 6455 §1.3 magic GUID concatenated with the nonce to derive the accept key.
@@ -131,7 +162,17 @@ RESERVED_CLOSE_CODES = frozenset({
 
 
 class WebSocketState:
-    """Lifecycle states for a websocket session."""
+    """Names for the states a ``WebSocketClient`` or ``Connection`` moves through, each a plain string.
+
+    Attributes:
+        CONNECTING: Opening the TCP or TLS connection and running the
+            opening handshake.
+        OPEN: Handshake done.  Both ends can send messages.
+        CLOSING: This end sent a CLOSE frame and waits for the other end's
+            CLOSE.
+        CLOSED: The connection is over.  ``last_close_code`` and
+            ``last_error`` say how it ended.
+    """
 
     CONNECTING = "connecting"
     OPEN = "open"
@@ -173,10 +214,20 @@ class CaseInsensitiveDict:
 
 
 def parse_ws_url(url: str) -> tuple[str, str, int, str]:
-    """Split a ``ws://`` or ``wss://`` *url* into ``(scheme, host, port, path)``.
+    """Split a ``ws://`` or ``wss://`` URL into ``(scheme, host, port, path)``.
+
+    ``scheme`` is ``"ws"`` or ``"wss"``.  ``port`` defaults to 80 for ``ws``
+    and 443 for ``wss``.  ``path`` defaults to ``"/"`` and keeps any query
+    string.  ``parse_ws_url("ws://192.168.1.42:8765/live")`` returns
+    ``("ws", "192.168.1.42", 8765, "/live")``.
+
+    Args:
+        url: The URL to split.
 
     Raises:
-        WebSocketURLError: Bad scheme, missing host, or out-of-range port.
+        WebSocketURLError: ``url`` is not a ``str``, has another scheme,
+            names no host, or has a port that is not a number from 1 to
+            65535.
     """
     if not isinstance(url, str):
         raise WebSocketURLError(
@@ -231,7 +282,12 @@ def parse_ws_url(url: str) -> tuple[str, str, int, str]:
 
 
 def make_websocket_key() -> str:
-    """Generate a fresh ``Sec-WebSocket-Key`` (16 random bytes, base64 ASCII) per RFC 6455 §4.1."""
+    """Return a new ``Sec-WebSocket-Key`` header value, 16 random bytes encoded as base64.
+
+    A client sends a fresh key in each opening handshake request
+    (RFC 6455 §4.1).  The server proves it read the request by answering
+    with ``derive_accept_key()`` of that key.
+    """
     nonce = os.urandom(16)
     encoded = binascii.b2a_base64(nonce)
     # b2a_base64 appends a trailing newline byte.
@@ -239,10 +295,15 @@ def make_websocket_key() -> str:
 
 
 def derive_accept_key(client_key: str) -> str:
-    """Compute ``Sec-WebSocket-Accept`` from the client's nonce.
+    """Return the ``Sec-WebSocket-Accept`` header value a server sends back for ``client_key``.
+
+    The value is the base64-encoded SHA-1 digest of ``client_key`` joined to
+    the fixed GUID from RFC 6455 §1.3.  A client compares the server's
+    ``Sec-WebSocket-Accept`` against it.
 
     Args:
-        client_key: Verbatim base64 nonce; do not decode it first.
+        client_key: The ``Sec-WebSocket-Key`` header value exactly as sent,
+            still base64-encoded.
     """
     digest = _sha1_digest((client_key + WS_MAGIC_GUID).encode("ascii"))
     encoded = binascii.b2a_base64(digest)

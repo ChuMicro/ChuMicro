@@ -138,12 +138,12 @@ def install_command(python: str | Path | None = None) -> list[str]:
             interpreter.  With ``uv`` this becomes ``--python <path>``;
             without ``uv`` it replaces ``sys.executable``.
     """
-    if shutil.which("uv"):
-        command = ["uv", "pip", "install"]
-        if python is not None:
-            command.extend(["--python", str(python)])
-        return command
     interpreter = str(python) if python is not None else sys.executable
+    if shutil.which("uv"):
+        # Always name the interpreter: without --python, uv installs into
+        # whatever $VIRTUAL_ENV names, and a shell that exported the main
+        # checkout's venv would have a worktree's setup repoint it there.
+        return ["uv", "pip", "install", "--python", interpreter]
     return [interpreter, "-m", "pip", "install"]
 
 

@@ -4,9 +4,9 @@ title: "chumicro-timing: timers and deadlines without sleep, for CircuitPython a
 
 # chumicro-timing
 
-**Cross-runtime millisecond tick helpers and periodic timing for CircuitPython, MicroPython, and CPython.**
+**Timers that don't block. Your loop keeps running.**
 
-Capture `ticks_ms()` once per pass through your loop and hand it to a `Rate` (a drift-free periodic cadence) or a `Deadline` (a single armed timeout).  Both are built on wrap-safe tick arithmetic, so the counter rollover on a board that has been up for weeks changes nothing.  All timing is non-blocking: nothing on the device path calls `time.sleep()` (the host-test `sleep_ms` shim in `chumicro_timing.testing` is the one exception, and it never deploys).
+`time.sleep(1)` stops your whole program for a second.  A button pressed during that second goes unnoticed.  With `chumicro-timing`, your `while True:` loop reads the clock on every pass and acts when a timer comes due.  A `Rate` comes due every N milliseconds.  A `Deadline` expires once, N milliseconds after it starts.  It runs on CircuitPython, MicroPython, and CPython.
 
 ## Install
 
@@ -21,27 +21,37 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
 pip install chumicro-timing
 ```
 
-No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
 
+Blink the onboard LED on a CircuitPython board, from a loop that never sleeps:
+
 ```python
+import board
+import digitalio
 from chumicro_timing import Rate, ticks_ms
 
-rate = Rate(1000, ticks_ms())
+led = digitalio.DigitalInOut(board.LED)
+led.direction = digitalio.Direction.OUTPUT
+
+blink = Rate(500, ticks_ms())       # comes due every 500 ms, counting from now
 
 while True:
-    now = ticks_ms()
-    if rate.due(now):
-        print("one second elapsed")
-    # ... do other work ...
+    now_ms = ticks_ms()             # read the clock once per pass
+    if blink.due(now_ms):           # True once every 500 ms, False otherwise
+        led.value = not led.value
+
+    # Nothing above waits, so code you add here runs on every pass.
 ```
+
+On MicroPython, create the LED with `led = Pin("LED", Pin.OUT)` from `machine` on a Pi Pico W, or with the LED's GPIO number on an ESP32.  Flip it with `led.value(not led.value())`.  The timing lines stay the same.
 
 ## Documentation
 
-- [User Guide](guide.md): periodic cadence with `Rate`, sharing one timestamp across a loop, deadlines, choosing a wait, using the tick helpers directly, wraparound details, pairing with `chumicro-runner`
-- [API Reference](api.md): the wrap-safe `ticks_ms` / `ticks_diff` / `ticks_add` helpers, the `Deadline` and `Rate` value objects, and the `Signal` / `wait_for` wait vocabulary
-- [Testing Helpers](testing.md): using `FakeTicks` in your tests
+- [User Guide](guide.md): blinking without `sleep`, several timers in one loop, giving up with a `Deadline`, what happens when the loop runs late, the tick functions and their rollover, and pairing with `chumicro-runner`
+- [API Reference](api.md): `Rate`, `Deadline`, the `ticks_ms` / `ticks_diff` / `ticks_add` functions, and `Signal` / `wait_for` for generator tasks
+- [Testing Helpers](testing.md): `FakeTicks`, a clock your tests move by hand
 
 ---
 

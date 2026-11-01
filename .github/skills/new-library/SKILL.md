@@ -15,7 +15,7 @@ This skill covers the full workflow from scaffolding a new library through makin
 python scripts/run.py new-library <name>
 ```
 
-This creates `libraries/<name>/` with the full directory tree (including a starter class in `core.py`, a passing test file, and a working example), regenerates IDE configs, and prints what was created. The scaffold is immediately runnable — tests pass at 100% coverage, lint is clean, and the example executes. Verify:
+This creates `libraries/<name>/` with the full directory tree (including a starter class in `core.py`, a passing test file, and a working example), regenerates IDE configs, and prints what was created. The scaffold is immediately runnable — tests pass at 100% coverage, lint is clean, and the example runs its loop until Ctrl-C. Verify:
 
 ```bash
 python scripts/run.py test --libraries <name> 2>&1 | tail -5
@@ -76,13 +76,14 @@ The scaffold creates a stub `testing.py` with instructions. **If the library has
 
 Put examples in `libraries/<name>/examples/`. At least one per major feature.
 
-**Rules ([Decision 0013](../../../plans/decisions/0013-docs-and-examples-standards.md)):**
+**Rules ([Decision 0013](../../../plans/decisions/0013-docs-and-examples-standards.md), [Decision 0130](../../../plans/decisions/0130-examples-and-demos-never-exit.md)):**
 
 - Top-level code — no `if __name__ == "__main__":` guard.
+- Never exits: imports, setup, then a module-level `while True:` with no `break` that repeats the example's work on a timer. A failure prints what went wrong and retries on the next pass. No `raise SystemExit` / `sys.exit()`. `CHU038` gates it. The scaffold's `basic_usage.py` already has this shape; keep the loop when you rewrite it.
 - Simulated examples must run on CPython without hardware.
 - Hardware examples: name `circuitpython_*.py` or `micropython_*.py`.
 - Descriptive filenames: `rate_blink.py`, not `example1.py`.
-- Module docstring with `Example output::` block.
+- Module docstring with an `Example output::` block showing a few passes of the loop.
 - Self-contained: copy-paste and run.
 
 The scaffold ships `examples/helpers.py` — a standalone wifi-up + tiny

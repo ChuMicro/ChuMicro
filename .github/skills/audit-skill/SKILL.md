@@ -284,7 +284,7 @@ Do not invoke `/new-skill` yourself — the user reviews the seed and fires it.
 - Body budgets re-measured with the Step 2 awk loop — ≤ 500 lines, under ~5,000 tokens
   (chars / 4), longest line not ballooned — when body content was touched.
 - Bang-pattern grep re-run over the touched files.
-- AI-tic regex (AGENTS.md § Writing tone) and the abstract-subject probe
+- AI-tic regex (`docs/contributing/agent-style-guide.md`) and the abstract-subject probe
   (`docs/contributing/agent-style-guide.md` § Concrete subject, real verb) against the
   post-edit body — hits are candidates for a read-aloud, not verdicts.
 - Every step still carries a discriminating Success criteria field; Done-when still distinct from the last step.

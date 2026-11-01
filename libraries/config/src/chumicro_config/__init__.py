@@ -1,7 +1,9 @@
-"""Runtime-config helpers: section loader and on-device reader.
+"""Read a project's settings on the board and build objects from them.
 
-The public entry points are :data:`config`, :func:`load_runtime_config`,
-:func:`load_section`, and :func:`try_load_section`.
+The settings form one flat dict whose keys are dotted names such as
+``"wifi.ssid"``. ``load_runtime_config()`` reads them from the board into a
+``RuntimeConfig``. ``load_section`` and ``try_load_section`` build an
+instance of a class from the settings under one prefix.
 """
 
 import gc
@@ -30,7 +32,8 @@ __all__ = [
 
 
 def __getattr__(name: str):
-    # Lazy imports keep runtime (and chumicro_msgpack) out of RAM until used.
+    # The first access imports chumicro_config.runtime and chumicro_msgpack,
+    # so a program that never reads the settings file never loads either.
     if name == "config":
         from chumicro_config.runtime import config  # noqa: PLC0415
 

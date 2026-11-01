@@ -1,20 +1,27 @@
-"""Generic transport factories for the chumicro networking libraries.
+"""``chumicro_sockets.sockets_factory`` builds the transport functions that network clients
+and servers take at construction.
 
-Builders take hosts, ports, and TLS material as parameters.  Protocol
-config namespaces (``mqtt.broker.host`` and friends) belong to each
-protocol library's ``from_config``, never here.
+Each builder captures a radio and TLS material once and returns a function
+that opens a fresh connector, listening socket, or UDP socket on every call.
+Every builder takes ``radio``, the CircuitPython ``wifi.radio`` object, which
+MicroPython and CPython ignore.
 
-The module name ends in ``_factory`` so the deploy walker's
-``__chumicro_skip_factories__`` family matching drops it from
-bring-your-own-transport deploys, and with it the only reference that
-would pull :mod:`chumicro_sockets` onto the board.
+A program that supplies its own transport everywhere lists
+``"sockets_factory"`` in ``__chumicro_skip_factories__``.  The deployer then
+leaves this module off the board, and with it ``chumicro_sockets``.
 """
 
 import chumicro_sockets
 
 
 def connector_factory(*, radio=None, ssl_context=None):
-    """Build a ``(host, port, use_tls) -> SocketConnector`` factory."""
+    """Return a function ``factory(host, port, use_tls)`` that builds a new ``connector`` per call.
+
+    An HTTP or WebSocket client takes the function as its transport and calls
+    it once per connection.  ``ssl_context`` is the ``ssl.SSLContext`` for
+    connections with ``use_tls=True``.  ``None`` checks the server against the
+    runtime's default certificate store.
+    """
     def factory(host, port, use_tls):
         return chumicro_sockets.connector(
             host, port,
@@ -27,10 +34,12 @@ def connector_factory(*, radio=None, ssl_context=None):
 
 
 def fixed_connector_factory(host, port, *, use_tls=False, radio=None, ssl_context=None):
-    """Build a ``() -> SocketConnector`` factory for one fixed endpoint.
+    """Return a function ``factory()`` that builds a new ``connector`` to ``host`` and ``port`` per call.
 
-    ``use_tls=True`` with no *ssl_context* dials TLS against the runtime's
-    default trust store; passing a context implies TLS on its own.
+    A client that always dials one server, such as an MQTT client, takes this
+    form.  ``use_tls=True`` dials TLS and, with no ``ssl_context``, checks the
+    server against the runtime's default certificate store.  Passing an
+    ``ssl_context`` turns TLS on even when ``use_tls`` is ``False``.
     """
     def factory():
         return chumicro_sockets.connector(
@@ -45,10 +54,14 @@ def fixed_connector_factory(host, port, *, use_tls=False, radio=None, ssl_contex
 
 def listener_factory(host, port, *, radio=None, ssl_context=None,
                      cert_path=None, key_path=None):
-    """Build a ``() -> ListeningSocket`` factory, TLS when material is given.
+    """Return a function ``factory()`` that opens a new ``listener`` on ``host`` and ``port`` per call.
 
-    TLS engages when *ssl_context* or *cert_path* is set; an explicit
-    *ssl_context* wins over paths.
+    An HTTP or WebSocket server takes the function and calls it when it starts
+    listening.  A ``host`` of ``"0.0.0.0"`` listens on every interface.  The
+    listener speaks TLS when ``ssl_context`` or ``cert_path`` is set, and
+    ``ssl_context`` wins when both are.  ``cert_path`` and ``key_path`` name
+    the PEM certificate and private-key files on the board, and each call
+    loads them through ``ssl_context_with_cert_and_key_paths``.
     """
     use_tls = ssl_context is not None or cert_path is not None
 
@@ -70,11 +83,12 @@ def listener_factory(host, port, *, radio=None, ssl_context=None,
 
 
 def udp_socket_factory(*, radio=None):
-    """Build a ``() -> socket`` factory returning a fresh bound non-blocking UDP socket.
+    """Return a function ``factory()`` that opens a new non-blocking UDP socket per call.
 
-    ``setblocking(False)`` is applied here so every consumer of the
-    factory gets a tick-loop-safe socket; ``connector`` and ``listener``
-    already guarantee non-blocking transports themselves.
+    Each socket comes from ``udp_socket(radio=radio)``, bound to a free port
+    on every interface.  The factory switches it to non-blocking mode, so
+    ``recvfrom_into`` raises ``OSError`` with ``EAGAIN`` when no datagram is
+    waiting.
     """
     def factory():
         udp_socket = chumicro_sockets.udp_socket(radio=radio)

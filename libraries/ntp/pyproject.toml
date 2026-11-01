@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "chumicro-ntp"
 dynamic = ["version"]
-description = "Runner-shaped SNTP client over an injected UDP socket: pure Python, cross-runtime."
+description = "Network time (SNTP) client over a UDP socket you pass in: pure Python, runs on CircuitPython, MicroPython, and CPython."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

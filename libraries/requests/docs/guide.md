@@ -2,193 +2,268 @@
 
 ## Overview
 
-`chumicro-requests` is a non-blocking HTTP/1.1 client built on `chumicro-sockets`.  `HttpClient` is the single entry point for every verb.  Its `check(now_ms)` / `handle(now_ms)` methods drive the request forward one tick at a time.  An LED keeps blinking on the same board while a request is in flight or mid-timeout against a stalled peer.  Two connect phases are the exception: the DNS lookup, and on MicroPython / CircuitPython the TLS handshake, each block the reactor for their duration (see *Bring your own transport*).  The library is single-in-flight today: a second `client.get(...)` while another request is running raises `HttpBusyError`.
+`chumicro-requests` makes HTTP requests from a board while the rest of the program keeps running.
 
-## Getting started with generators
+1. **Start it.**  `client.get(url)` (or `post`, `put`, `patch`, `delete`) returns a `RequestHandle` straight away.  Nothing has gone over the network yet.
+2. **Move it along.**  The loop calls `client.handle(now_ms)` on every pass.  Each call takes one small step, such as looking up the host, connecting, sending, or reading the bytes that have arrived, and returns.
+3. **Collect it.**  Once `request.done` is `True`, `request.response` holds the answer, or `request.error` says why there is none.
 
-The generator surface runs a whole request top to bottom (connect, send, receive, return) with no handle to poll and no `on_done` callback.  A single `response = yield from get(...)` drives the request under `Runner.add_generator`, and other runner services keep getting the CPU between yields.
+Steps 1 and 3 are `adafruit_requests`' `response = requests.get(url)` split in two.  Between them, the rest of the loop, such as an LED, a button, or a sensor, keeps running while the server takes its time.  Opening the connection is the one step that can still hold the loop ([Platform notes](#platform-notes)).
+
+One client runs one request at a time.  Calling `get()` while a request is still in flight raises `HttpBusyError`.  A program finishes one request before starting the next, or builds a second `HttpClient`.
+
+## Getting started
+
+This CircuitPython `code.py` fetches a page every 30 seconds, the same loop as the [`periodic_get.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/requests/examples/periodic_get.py) example.  The `connect()` call takes the network name and password:
 
 ```python
+import wifi
+from chumicro_requests import HttpClient
+from chumicro_sockets.sockets_factory import connector_factory
+from chumicro_timing import Rate, ticks_ms
+
+wifi.radio.connect("your-network", "your-password")
+client = HttpClient(transport_factory=connector_factory(radio=wifi.radio))
+every_30_s = Rate(30_000, ticks_ms())
+request = client.get("http://example.com/")  # starts the fetch and returns at once
+
+while True:
+    now_ms = ticks_ms()
+    if client.check(now_ms):    # True while a request is in flight
+        client.handle(now_ms)   # one small step: connect, send, or read
+
+    if request is not None and request.done:
+        if request.error is not None:
+            print("failed:", request.error)
+        else:
+            print(request.response.status_code, len(request.response.body), "bytes")
+        request = None
+
+    if request is None and every_30_s.due(now_ms):
+        request = client.get("http://example.com/")
+```
+
+- `connector_factory(radio=wifi.radio)` builds the `transport_factory`, a function `HttpClient` calls to open a connection for each request.  CircuitPython needs the board's radio here.  On MicroPython and CPython, `connector_factory()` takes no arguments.
+- `client.get(url)` starts the request.  It raises only for a URL it cannot parse (`HttpURLError`) or when a request is already in flight (`HttpBusyError`).  Network failures arrive later, on `request.error`.
+- `client.check(now_ms)` returns `True` while a request is in flight.  `client.handle(now_ms)` takes one step on it.  The same pair makes the client a runner service ([Runner pattern](#runner-pattern)).
+- `ticks_ms()` from `chumicro-timing` is a millisecond counter.  The client times its requests on the same counter, so the loop passes its value rather than one from `time.monotonic()`.
+- `Rate(30_000, now_ms)` makes `due(now_ms)` true once every 30 seconds ([`chumicro-timing`](https://chumicro.com/ChuMicro/timing/stable/guide/)).  A `time.sleep(30)` in its place would stop the whole loop.
+
+The first reference to `HttpClient` imports the client module.  Building the client at startup lands that one-time cost on a fresh heap.
+
+## Reading the response
+
+```python
+response = request.result                  # the Response, or raises request.error
+print(response.status_code)                # 200
+print(response.reason)                     # OK
+print(response.headers["content-type"])    # header names match in any case
+print(response.body)                       # raw bytes
+print(response.text)                       # body decoded to str
+print(response.json())                     # body parsed as JSON
+```
+
+`request.result` folds the two checks from the loop into one line.  It returns `request.response`, or raises `request.error` when the request failed.  Reading it before `request.done` raises `HttpError`.
+
+`response.text` decodes `body` with `response.encoding`.  The encoding comes from the `charset=` part of the `Content-Type` header and falls back to `utf-8`.  When a server names the wrong charset, setting the encoding before reading `text` overrides it:
+
+```python
+response.encoding = "latin-1"
+print(response.text)
+```
+
+`response.json()` decodes through `text`, so the override applies to JSON too.
+
+## Writing the fetch as a generator
+
+`chumicro_requests.generators.get` fetches inside a [generator task](https://chumicro.com/ChuMicro/runner/stable/guide/#generator-tasks).  `response = yield from get(connector, url)` pauses the task until the whole response is in, then hands back the `Response`.  The fetch reads like `adafruit_requests` code, and the board keeps running everything else while it waits.
+
+This CircuitPython program is a short form of the [`generator_fetch.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/requests/examples/generator_fetch.py) example:
+
+```python
+import wifi
+from chumicro_requests import HttpError
 from chumicro_requests.generators import get
 from chumicro_runner import Runner
+from chumicro_runner.generators import sleep_until
 from chumicro_sockets.sockets_factory import connector_factory
+from chumicro_timing import ticks_add, ticks_ms
 
-# wifi is your chumicro_wifi.WifiService; wifi.adapter.radio is the board
-# radio on CircuitPython and None on MP / CPython, where no radio is needed.
-transport_factory = connector_factory(radio=wifi.adapter.radio)
+wifi.radio.connect("your-network", "your-password")
+connector = connector_factory(radio=wifi.radio)
 
 
-def fetch_once():
-    response = yield from get(transport_factory, "http://api.example.com/now")
-    print(response.status_code, len(response.body))
+def fetch_forever():
+    while True:
+        try:
+            response = yield from get(connector, "http://example.com/")
+            print(response.status_code, len(response.body), "bytes")
+        except (HttpError, OSError) as error:
+            print("failed:", error)
+        yield from sleep_until(ticks_add(ticks_ms(), 30_000))
 
 
 runner = Runner()
-handle = runner.add_generator(fetch_once())
-while not handle.done:
-    now_ms = runner.tick()
-    runner.wait(now_ms)
+runner.add_generator(fetch_forever())
+
+while True:
+    now_ms = runner.tick()  # fetch_forever runs when what it waits for is ready
+    runner.wait(now_ms)     # the CPU rests until then
 ```
 
-`chumicro_requests.generators` also exposes `post`, `put`, `patch`, `delete`, and the lower-level `fetch(transport_factory, method, url)`.  For a body too big for RAM, `stream(...)` returns a reader you pull one chunk per `yield from` (see [Streaming large bodies](#streaming-large-bodies)).
+- `runner.add_generator(fetch_forever())` registers the function and runs it up to its first pause.
+- `runner.tick()` and `runner.wait(now_ms)` are the whole main loop.  Anything else registered with the same runner runs between fetches.
+- `sleep_until(ticks_add(ticks_ms(), 30_000))` pauses the function for 30 seconds without stopping the board.
+- A failed request raises inside the function, on the `yield from` line.  It raises an `HttpError` from the request, or an `OSError` when the runner sees the connection drop.  The `except` there prints the error, and the loop tries again.  An uncaught error ends `fetch_forever` for good.  The runner counts it in `runner.handler_errors` and carries on with everything else.
 
-## Getting started with a service
+The same module has `post`, `put`, `patch`, `delete`, the general `fetch(connector, method, url)`, and `stream(...)` for bodies too big for RAM ([Streaming large bodies](#streaming-large-bodies)).  Each call builds its own client, so a generator fetch never raises `HttpBusyError`.  A body over `max_body_bytes` raises `HttpOversizedError` here instead of being dropped.
 
-Reach for the `HttpClient` service when you make repeated requests on one client, or when you want the `check` / `handle` shape that drops straight into a `Runner` alongside other services.
+## Runner pattern
+
+`HttpClient` is a [runner service](https://chumicro.com/ChuMicro/runner/stable/guide/#services), so `runner.add(client)` is all the wiring it needs.  `client.get(url, on_done=show)` makes the client call `show` with the finished `RequestHandle`:
 
 ```python
+import wifi
 from chumicro_requests import HttpClient
+from chumicro_runner import Runner
 from chumicro_sockets.sockets_factory import connector_factory
-from chumicro_timing import ticks_ms
 
-client = HttpClient(transport_factory=connector_factory(radio=wifi.adapter.radio))
-handle = client.get("http://api.example.com/now", timeout_ms=5000)
+URL = "http://example.com/"
 
-while not handle.done:
-    if client.check(ticks_ms()):
-        client.handle(ticks_ms())
+wifi.radio.connect("your-network", "your-password")
+client = HttpClient(transport_factory=connector_factory(radio=wifi.radio))
 
-response = handle.result
-print(response.status_code, response.body)
-print(response.text)               # decoded str
-print(response.json())             # parsed JSON
+
+def show(request):
+    if request.error is not None:
+        print("failed:", request.error)
+    else:
+        print(request.response.status_code, len(request.response.body), "bytes")
+
+
+def start_fetch(now_ms):
+    if not client.busy:
+        client.get(URL, on_done=show)
+
+
+def heartbeat(now_ms):
+    print("still running")
+
+
+runner = Runner()
+runner.add(client)                                                    # moves the request along
+runner.add_periodic(start_fetch, period_ms=30_000, start_after_ms=0)  # every 30 s, starting now
+runner.add_periodic(heartbeat, period_ms=5_000)                       # other work, on its own timer
+
+while True:
+    now_ms = runner.tick()  # every registered service takes one small step
+    runner.wait(now_ms)     # then the CPU rests until the next event or deadline
 ```
 
-Build your client at startup. The first `HttpClient` reference imports the client module, so let that one-time cost land on a fresh heap.
+`runner.wait()` watches the client's socket and its timeout, so the loop rests until bytes arrive.
 
-## POST / PUT / PATCH / DELETE
+## Sending data: POST, PUT, PATCH, DELETE
 
-`HttpClient` exposes a method per verb. Bodies can be raw bytes / str
-or a Python object that gets JSON-encoded:
+`post`, `put`, `patch`, and `delete` each start a request with that HTTP verb.  A body can be bytes, a `str`, or a Python object that `json=` encodes:
+
+| Call | Body sent |
+|---|---|
+| `client.post(url, body=b"\x01\x02\x03")` | The raw bytes |
+| `client.post(url, body="plain text")` | The `str`, encoded as UTF-8 |
+| `client.post(url, json={"name": "thing", "qty": 3})` | The object as JSON, with `Content-Type: application/json` |
+| `client.put(url, json={"name": "renamed"})` | `put` and `patch` take the same `body=` and `json=` as `post` |
+| `client.patch(url, body=b"diff-bytes")` | The raw bytes |
+| `client.delete(url)` | No body |
+
+One request has to finish before the next starts on the same client ([Getting started](#getting-started)).  `body=` and `json=` together raise `ValueError`.  Every verb takes `headers=` as a dict or a list of `(name, value)` pairs.  A `Content-Type` set there wins over the one `json=` adds.
+
+## Timeouts and errors
+
+Every request has a deadline that covers the whole exchange, first step to last byte, redirects included.  The deadline is 10 seconds by default.  `timeout_ms=` changes it for one request, and `HttpClient(default_timeout_ms=...)` changes it for every request:
 
 ```python
-# Raw bytes / str body
-handle = client.post("http://api/widgets", body=b"<custom-bytes>")
-handle = client.post("http://api/widgets", body="text/plain payload")
-
-# JSON helper, auto-encodes + sets Content-Type: application/json
-handle = client.post("http://api/widgets", json={"name": "thing", "qty": 3})
-
-# PUT / PATCH share the same body / json semantics
-handle = client.put("http://api/widgets/42", json={"name": "renamed"})
-handle = client.patch("http://api/widgets/42", body=b"diff-bytes")
-
-# DELETE is intransitive in v1, no body parameter
-handle = client.delete("http://api/widgets/42")
+request = client.get(url, timeout_ms=30_000)
 ```
 
-Caller-supplied `headers={"Content-Type": "..."}` always wins over the
-JSON-helper default. Pass exactly one of `body=` or `json=`; passing
-both raises `ValueError`.
+The client checks the deadline between steps, so a connect step that holds the loop ([Platform notes](#platform-notes)) can run past it before the timeout lands.  `client.cancel()` ends the request in flight at once.  Its handle finishes with an `HttpError`.
+
+Every error is an `HttpError` or one of its subclasses:
+
+| Error | Means |
+|---|---|
+| `HttpTimeoutError` | The request ran past its deadline. |
+| `HttpProtocolError` | The server sent something that is not valid HTTP/1.1, or closed the connection partway through the response. |
+| `HttpURLError` | The URL is not an absolute `http://` or `https://` URL.  `get()` raises it at once.  A bad redirect `Location` arrives on `request.error`. |
+| `HttpOversizedError` | A body ran past `max_body_bytes` under the `DISCONNECT` policy ([Memory notes](#memory-notes)). |
+| `HttpBusyError` | `get()` was called while another request was in flight.  Raised by `get()` itself. |
+| `HttpError` | The connection failed (host not found, refused, reset) or the request was cancelled. |
 
 ## Redirects
 
-`HttpClient` follows `301` / `302` / `303` / `307` / `308` redirects
-automatically up to a budget. Default cap is 5. Override per-call or
-per-client:
+`HttpClient` follows `301`, `302`, `303`, `307`, and `308` redirects, up to 5 hops by default.  `max_redirects=0` hands back the 3xx response itself:
 
 ```python
-# Per-call: don't follow at all (return the 3xx response as-is)
-handle = client.get(url, max_redirects=0)
-
-# Per-call: raise the cap
-handle = client.get(url, max_redirects=20)
-
-# Per-client default
-client = HttpClient(transport_factory=..., default_max_redirects=10)
+request = client.get(url, max_redirects=0)
 ```
 
-Method handling follows long-standing browser + RFC 7231 §6.4 rules:
+`max_redirects=20` allows more hops for one request.  `HttpClient(..., default_max_redirects=10)` changes the limit for every request.
 
-- `301` / `302` / `303` switch the next hop to **GET with no body**
-- `307` / `308` **preserve** the original method and body
-
-`response.url` reflects the URL of the FINAL hop, not the original
-request. If the budget is exhausted before reaching a non-3xx response,
-the last 3xx is returned to the caller (matching CPython `requests`'
-default behavior without the `raise_for_status()` step).
-
-The `Location` header may be absolute (`https://other.com/dest`),
-absolute-path (`/api/v2`), or path-relative (`trinkets`). All three
-shapes are resolved against the current URL.
+- `301`, `302`, and `303` repeat the request as a GET with no body, as browsers do (RFC 7231 §6.4).
+- `307` and `308` repeat it with the original method and body.
+- `Location` can be absolute (`https://other.example/dest`), start at the root (`/api/v2`), or be relative to the current path (`trinkets`).
+- `response.url` is the final URL, after every hop.
+- When the hop limit runs out, the request finishes with the last 3xx response instead of an error.
 
 ## Body framing
 
-`HttpClient` accepts three RFC 7230 body framings transparently:
+`HttpClient` picks how to read a response body from the response headers:
 
-- **`Content-Length: N`** reads exactly N bytes (most common case).
-- **`Transfer-Encoding: chunked`** selects RFC 7230 §4.1 chunked
-  decoding.  Chunk-extensions and trailer headers are accepted and
-  discarded.  `Content-Length` is ignored when chunked is present per
-  §3.3.3.
-- **Neither header** reads until the peer closes the connection
-  (HTTP/1.0-style framing).
+- **`Content-Length: N`** reads exactly N bytes.  Most servers send this.
+- **`Transfer-Encoding: chunked`** decodes the chunks and joins them (RFC 7230 §4.1).  Chunk extensions and trailer headers are read and discarded, and `Content-Length` is ignored when both headers are present.
+- **Neither header** reads until the server closes the connection.
 
-In all cases `response.body` returns the decoded bytes (chunks
-concatenated for chunked responses).  `response.text` and
-`response.json()` work the same way regardless of framing.
-
-Other `Transfer-Encoding` values (`gzip`, `deflate`, `identity`
-stacked with chunked, etc.) are rejected with `HttpProtocolError`
-in v1, since the caller would otherwise silently get garbled bytes.
+`response.body`, `text`, and `json()` behave the same whichever way the body arrived.  Any other `Transfer-Encoding`, such as `gzip` or `deflate`, fails the request with `HttpProtocolError` instead of handing back compressed bytes.
 
 ## Streaming large bodies
 
-By default the whole body is buffered in RAM, capped at
-`max_body_bytes` (64 KB).  Pass `stream=True` (on any verb, or on the
-generic `client.request(method, url, ...)`) to consume the body
-incrementally instead: firmware images, log pulls, and any payload
-bigger than the heap become readable at a fixed RAM cost (the
-`stream_buffer_size` staging window, default 1024 bytes, plus your own
-buffer).
+By default the whole body lands in RAM, capped at `max_body_bytes` (64 KB).  `stream=True` on any verb reads the body a piece at a time instead.  Firmware images, log pulls, and any payload bigger than the heap then cost a fixed amount of RAM: a staging window of `stream_buffer_size` bytes (1024 by default) plus the program's own buffer.
 
 ```python
-handle = client.get("http://host/firmware.bin", stream=True,
-                    timeout_ms=120_000)
+request = client.get("http://example.com/firmware.bin", stream=True, timeout_ms=120_000)
 buffer = bytearray(512)
 view = memoryview(buffer)
-
-# Inside your service's handle(now_ms), one slice per tick:
-if handle.done and handle.error is not None:
-    report(handle.error)                    # failed mid-transfer
-elif handle.response is not None:           # headers are in
-    count = handle.read_body_into(view)
-    if count:
-        flash.write(view[:count])
-    elif handle.done:
-        finish()                             # 0 after done == end of body
 ```
 
-The contract:
+Each pass through the loop, after `client.handle(now_ms)`, reads what has arrived:
 
-- `handle.response` is set as soon as the final hop's headers arrive
-  (before `handle.done`), so you can branch on `status_code` /
-  `headers` first.  Its `body` is `b""` and `streamed` is `True`;
-  `.text` / `.json()` raise `HttpError`.
-- `handle.read_body_into(buffer)` copies decoded body bytes into your
-  buffer and returns the count.  `0` means "nothing this tick"; once
-  `handle.done` is `True` (with no `error`), `0` means end of body.
-- Backpressure is automatic: when the staging window is full the
-  client stops reading the socket (and reports no poll interest, so a
-  runner parks instead of spinning) until you drain it.
-- `max_body_bytes` and `WhenOversized` do not apply to streamed
-  bodies; the staging window is the RAM bound.  To enforce your own
-  ceiling, count what you read and call `client.cancel()`.
-- `timeout_ms` covers the whole transfer, your reads included, so size
-  it for the download, not the round-trip.
-- `client.cancel()` aborts the request immediately (the handle fails
-  with `HttpError`), for early exits that shouldn't wait out the
-  timeout.
+```python
+if request is not None:
+    if request.error is not None:
+        print("download failed:", request.error)
+        request = None
+    elif request.response is not None:          # the headers are in
+        count = request.read_body_into(view)
+        if count:
+            flash.write(view[:count])           # your code: store this piece
+        elif request.done:
+            print("download complete")          # 0 after done means end of body
+            request = None
+```
 
-The generator form wraps the same machinery, one chunk per
-`yield from`:
+- `request.response` appears as soon as the final hop's headers arrive, before `request.done`, so the program can check `status_code` and `headers` first.  Its `body` is `b""` and its `streamed` is `True`.  `text` and `json()` raise `HttpError`.
+- `request.read_body_into(buffer)` copies body bytes into the buffer and returns the count.  `0` means nothing has arrived yet, until `request.done` is `True` with no `error`.  From then on, `0` means the body is finished.
+- When the staging window is full, the client stops reading the socket until the program drains it.  It also stops asking a `Runner` to watch the socket, so the loop rests instead of spinning on data it cannot take.
+- `max_body_bytes` and `WhenOversized` leave a streamed body alone, since the staging window is the RAM limit.  A program that wants its own size limit counts what it reads and calls `client.cancel()`.
+- `timeout_ms` covers the whole transfer, the program's reads included, so it is sized for the download rather than the first byte.
+
+The generator form reads one piece per `yield from`:
 
 ```python
 from chumicro_requests.generators import stream
 
-def download(transport_factory, url, sink):
-    reader = yield from stream(transport_factory, "GET", url,
-                               timeout_ms=120_000)
+
+def download(connector, url, store):
+    reader = yield from stream(connector, "GET", url, timeout_ms=120_000)
     if reader.response.status_code != 200:
         reader.cancel()
         return
@@ -198,148 +273,90 @@ def download(transport_factory, url, sink):
         count = yield from reader.read_into(view)
         if count == 0:
             break
-        sink(view[:count])
+        store(view[:count])
 
-runner.add_generator(download(transport_factory, url, flash.write))
+
+runner.add_generator(download(connector, url, flash.write))
 ```
 
-## Body decoding
+## HTTPS
 
-`Response.body` is always raw `bytes`.  `Response.text` decodes those
-bytes using `Response.encoding`, which is sniffed from the
-`Content-Type` header's `charset=` parameter (default `utf-8`).
-Override the encoding when a server's Content-Type lies:
+An `https://` URL works with no extra setup.  The connection checks the server's certificate against each runtime's default trusted roots, listed in the sockets guide's [TLS](https://chumicro.com/ChuMicro/sockets/stable/guide/#tls) section.
+
+A context built from one certificate authority's PEM file trusts that CA instead, for a server on a home network or a site whose root the MicroPython set lacks.  `connector_factory` takes it as `ssl_context=`:
 
 ```python
-response = handle.result
-response.encoding = "latin-1"
-print(response.text)
+from chumicro_sockets import ssl_context_with_ca
+
+with open("/my_root_ca.pem") as pem_file:
+    context = ssl_context_with_ca(pem_file.read())
+client = HttpClient(transport_factory=connector_factory(radio=wifi.radio, ssl_context=context))
 ```
 
-`Response.json()` decodes via `text` first, then runs `json.loads`,
-so charset overrides apply to JSON responses too.
+### Set the board's clock first
+
+The certificate check compares the certificate's start date with the board's clock.  A board with no battery-backed clock boots with a date years in the past, before any current certificate was issued.  The handshake then fails with `ValueError("certificate validity starts in the future")`.  [`chumicro-ntp`](https://chumicro.com/ChuMicro/ntp/stable/) sets the clock from the network before the first `https://` request.
+
+### Leave heap room for the handshake
+
+A TLS handshake on a MicroPython board measured about 25 KB of heap on top of what the program already held.  Without that much free, the connect fails with `OSError(12)` (ENOMEM), which arrives as an `HttpError` on `request.error`.  Importing less before the first `https://` request leaves more room.  A `chumicro-workspace` deploy with `--deploy-mode flash` keeps the library files on the board's filesystem instead of in RAM.
 
 ## Bring your own transport
 
-The bundled
-`chumicro_sockets.sockets_factory.connector_factory(radio=..., ssl_context=...)`
-returns a factory wired to `chumicro-sockets`. The helper lives in an
-opt-in submodule so users with a custom transport never trigger the
-`chumicro-sockets` deploy. Tests pass a factory returning a
-`chumicro_sockets.testing.FakeSocketConnector` (which wraps a
-`FakeSocket`).
+`HttpClient` opens every connection through its `transport_factory`, a function called as `transport_factory(host, port, use_tls)` once per request and once per redirect hop.  Most programs use `connector_factory` from `chumicro-sockets`.  A custom factory runs the client over a different network stack.
 
-`HttpClient` does not care which library produces its sockets.  The `transport_factory` you pass is a callable of shape `(host: str, port: int, use_tls: bool) -> SocketConnector`.  The connector advances the TCP connect one tick at a time, but the DNS lookup and, on MicroPython / CircuitPython, the TLS handshake block the reactor for their duration.  On a slow or unreachable host that can be seconds, freezing every other runner service, so connect before starting time-critical work.  Once `connector.state == "ready"`, the underlying socket must expose the four-method contract:
+The factory returns a connector, an object that opens the connection one step at a time.  `HttpClient` uses these parts of it:
+
+| Member | What `HttpClient` expects |
+|---|---|
+| `tick(now_ms)` | Take one step toward an open connection. |
+| `state` | `"ready"` once connected, `"failed"` once it has given up, anything else while still working. |
+| `socket` | The connected socket, once `state` is `"ready"`. |
+| `last_error` | Why it failed, once `state` is `"failed"`. |
+| `io_socket`, `io_interest(now_ms)` | The socket to watch, and whether to watch it for reading or writing, so a `Runner` can rest until it is ready. |
+| `cancel()` | Give up and close whatever is open. |
+
+The connected socket needs these methods:
 
 | Method | Contract |
 |---|---|
-| `recv_into(buffer, nbytes) -> int` | Reads up to `nbytes` into `buffer` (a `memoryview`).  Raises `OSError(EAGAIN \| EWOULDBLOCK)` on no data, returns 0 on peer-close, otherwise returns bytes written. |
-| `send(payload) -> int` | Sends `payload` (a `bytes`).  Raises `OSError(EAGAIN \| EWOULDBLOCK)` when the send buffer is full, otherwise returns bytes sent (may be partial). |
+| `recv_into(buffer, nbytes) -> int` | Reads up to `nbytes` into `buffer` (a `memoryview`).  Raises `OSError(EAGAIN \| EWOULDBLOCK)` when no data is waiting, returns 0 when the peer has closed, otherwise returns the bytes written. |
+| `send(payload) -> int` | Sends `payload` (a `bytes`).  Raises `OSError(EAGAIN \| EWOULDBLOCK)` when the send buffer is full, otherwise returns the bytes sent, which may be fewer than `len(payload)`. |
 | `close() -> None` | Releases the connection. |
-| `setblocking(flag) -> None` | Best-effort.  Absence is tolerated. |
+| `setblocking(flag) -> None` | Optional.  The client calls it when present. |
 
-`chumicro_sockets.connector` is one producer.  See `chumicro_sockets._connector.SocketConnector` for the connector contract (`tick(now_ms)`, `state`, `socket`, `io_*`, `next_deadline`, `cancel`).  Any tick-driven state machine with that surface works as a custom factory.
-
-If you supply your own factory and want `chumicro_sockets` dropped from the deploy, add a module-level constant to your entrypoint and the chumicro-workspace deployer will filter the default factory out of the import graph:
+With a custom factory, this line in the entry file makes the `chumicro-workspace` deployer drop the default factory, and `chumicro-sockets` with it:
 
 ```python
 # code.py / app.py
 __chumicro_skip_factories__ = ("sockets_factory",)
 ```
 
-The constant accepts a family form (the bare stem, matches every `chumicro_*.sockets_factory`) or an exact dotted path (`chumicro_sockets.sockets_factory`).  An unmatched entry fails the deploy with a typo message rather than silently shipping the default.  Calling `HttpClient.from_config(...)` when `chumicro_sockets.sockets_factory` is missing (either skipped at deploy time or not installed by `circup` / `mip`) raises `RuntimeError` naming the bypass kwarg.
+Each entry is a bare module stem (`"sockets_factory"`, matching every `chumicro_*.sockets_factory`) or one exact dotted path (`"chumicro_sockets.sockets_factory"`).  An entry that matches nothing fails the deploy with a typo message.  With the default factory absent, `HttpClient.from_config(...)` raises `RuntimeError` asking for `transport_factory=`.
 
-Adopting `chumicro-requests` on its own needs nothing from the rest of the family: pass your own `transport_factory` (and, if you want, your own `ticks=` clock), drive the client from a plain `while` loop as in [Getting started with a service](#getting-started-with-a-service), and run host tests with a factory returning a `chumicro_sockets.testing.FakeSocketConnector`, no board required.
-
-## Runner pattern
-
-`HttpClient.check(now_ms) -> bool` and `handle(now_ms) -> None` satisfy the
-runner contract. Drop the client into a `Runner` alongside an
-LED-heartbeat task:
-
-```python
-from chumicro_runner import Runner
-from chumicro_requests import HttpClient
-from chumicro_sockets.sockets_factory import connector_factory
-
-http_client = HttpClient(transport_factory=connector_factory(radio=radio))
-runner = Runner()
-runner.add(http_client)
-runner.add(blink_task)
-while True:
-    now_ms = runner.tick()
-    runner.wait(now_ms)
-```
+With its own `transport_factory` and `ticks=` clock, `chumicro-requests` runs with no other ChuMicro library, driven from a plain `while` loop like the one in [Getting started](#getting-started).  For host tests, a factory returning `chumicro_sockets.testing.FakeSocketConnector` runs a request end to end with no network.
 
 ## Memory notes
 
-The default 64 KB `max_body_bytes` cap is sized for the minimum
-supported board class (256 KB MCU RAM). Bump it for larger boards if needed; the `Response.body`
-buffer grows up to that cap. The default 1024-byte `recv_budget_per_tick`
-matches `chumicro-mqtt`'s; bytes drained per tick are bounded so concurrent
-runner tasks (LED blink, control loop) keep getting CPU time even mid-large-body.
-For bodies that shouldn't (or can't) sit in RAM at all, use
-`stream=True` (see [Streaming large bodies](#streaming-large-bodies)):
-the per-request cost drops to the `stream_buffer_size` staging window
-(default 1024 bytes) regardless of body size.
-The response's header section has its own 16 KB `max_header_bytes` cap;
-raise it on `HttpClient(...)` if a server's cookie or header chain
-overflows it.
+- A buffered body is capped at `max_body_bytes`, 64 KB by default, a size picked for a 256 KB board.  A board with more RAM can raise it.
+- The `when_oversized=` policy decides what happens past the cap.  `WhenOversized.DROP_WITH_EVENT`, the default, finishes the request with an empty body, sets `response.oversized_dropped`, and calls `client.on_oversized(reported_length, url)`.  `DROP_SILENT` does the same without the call.  `DISCONNECT` fails the request with `HttpOversizedError`.
+- `handle()` reads at most `recv_budget_per_tick` bytes per call (1024 by default), so a large download cannot take over one pass of the loop.
+- Response headers have their own cap, `max_header_bytes` (16 KB by default).  A server with large cookies or a long header chain needs it raised.
+
+## Testing
+
+`chumicro_requests.testing.FakeHttpClient` stands in for `HttpClient` in host tests.  `enqueue_response()` or `enqueue_error()` scripts each answer, and the next `handle()` call finishes the request.  [Testing Helpers](testing.md) walks through it.
 
 ## Platform notes
 
-Pure Python, no third-party deps beyond `chumicro-sockets` and `chumicro-timing`.
-Works identically on CPython, MicroPython, and CircuitPython once the
-connection factory is wired up. HTTPS uses the same
-`chumicro_sockets.sockets_factory.connector_factory(ssl_context=...)`
-pattern as plain HTTP.
-
-### HTTPS heap headroom on minimum-class boards
-
-mbedTLS handshake costs heap.  Bench-tested on Pi Pico W MP with a
-raw-stdlib `ssl.wrap_socket()` against `letsencrypt.org:443`, the
-handshake consumed about 25 KB of heap on top of whatever the app
-already had loaded.  Headroom matters: an app that's loaded a lot
-into RAM (chumicro stack + workspace fixtures + per-example helpers)
-can run the handshake out of memory and surface as `OSError(12)`
-(ENOMEM) inside `wrap_socket()`.  If you see ENOMEM on HTTPS, the
-two levers are (a) drop unused imports before the request, or (b)
-switch to flash deploy mode (chumicro-deploy `--mode flash`) so the
-library bootstrap lives on flash and the heap is free for the
-handshake.
-
-### TLS context: bring your own CA
-
-`chumicro_sockets.sockets_factory.connector_factory(ssl_context=...)`
-accepts an SSL context built via `chumicro_sockets.ssl_context_with_ca(pem)`.
-CA-pinning is required
-on both supported embedded runtimes, but for different reasons:
-
-- **MicroPython** doesn't have `ssl.create_default_context()` at all;
-  every TLS context must be built explicitly.
-- **CircuitPython** has `ssl.create_default_context()` (and it builds
-  cheaply, ~80 bytes of heap on a Pi Pico W), but the returned context
-  carries no CAs and has `check_hostname=False`, so a handshake against
-  any real cert would fail.
-
-So on both runtimes, pass a context with a CA loaded. The CPython "default
-context loads a 100-200 KB system trust store" intuition doesn't apply:
-neither MP nor CP bundles a trust store, by design.
-
-### Device RTC must be set before TLS
-
-mbedTLS `CERT_REQUIRED` checks the cert validity window against the device
-clock. A board with no RTC battery and no NTP boots at 2021-01-01 (or epoch),
-which is "before" every modern cert's `not_valid_before` field, so the handshake
-fails with `ValueError("certificate validity starts in the future")`.
-Use [`chumicro-ntp`](https://chumicro.com/ChuMicro/ntp/stable/) to set the device clock from a public NTP server before the TLS handshake.  Cross-runtime, non-blocking, takes a UDP socket you provide.
+The same code runs on CircuitPython, MicroPython, and CPython once the network is up.  Sending, waiting for the server, and reading the response take small steps on every runtime.  The connect steps that hold the loop on each runtime are listed in the sockets guide's [Platform notes](https://chumicro.com/ChuMicro/sockets/stable/guide/#platform-notes).  A slow or unreachable host can hold the loop for seconds in those steps, so a program starts requests before time-critical work instead of in the middle of it.
 
 ## Examples
 
 | Example | What it shows |
 |---|---|
-| `periodic_get.py` | Periodic GET on a real CP/MP board: wifi up, hits a configured URL every N seconds, drives an LED-blink counter to verify the request never blocks the loop.  Cross-runtime (CP + MP). |
-| `generator_fetch.py` | The generator surface: a straight-line `yield from get(...)` fetch driven by `runner.add_generator`, no callbacks or state polling. |
+| [`periodic_get.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/requests/examples/periodic_get.py) | Fetches a page every 30 seconds from a plain `while True` loop that calls `client.check` and `client.handle`, and prints the status and size of each answer.  CircuitPython and MicroPython. |
+| [`generator_fetch.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/requests/examples/generator_fetch.py) | The same job written as `response = yield from get(...)` in a generator function, run by a `Runner` loop.  CircuitPython and MicroPython. |
 
 ---
 

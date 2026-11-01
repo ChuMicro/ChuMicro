@@ -21,13 +21,13 @@ The typical use is a watchdog or a delayed action: arm the countdown, poll it ea
 from {import_name} import Countdown
 from chumicro_timing import ticks_ms
 
-countdown = Countdown(period_ms=5000)    # fires once after 5 s
+countdown = Countdown(period_ms=5000)    # fires once, 5 s from now
 
 while True:
-    now = ticks_ms()
-    if countdown.fired(now):
+    now_ms = ticks_ms()
+    if countdown.fired(now_ms):
         print("time's up")
-        break
+        countdown.reset(now_ms)          # start the next 5 s countdown
 ```
 
 `fired(now_ms)` returns `True` exactly once, on the first poll after the deadline.  Every subsequent call returns `False` until you `reset()`.
@@ -46,10 +46,10 @@ display_off = Countdown(period_ms=10_000)
 wifi_retry = Countdown(period_ms=30_000)
 
 while True:
-    now = ticks_ms()            # ONE reading per iteration
-    if display_off.fired(now):
+    now_ms = ticks_ms()         # one reading per pass, shared by every timer
+    if display_off.fired(now_ms):
         screen.off()
-    if wifi_retry.fired(now):
+    if wifi_retry.fired(now_ms):
         radio.reconnect()
 ```
 
@@ -58,9 +58,9 @@ while True:
 `reset(now_ms)` restarts the countdown from `now_ms`:
 
 ```python
-now = ticks_ms()
-countdown.reset(now)
-# Next fire is now period_ms from this moment.
+now_ms = ticks_ms()
+countdown.reset(now_ms)
+# The next fire is period_ms from this moment.
 ```
 
 ### Checking remaining time
@@ -68,8 +68,8 @@ countdown.reset(now)
 `remaining_ms(now_ms)` returns the time left, or `0` once the countdown has fired:
 
 ```python
-now = ticks_ms()
-if countdown.remaining_ms(now) < 1000:
+now_ms = ticks_ms()
+if countdown.remaining_ms(now_ms) < 1000:
     show_warning_banner()
 ```
 

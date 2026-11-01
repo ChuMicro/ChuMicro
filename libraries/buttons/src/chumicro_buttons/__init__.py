@@ -1,4 +1,8 @@
-"""Debounced buttons, switches, and key matrices: edges, long presses, repeats, and clicks."""
+"""Debounced buttons and switches, with long press, auto-repeat, and click counting.
+
+``Button`` reads one button and ``Buttons`` reads several.  ``KeyMatrix``, for a keypad
+wired as rows and columns, imports from ``chumicro_buttons.matrix``.
+"""
 
 import gc
 

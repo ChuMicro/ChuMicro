@@ -867,9 +867,9 @@ def flash_firmware(
             credentials) before writing.  Set ``False`` to preserve
             them across an in-place upgrade.
         flash_offset: esptool path only.  Defaults to ``"0x0"`` for
-            CircuitPython's combined image.  Use ``"0x1000"`` for
-            MicroPython ESP32 / S2 / S3 builds (which ship separate
-            bootloader, partition table, and app sections).  Wrong
+            CircuitPython's combined image and for MicroPython
+            ESP32-S3 and ESP32-C3 builds.  Use ``"0x1000"`` for
+            MicroPython ESP32 and ESP32-S2 builds.  Wrong
             offset writes the app image over the bootloader region
             and leaves an unbootable chip until a manual reflash.
         on_progress: Optional ``(fraction, message)`` callback.

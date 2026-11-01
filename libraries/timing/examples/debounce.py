@@ -1,21 +1,29 @@
-"""Button debounce using tick functions directly.
+"""Debounce a pretend button by hand, printing what it accepts and what it ignores.
 
-Demonstrates ``ticks_ms`` and ``ticks_diff`` for ignoring rapid state
-changes.  This is the classic debounce pattern.  A raw button signal bounces
-for a few milliseconds after each press.  The debouncer records the
-timestamp of the last accepted transition and ignores any further
-changes until the quiet period has elapsed.
+A button's metal contacts bounce for a few milliseconds when they meet or
+part, so one press reads as on-off-on.  This loop accepts a change only when
+at least 20 ms have passed since the last change it accepted, measured with
+``ticks_diff``, and ignores the bounces in between.  The pretend button
+presses and releases twice a second, bouncing every time, and the console
+shows each accepted press and release next to the bounces it threw away.
 
-On a real board, replace ``read_raw_button()`` with a GPIO read.
+Arduino's Debounce sketch waits for the pin to hold still for
+``debounceDelay`` before believing it.  This loop believes the first change at
+once and then ignores the pin for ``DEBOUNCE_MS``, so a press shows up sooner.
+``chumicro_buttons`` does all of this for you, along with long presses and
+double clicks.  ``circuitpython_debounce.py`` and ``micropython_debounce.py``
+run the same loop on a real button.
 
 Example output::
 
-    Debounce demo (20 ms quiet period)...
+    Debouncing a pretend button with a 20 ms quiet period.
 
-      [ 1121 ms] raw=True  -> PRESS accepted
-      [ 1128 ms] raw=False    (ignored, 7 ms < 20 ms)
-      [ 1202 ms] raw=False -> RELEASE accepted
-      [ 1209 ms] raw=True     (ignored, 7 ms < 20 ms)
+      [  123 ms] PRESS accepted
+      [  204 ms] RELEASE accepted
+      [  623 ms] PRESS accepted
+      [  628 ms]   bounce ignored, 5 ms after the last change
+      [  702 ms] RELEASE accepted
+      [  708 ms]   bounce ignored, 6 ms after the last change
       ...
 
 Runs on CPython, MicroPython, and CircuitPython.
@@ -27,68 +35,63 @@ from chumicro_timing import ticks_diff, ticks_ms
 
 DEBOUNCE_MS = 20
 
-# --- Simulated raw button signal ---
-# Each entry is (duration_ms, pin_state).  The pattern fakes a noisy
-# press (True with bounces) followed by a clean idle (False).
-_SIGNAL = [
-    (120, False),   # idle
-    (5, True),      # press edge
+# The pretend button, as (how long in ms, pressed or not) in order.  It is a
+# press with two bounces, a hold, then a release with two bounces, repeating.
+BUTTON_SIGNAL = (
+    (120, False),   # not pressed
+    (5, True),      # contacts meet
     (5, False),     # bounce
     (5, True),      # bounce
-    (65, True),     # held
-    (5, False),     # release edge
+    (65, True),     # held down
+    (5, False),     # contacts part
     (5, True),      # bounce
     (5, False),     # bounce
-    (285, False),   # idle until cycle repeats
-]
-_CYCLE_MS = sum(duration for duration, _ in _SIGNAL)
-_start = ticks_ms()
+    (285, False),   # not pressed, then the pattern repeats
+)
+SIGNAL_LENGTH_MS = sum(duration_ms for duration_ms, _ in BUTTON_SIGNAL)
+
+started_ms = ticks_ms()
 
 
-def read_raw_button() -> bool:
-    """Return the simulated raw button state.
+def read_button(now_ms: int) -> bool:
+    """Return True while the pretend button reads as pressed.
 
-    Returns:
-        True if the button is pressed.
-
-    On a real board::
-
-        return not button_pin.value   # active-low button
+    On a board this is a pin read, such as ``return not button_pin.value``
+    for a button wired to ground.
     """
-    offset = ticks_diff(ticks_ms(), _start) % _CYCLE_MS
-    elapsed = 0
-    for duration, state in _SIGNAL:
-        elapsed += duration
-        if offset < elapsed:
-            return state
+    position_ms = ticks_diff(now_ms, started_ms) % SIGNAL_LENGTH_MS
+    for duration_ms, pressed in BUTTON_SIGNAL:
+        if position_ms < duration_ms:
+            return pressed
+        position_ms -= duration_ms
     return False
 
 
-# --- Debounce state ---
-last_stable = False
-last_change_ms = ticks_ms()
+# The last state the debouncer accepted, and when it accepted it.
+accepted_pressed = False
+last_change_ms = started_ms
 
-print(f"Debounce demo ({DEBOUNCE_MS} ms quiet period)...\n")
+print(f"Debouncing a pretend button with a {DEBOUNCE_MS} ms quiet period.\n")
 
 while True:
     now = ticks_ms()
-    raw = read_raw_button()
-    elapsed_since_change = ticks_diff(now, last_change_ms)
-    elapsed_total = ticks_diff(now, _start)
+    pressed = read_button(now)
 
-    if raw != last_stable:
-        if elapsed_since_change >= DEBOUNCE_MS:
-            # Enough quiet time has passed, so accept the transition.
-            action = "PRESS" if raw else "RELEASE"
-            print(f"  [{elapsed_total:5d} ms] raw={raw!s:<6s}"
-                  f"-> {action} accepted")
-            last_stable = raw
+    if pressed != accepted_pressed:
+        since_last_change_ms = ticks_diff(now, last_change_ms)
+        elapsed_ms = ticks_diff(now, started_ms)
+
+        if since_last_change_ms >= DEBOUNCE_MS:
+            # Quiet for long enough: this is a real press or release.
+            accepted_pressed = pressed
             last_change_ms = now
+            action = "PRESS" if pressed else "RELEASE"
+            print(f"  [{elapsed_ms:5d} ms] {action} accepted")
         else:
-            # Too soon after the last transition: bounce, ignore.
-            print(f"  [{elapsed_total:5d} ms] raw={raw!s:<6s}"
-                  f"   (ignored, {elapsed_since_change} ms "
-                  f"< {DEBOUNCE_MS} ms)")
+            # Too soon after the last accepted change: a bounce.
+            print(f"  [{elapsed_ms:5d} ms]   bounce ignored, "
+                  f"{since_last_change_ms} ms after the last change")
 
-    # In a real project, the rest of your main loop goes here.
+    # Check every 5 ms, so the console shows each bounce once instead of once
+    # per pass.  A real program spends this time on its other work.
     time.sleep(0.005)

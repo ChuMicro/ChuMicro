@@ -4,9 +4,9 @@ title: "chumicro-kvstore: storage that survives a reboot on CircuitPython and Mi
 
 # chumicro-kvstore
 
-**Tiny mutable key-value store for runtime state that survives reboot.**
+**A dict that keeps its values through a reset or a power cut.**
 
-Counters, timestamps, tokens, and retry budgets that your program writes while it runs and still finds after a power cycle, on CircuitPython, MicroPython, and CPython.  You get a dict you assign to and `commit()` when the change matters; the backend is chosen for the runtime you are on (NVM with CRC framing on CircuitPython, NVS on ESP32 MicroPython, LittleFS elsewhere, in-memory on a host).
+`KVStore` keeps a boot count, the last reading, a calibration value, or a login token on the board, and finds it again after a reset.  It works like a Python dict: change it as often as you like, then call `commit()` to save the change.  It picks the place to save for the board it runs on: `microcontroller.nvm` on CircuitPython, NVS (the ESP32's built-in settings storage) or a file in flash on MicroPython, and plain memory on a laptop.  NVM sits outside the CIRCUITPY drive.  On CircuitPython, saving works even while the drive is mounted on your laptop and your code cannot write files.
 
 ## Install
 
@@ -21,25 +21,32 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_kvstore
 pip install chumicro-kvstore
 ```
 
-No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
 
-```python
-from chumicro_kvstore import KVStore
-from chumicro_timing import ticks_ms  # separate install: chumicro-timing
+Count how many times the board has started.  Press reset and the count goes up by one:
 
-store = KVStore(backend="auto")              # picks the right backend per runtime
+```python
+import time
+
+from chumicro_kvstore import KVStore
+
+store = KVStore(backend="auto")            # picks NVM, NVS, or flash for this board
 store["boot_count"] = store.get("boot_count", 0) + 1
-store["last_seen_ms"] = ticks_ms()
-store.commit()                                # one flush per logical change
+store.commit()                             # saved: survives a reset or power cut
+print(f"Boot count: {store['boot_count']}")
+
+while True:
+    time.sleep(5)
+    print(f"Boot {store['boot_count']}, still running")
 ```
 
 ## Documentation
 
-- [User Guide](guide.md): backends and `auto` selection, commit semantics, sizing and full-store handling, corruption handling, platform notes
-- [API Reference](api.md): `KVStore` methods, `commit_if_changed`, and the `KVStoreFull` / `KVStoreCorrupt` exceptions
-- [Testing Helpers](testing.md): using `FakeKVStore` in your tests
+- [User Guide](guide.md): where each board saves, when to call `commit()` versus `commit_if_changed()`, how much fits, what happens to damaged data, and platform notes
+- [API Reference](api.md): `KVStore` and its methods, and the `KVStoreFull` / `KVStoreCorrupt` exceptions
+- [Testing Helpers](testing.md): `FakeKVStore`, an in-memory store for your tests
 
 ---
 

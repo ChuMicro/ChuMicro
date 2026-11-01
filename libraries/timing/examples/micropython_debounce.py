@@ -1,61 +1,73 @@
-"""Button debounce on MicroPython.
+"""Toggle the onboard LED with a button, debounced by hand, on MicroPython.
 
-Reads a physical button with software debounce using ``ticks_ms``
-and ``ticks_diff``.  Toggles the onboard LED on each accepted press.
-Prints a startup banner and a line on every accepted press so a serial
-console (or a sweep harness) can verify the loop without a probe.
+Each press of the button flips the onboard LED and prints a line.  A button's
+metal contacts bounce for a few milliseconds when they meet, and without
+debouncing one press reads as several.  This loop accepts a change only when
+at least 20 ms have passed since the last change it accepted, measured with
+``ticks_diff``, and ignores the bounces in between.
+
+This file shows how debouncing works.  ``chumicro_buttons`` does it for you,
+and also catches a tap that is over before your loop gets round to reading
+the pin.
+
+Wiring: a momentary button from GP14 to GND on a Pi Pico W.  The pin's
+internal pull-up is switched on below, so the button is the only part.  On an
+ESP32 board, set ``BUTTON_PIN`` to 0 and press the BOOT button, which needs no
+wiring, and set ``LED_PIN`` to the onboard LED's GPIO number: 15 on a Lolin S2
+Mini, 2 on most ESP32 dev boards.
 
 Example output::
 
-    Button debounce: press button to flip the LED.
+    Press the button to flip the LED.
 
-      [  815 ms] press → toggle
-      [ 1407 ms] press → toggle
+      press, LED on
+      press, LED off
+      press, LED on
       ...
 
 Setup:
-1. Install ``chumicro_timing``
-   (``mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing``
-   or copy the package to the board).
-2. Wire a momentary button between **GPIO0** and **GND**.
-   The internal pull-up is enabled, so no external resistor is needed.
-   Change ``Pin(0)`` to match your wiring.
-3. Save this file as ``main.py`` on the board.
+1. Install the library:
+   ``mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing``.
+2. Copy this file to the board as ``main.py``.
 
 Runs on MicroPython.
 """
 
-#: MicroPython-only.  Uses ``machine.Pin`` (MP API).
-#: Pair: ``circuitpython_debounce.py`` for the CP equivalent (``board`` + ``digitalio``).
+# ChuMicro's example tools read this line: this file needs MicroPython.
 __chumicro_runtimes__ = ("micropython",)
 
 from chumicro_timing import ticks_diff, ticks_ms
 from machine import Pin
 
+BUTTON_PIN = 14     # GP14 on a Pi Pico W.  0 is the BOOT button on most ESP32 boards.
+LED_PIN = "LED"     # Pi Pico W.  15 on a Lolin S2 Mini, 2 on most ESP32 dev boards.
+
 DEBOUNCE_MS = 20
 
-# --- Button setup (active-low with internal pull-up) ---
-button = Pin(0, Pin.IN, Pin.PULL_UP)
+# The button reads 1 while released and 0 while pressed, because the pull-up
+# holds the pin high until the button connects it to GND.
+button = Pin(BUTTON_PIN, Pin.IN, Pin.PULL_UP)
 
-# --- LED setup (pin 2 is the built-in LED on most ESP32 boards) ---
-led = Pin(2, Pin.OUT)
+led = Pin(LED_PIN, Pin.OUT)
 
-# --- Debounce state ---
-last_stable = button.value()
+# The last level the debouncer accepted, and when it accepted it.
+accepted_level = button.value()
 last_change_ms = ticks_ms()
-led_state = False
 
-print("Button debounce: press button to flip the LED.\n")
+print("Press the button to flip the LED.\n")
 
 while True:
     now = ticks_ms()
-    raw = button.value()  # 0 when pressed (active-low)
+    level = button.value()
 
-    if raw != last_stable and ticks_diff(now, last_change_ms) >= DEBOUNCE_MS:
-        last_stable = raw
+    # A change counts only when it comes DEBOUNCE_MS or more after the last
+    # accepted one.  Anything sooner is the contacts bouncing.
+    if level != accepted_level and ticks_diff(now, last_change_ms) >= DEBOUNCE_MS:
+        accepted_level = level
         last_change_ms = now
 
-        if not raw:  # button just pressed
-            led_state = not led_state
-            led.value(led_state)
-            print(f"  [{now:>5} ms] press → toggle")
+        if not level:   # 0 means pressed
+            led.value(not led.value())
+            print("  press, LED on" if led.value() else "  press, LED off")
+
+    # Nothing above waits, so code you add here runs on every pass.

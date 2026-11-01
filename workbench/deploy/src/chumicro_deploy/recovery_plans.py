@@ -28,8 +28,9 @@ PLANS: dict[DeployFailureKind, RecoveryPlan] = {
         headline="The board's REPL did not respond.",
         fix_steps=(
             "Tap the board's RESET button and wait a second.",
-            "If CircuitPython dropped into safe mode, press any key "
-            "over a serial terminal to exit safe mode, then retry.",
+            "If CircuitPython dropped into safe mode, tap RESET to "
+            "leave it (the board prints 'Press reset to exit safe "
+            "mode'), then retry.",
             "If the board is stuck running user code that ignores "
             "Ctrl-C, hold RESET for 2 seconds or unplug + replug "
             "the USB cable.",

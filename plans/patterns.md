@@ -62,7 +62,13 @@ class MyService:
             now_ms: Current time in milliseconds.
         """
         # ... do work ...
+
+    def next_deadline(self, now_ms: int) -> int | None:
+        """Return the tick by which handle() must run next, or None for never."""
+        return self._next_ms
 ```
+
+**Every service tells `Runner.wait()` when it next needs a turn.**  `wait()` sleeps until the earliest `next_deadline` any entry reports, or until a registered socket (`io_socket` + `io_interest`) has an event.  A service with neither is invisible to it: alone in a runner, `wait()` returns at once and the loop spins; beside slower jobs, it gets a turn only when they wake the loop.  Report the next due tick while waiting on a timer, a short poll interval while polling something with no socket (a join in flight, a UDP reply), `now_ms` when work is already queued (a message read on this tick, a DNS step still to run), and `None` only when nothing will ever be due.  A pin-edge input such as a button has no deadline to name, so register it with `runner.add(button, period_ms=20)`.
 
 Wire into Runner:
 
@@ -77,10 +83,8 @@ runner.add(service)  # Runner calls service.check(), then service.handle()
 runner.add_periodic(handler, period_ms=100)
 ```
 
-Existing example: `Heartbeat` does not implement `check`/`handle`
-(it predates the Runner), but it demonstrates the constructor
-injection and `ticks` protocol patterns that Runner-compatible
-services should follow.
+Existing examples: `WifiService.next_deadline` (backoff tick, join poll,
+link check) and `NTPClient.next_deadline` (reply poll while busy).
 
 Related: Decision 0014, `libraries/runner/src/chumicro_runner/core.py`.
 
@@ -1342,7 +1346,7 @@ Two things this surfaces that a single number hides.  A module-level `import` is
 
 The per-construct view is also a design signal, not just an accounting one.  When the runner's deadline compare was measured this way, the biggest line item was an import the library should not have had at all (see *Injected clocks* below); removing it left the package 10 B smaller than before the feature, and the ceiling never moved.  Reach for this before writing the justification, because sometimes the measurement retires the raise.
 
-Docstrings are free here.  The gate strips them with the real deploy `strip_source` (Decision 0090) before compiling, so explaining a workaround in a docstring costs no flash.
+Docstrings are free in the `mpy` dimension.  The gate strips them with the real deploy `strip_source` (Decision 0090) before compiling.  The `stripped` dimension still pays one newline byte per docstring line, because `strip_source` blanks lines instead of deleting them so board tracebacks keep their line numbers.  A docstring-only rewrite that adds lines can trip `stripped` while `mpy` holds still; the AST-equality check against HEAD is the measurement that justifies that raise.
 
 ## Injected clocks: publish the deadline, never judge it
 
@@ -1526,3 +1530,64 @@ memory of another document. `python3 run.py flash-firmware` survived a draft of
 the start-here page; the workspace CLI spells it `install-firmware`, and
 `chumicro-deploy` is the tool that spells it `flash-firmware`. Reading
 `build_parser()` takes one command and settles it.
+
+## Example and demo loops: do the work, wait, do it again
+
+An example or demo never exits
+([Decision 0130](decisions/0130-examples-and-demos-never-exit.md)). After the
+setup, its module-level `while True:` repeats the work the file teaches on a
+timer, and a failure is printed and retried on the next pass.
+
+Work that finishes inside one call takes a plain loop with `time.sleep`:
+
+```python
+import time
+
+from chumicro_msgpack import packb, unpackb
+
+settings = {"name": "lamp", "brightness": 0}
+
+while True:
+    settings["brightness"] = (settings["brightness"] + 25) % 125
+    data = packb(settings)
+    print(f"packed {len(data)} bytes, restored {unpackb(data)}")
+    time.sleep(2)
+```
+
+Network work runs as a generator on the `Runner`. The generator owns the
+repeat and the retry, so the module-level loop stays the three lines
+[Decision 0122](decisions/0122-demos-and-examples-write-the-loop-out.md) fixes:
+
+```python
+from chumicro_requests import HttpError
+from chumicro_requests.generators import get
+from chumicro_runner.generators import sleep_until
+from chumicro_timing import ticks_add, ticks_ms
+
+FETCH_EVERY_MS = 30_000
+
+
+def fetch_forever(factory, url):
+    while True:
+        try:
+            response = yield from get(factory, url)
+            print(f"FETCHED status={response.status_code} bytes={len(response.body)}")
+        except HttpError as error:
+            print(f"FETCH_FAILED error={type(error).__name__}")
+        yield from sleep_until(ticks_add(ticks_ms(), FETCH_EVERY_MS))
+
+
+runner.add_generator(fetch_forever(factory, url))
+
+while True:
+    now_ms = runner.tick()
+    runner.wait(now_ms)
+```
+
+- Catch the library's own base error (`HttpError` here), not `Exception`, so a
+  typo in the example still crashes loudly while someone is writing it.
+- A demo prints `DEMO_COMPLETE` once, after its first successful pass. The
+  driver waits for that one line, and printing it every pass adds noise.
+- `CHU038` checks that the module-level loop exists, never breaks, and that
+  nothing calls `SystemExit` or `sys.exit()`. Whether the loop repeats real
+  work, rather than a bare heartbeat, is for review to judge.

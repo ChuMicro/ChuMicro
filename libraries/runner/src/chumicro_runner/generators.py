@@ -1,6 +1,7 @@
-"""Suspension helpers for runner-driven generators.
+"""``sleep_until``: pause a generator task until a given tick.
 
-``sleep_until`` suspends a generator registered via ``Runner.add_generator`` until an absolute tick arrives.
+Import it from ``chumicro_runner.generators``.  ``import chumicro_runner`` leaves this module
+unloaded, so a program with no generator tasks spends no RAM on it.
 """
 
 
@@ -13,17 +14,17 @@ class _DeadlineWait:
 
 
 def sleep_until(until_ms: int) -> object:
-    """Suspend the generator until ``ticks_ms() >= until_ms``.
+    """Pause the calling generator task until the clock reaches the tick ``until_ms``.
 
-    Does no time math of its own: it publishes the deadline and the driver decides
-    when to resume, comparing with the clock it was built on.  That keeps a sleep
-    measured in the units of the clock passed to ``Runner(ticks=...)`` rather than
-    a second one this module reached for.
+    Call it as ``yield from sleep_until(until_ms)`` inside a generator registered with
+    ``Runner.add_generator``.  The runner runs its other jobs meanwhile, sleeps in ``wait``
+    until ``until_ms`` if nothing else is due, and resumes the generator on the first tick
+    at or after it.  To pause for a duration, pass ``ticks_add(ticks_ms(), duration_ms)``.
 
     Args:
-        until_ms: Absolute tick value at which to resume, in the driver's units.
+        until_ms: The tick to resume at, on the clock the ``Runner`` was built with.
 
     Yields:
-        A private deadline-wait carrying *until_ms*.
+        A wait object that carries ``until_ms`` for the runner to schedule against.
     """
     yield _DeadlineWait(until_ms)

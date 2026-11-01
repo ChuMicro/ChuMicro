@@ -115,14 +115,14 @@ class TestCPythonTCPConnector:
         assert connector.check(0) is False
         connector.socket.close()
 
-    def test_next_deadline_is_none(self, listener) -> None:
-        # Connector itself does not time out; consumers wrap with
-        # an outer deadline.
+    def test_next_deadline_is_due_until_dns_then_none(self, listener) -> None:
+        # Due now before the DNS step runs (no socket can wake the loop yet);
+        # None once connected, since the connector never times out on its own.
         host, port = listener
         connector = make_connector(host, port)
-        assert connector.next_deadline(0) is None
+        assert connector.next_deadline(7) == 7
         _drive(connector)
-        assert connector.next_deadline(0) is None
+        assert connector.next_deadline(7) is None
         connector.socket.close()
 
     def test_dns_failure_lands_in_failed(self) -> None:

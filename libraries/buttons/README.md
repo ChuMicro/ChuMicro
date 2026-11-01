@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **Buttons that catch the press even when your loop is busy.**
 
-Wire a button to a pin, read `button.just_pressed` in the loop you already wrote, and the press lands whether your program was idle or halfway through a slow network call.  Debouncing, long presses, auto-repeat, and double-click counting come with it, and the same code runs on CircuitPython, MicroPython, and your laptop.
+`chumicro-buttons` reads a button wired to a pin and reports each press through `button.just_pressed`, in the `while True:` loop you already have.  A press lands whether the program was idle or halfway through a slow network call.  Debouncing, long presses, auto-repeat, and double-click counting come with it.  The same code runs on CircuitPython, MicroPython, and CPython.
 
 <br clear="left">
 
@@ -24,11 +24,13 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_buttons
 pip install chumicro-buttons
 ```
 
-For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and details on PyPI naming, see the [ChuMicro install guide](https://chumicro.com/ChuMicro/guides/install/).
+The `Runner` loop in the quick example comes from `chumicro-runner`.  Install it the same way.
+
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
 
-Wire a momentary button between a GPIO pin and GND.  The internal pull-up is switched on for you, so no extra parts are needed.
+Toggle the onboard LED with a button on a CircuitPython board.  On a Pi Pico W, wire a momentary button from GP14 to GND.  On an ESP32-S2 board, use IO14 and `board.IO14`.  The library switches on the pin's internal pull-up, so the button is the only part:
 
 ```python
 import board
@@ -36,22 +38,26 @@ import digitalio
 from chumicro_buttons import Button
 from chumicro_timing import ticks, ticks_ms
 
-button = Button(pin=board.GP14, ticks=ticks)
-
 led = digitalio.DigitalInOut(board.LED)
 led.direction = digitalio.Direction.OUTPUT
 
-while True:
-    now = ticks_ms()
-    button.check(now)
+button = Button(pin=board.GP14, ticks=ticks)    # ticks: the clock it times presses with
 
-    if button.just_pressed:              # true only on the tick the press landed
+while True:
+    now_ms = ticks_ms()
+    button.check(now_ms)                # collect what the button did, without waiting
+
+    if button.just_pressed:             # True on exactly one pass per press
         led.value = not led.value
 ```
 
-The loop never pauses, so the rest of your program keeps running between presses.  `just_pressed` is true for exactly one pass, which means you can read it as many times as you like without it firing twice.
+The loop never pauses, so code you add to it keeps running between presses.  `just_pressed` is `True` on exactly one pass per press.  Reading it twice in that pass gives the same answer.  Nothing needs to clear it.
 
-In a program with more going on, hand the loop to [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) and let callbacks do the reading:
+On MicroPython, pass a `machine.Pin`: `Button(pin=Pin(14), ticks=ticks)`.
+
+In `adafruit_debouncer` terms, `check()` is `update()` and `just_pressed` is `Button.pressed`.  Here `pressed` is the held-down level, `True` for as long as the button is down.  Arduino's Debounce sketch keeps `lastDebounceTime` by hand.  Here `check()` does that bookkeeping.
+
+In a program with more going on, hand the loop to [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) and let a callback react to the press:
 
 ```python
 from chumicro_runner import Runner
@@ -59,28 +65,41 @@ from chumicro_runner import Runner
 button.on_press = lambda: print("pressed")
 
 runner = Runner()
-runner.add(button)
+runner.add(button, period_ms=20)        # look at the button every 20 ms
 
 while True:
-    now = runner.tick()
-    runner.wait(now)
+    now_ms = runner.tick()
+    runner.wait(now_ms)
 ```
 
-`tick()` gives every registered service one small step and dispatches your callbacks; `wait()` parks the CPU until the next event, waking exactly when a long press, a repeat, or a click window is due.
+`runner.tick()` checks the button and calls `on_press` on the pass a press lands.  `runner.wait(now_ms)` sleeps until the next job is due.  A press cannot wake the runner, so `period_ms=20` has it look at the button every 20 ms.  Without `period_ms`, a press waits for whatever wakes the runner next, which can be seconds in a program with a slow job.
 
 ## Presses land even when the loop is slow
 
-A tap is short.  If your loop stalls on a socket read or a flash write, a naive pin read looks at the wrong moment and the press is gone.  This library captures the edge when it happens instead of when you get around to asking.
+A tap is short.  When the loop is busy with a network request or a flash write, a plain pin read comes too late and misses the press.  `chumicro-buttons` records the press when it happens and reports it on the next pass.
 
-On CircuitPython that capture is the firmware's own `keypad` scan, which runs in the background and stamps each edge with the time it happened.  On MicroPython the library installs a small interrupt handler and does the same job.  Either way the timing you read is the press the person actually performed:
+On CircuitPython the firmware's own `keypad` module records presses in the background and stamps each one with the time it happened.  On MicroPython the library installs a small pin interrupt that does the same job.  Either way, durations measure the press the person actually made:
 
 ```python
-button.check(now)
+button.check(now_ms)
 if button.just_pressed:
-    print(button.held_ms)      # measured from the real edge, not from this tick
+    print(button.held_ms)      # counted from the real press, not from this pass
 ```
 
-You never set any of this up.  There is no capture mode to pick and no interrupt to write.
+The library picks the recording method for the runtime, so the code stays the same on both.
+
+## Debouncing
+
+A button is two pieces of metal meeting.  They bounce apart a few times before they settle, so one press can read as several.  *Debouncing* ignores that chatter.  `chumicro-buttons` debounces every button.
+
+`settle_ms` is the only setting.  A change counts once the pin has held its new level that long.  It defaults to 10, which suits an ordinary tactile button:
+
+```python
+button = Button(pin=board.GP14, ticks=ticks, settle_ms=10)   # the default
+button = Button(pin=board.GP14, ticks=ticks, settle_ms=0)    # the signal is already clean
+```
+
+Set it to `0` when debouncing hardware sits behind the button.  That drops the 10 ms wait before a press is reported.  The [guide](https://chumicro.com/ChuMicro/buttons/stable/guide/) shows that wiring with component values, and when it is worth the parts.
 
 ## What's included
 
@@ -97,11 +116,14 @@ You never set any of this up.  There is no capture mode to pick and no interrupt
 | Symbol | Description |
 |---|---|
 | `button.pressed` | `True` while the key is down, after debouncing |
-| `button.just_pressed` | `True` only on the tick the press landed |
-| `button.just_released` | `True` only on the tick the release landed |
-| `button.held_ms` | Milliseconds the key has been down, measured from the real edge.  After a release it holds how long that press lasted |
-| `button.click_count` | Presses in the click series that just closed |
-| `button.overflowed` | `True` when a signal was too noisy to capture in full |
+| `button.just_pressed` | `True` only on the pass the press landed |
+| `button.just_released` | `True` only on the pass the release landed |
+| `button.just_long_pressed` | `True` only on the pass a press reached `long_press_ms` |
+| `button.just_repeated` | `True` on each pass auto-repeat fires while the key is held.  Set `repeat_ms` to turn it on |
+| `button.just_clicked` | `True` only on the pass a run of quick presses ended.  Set `click_ms` to turn it on |
+| `button.held_ms` | Milliseconds the key has been down, counted from the real press.  After a release it holds how long that press lasted |
+| `button.click_count` | How many quick presses were in the run that just ended: 2 for a double click |
+| `button.overflowed` | `True` when a signal was too noisy to record in full |
 
 ### Callbacks, dispatched by `handle(now_ms)`
 
@@ -111,50 +133,27 @@ You never set any of this up.  There is no capture mode to pick and no interrupt
 | `button.on_release` | Called with no arguments when the key comes up |
 | `button.on_long_press` | Called once per press, after `long_press_ms` |
 | `button.on_repeat` | Called on each auto-repeat while the key is held |
-| `button.on_click` | Called with the press count when a click series closes |
+| `button.on_click` | Called with `click_count` when a run of quick presses ends |
 
 ### Testing
 
 | Symbol | Description |
 |---|---|
-| `chumicro_buttons.testing.FakeButtonSource` | Hand-driven edge source, so button logic is testable with no board |
-
-## Debouncing
-
-A switch is two pieces of metal meeting, and they bounce apart a few times on the way.  Left alone, one press reads as several.
-
-`settle_ms` is the only setting.  It defaults to 10, which suits an ordinary tactile switch:
-
-```python
-button = Button(pin=board.GP14, ticks=ticks, settle_ms=10)   # the default
-button = Button(pin=board.GP14, ticks=ticks, settle_ms=0)    # the signal is already clean
-```
-
-Set it to `0` when the button has debouncing hardware behind it, which buys back the settle delay.  The [guide](https://chumicro.com/ChuMicro/buttons/stable/guide/) has wiring diagrams with real component values for building that, and an honest account of when it is worth the parts.  For most projects the default is enough.
+| `chumicro_buttons.testing.FakeButtonSource` | A stand-in for the pin that a test presses and releases by hand, so button logic runs with no board |
 
 ## Where this fits
 
-Imports nothing.  It compares durations using the tick arithmetic you hand it, which is what `ticks=` is for, and [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) supplies the usual one.  Bring your own and this library never loads it.  Used directly in user apps; nothing downstream depends on it.
+Depends on [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing), which installs with it.  Your program hands the `ticks` module to each button as `ticks=`.  The library imports no clock itself, so a program can pass a different clock there.
 
-Pairs with [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner), which deals out turns to every service in your program:
-
-```python
-runner.add(button)      # check() and handle() are the runner's contract
-```
-
-A rotary encoder's push switch is a `Button` like any other, so an encoder with a click uses this library alongside [`chumicro-knobs`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/knobs).
+Runs as a service on a [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) loop, as the quick example shows.  A rotary encoder's push switch is a `Button` like any other, so an encoder with a click uses this library alongside [`chumicro-knobs`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/knobs).
 
 ## Platform support
 
-Works on CPython, MicroPython, and CircuitPython.
-
-CircuitPython reads keys through the firmware's own background scan, which costs nothing in your board's storage because it is compiled into the firmware.  MicroPython has no equivalent, so the library installs and owns a capture interrupt there.  Either way the API is the same and you set none of it up.
-
-`pin=` needs real hardware, so on a laptop it raises and points you at the fake below.
+Works on CPython, MicroPython, and CircuitPython.  CircuitPython's `keypad` module is built into the firmware, so it takes no space on the board's drive.  On a laptop, `pin=` raises an error that points to `FakeButtonSource`.
 
 ## Testing your code
 
-The `chumicro_buttons.testing` module provides `FakeButtonSource`, a hand-driven stand-in for the hardware, so press logic is an ordinary unit test with no board and no waiting:
+`FakeButtonSource` from `chumicro_buttons.testing` stands in for the hardware, so press logic becomes an ordinary unit test with no board and no waiting:
 
 ```python
 from chumicro_buttons import Button
@@ -168,17 +167,17 @@ source.press(at_ms=100)
 button.check(120)
 
 assert button.just_pressed
-assert button.held_ms == 20      # measured from the edge, not from the tick
+assert button.held_ms == 20      # counted from the press, not from the check
 ```
 
-Each queued edge carries its own `at_ms`, separate from the tick you pass to `check()`.  That gap is what lets a test cover slow-loop behavior on the host.
+Each queued press or release carries its own `at_ms`, separate from the time passed to `check()`.  That gap lets a test act out a slow loop on a laptop.
 
 ## Examples
 
 | Example | What it shows |
 |---|---|
-| [`circuitpython_button_toggle.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/buttons/examples/circuitpython_button_toggle.py) | A button flips the onboard LED on CircuitPython |
-| [`micropython_button_toggle.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/buttons/examples/micropython_button_toggle.py) | The same button on MicroPython |
+| [`circuitpython_button_toggle.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/buttons/examples/circuitpython_button_toggle.py) | The quick example as a full program: a press flips the onboard LED, and a half-second hold turns it off |
+| [`micropython_button_toggle.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/buttons/examples/micropython_button_toggle.py) | The same program on MicroPython |
 
 ## Contributing
 

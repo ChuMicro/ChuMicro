@@ -6,7 +6,9 @@ streams a few text messages then closes, built on
 exercises both ends of the library.  Deploys the board's ``app.py`` via
 :func:`chumicro_workspace.deploy_api.deploy_project` with the server URL
 baked into the runtime_config payload, then waits for the board's
-marker sequence to confirm it received the whole stream.
+marker sequence to confirm it received the whole stream.  The board
+connects again every five seconds after that, so the server answers
+every connection the same way.
 
 Pinned ``deploy_mode="flash"`` so the demo always runs the
 production-shaped path regardless of any per-device override in
@@ -29,6 +31,7 @@ from chumicro_workspace.deploy_api import (
     DeployApiError,
     DeviceNotFoundError,
     deploy_project,
+    echo_board_line,
 )
 from chumicro_workspace.markers import MarkerTimeoutError
 
@@ -92,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--completion-timeout-s", type=float, default=30.0,
-        help="seconds to wait for STREAM_CLOSED after WS_CONNECTING",
+        help="seconds to wait for the first STREAM_CLOSED after WIFI_OK",
     )
     args = parser.parse_args(argv)
 
@@ -119,6 +122,7 @@ def main(argv: list[str] | None = None) -> int:
                 deploy_mode="flash",
                 extra_runtime_config={"websockets.stream.url": stream_url},
                 workspace_root=_REPO_ROOT,
+                on_line=echo_board_line,
             )
         except DeviceNotFoundError as device_error:
             print(f"driver: {device_error}", file=sys.stderr)
@@ -136,10 +140,10 @@ def main(argv: list[str] | None = None) -> int:
         wifi_marker = session.wait_for("WIFI_OK", timeout_s=args.wifi_timeout_s)
         print(f"driver: board WIFI_OK ip={wifi_marker.values.get('ip')}")
 
-        # Wait on the terminal STREAM_CLOSED marker (it carries the count,
-        # which proves the messages arrived) rather than the intermediate
-        # WS_OPEN / MESSAGE markers: a single corrupted serial line on a
-        # non-terminal marker shouldn't fail an otherwise-clean run.
+        # Wait on the first STREAM_CLOSED marker (it carries the count,
+        # which proves the messages arrived) rather than the per-message
+        # MESSAGE markers: a single corrupted serial line on one of those
+        # shouldn't fail an otherwise-clean run.
         closed_marker = session.wait_for(
             "STREAM_CLOSED", timeout_s=args.completion_timeout_s,
         )
@@ -153,10 +157,8 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 4
 
-        # The board lingers a few seconds after STREAM_CLOSED before it
-        # prints DEMO_COMPLETE, so this wait covers the linger too.
         session.wait_for("DEMO_COMPLETE", timeout_s=15.0)
-        print("driver: demo completed cleanly.")
+        print("driver: demo completed cleanly; the board keeps reconnecting.")
         return 0
     except MarkerTimeoutError as marker_error:
         print(f"driver: {marker_error}", file=sys.stderr)

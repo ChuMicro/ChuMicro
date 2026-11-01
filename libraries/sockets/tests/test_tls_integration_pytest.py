@@ -205,6 +205,19 @@ def tls_echo_server(
 # ---------------------------------------------------------------------------
 
 
+class TestCustomCaContextTrust:
+    def test_trusts_only_the_supplied_ca(
+        self, self_signed_cert: tuple[Path, Path],
+    ) -> None:
+        """The context's store holds exactly the one supplied CA and keeps
+        hostname checking and required verification on."""
+        cert_path, _ = self_signed_cert
+        context = ssl_context_with_ca(cert_path.read_bytes())
+        assert context.cert_store_stats()["x509"] == 1
+        assert context.check_hostname is True
+        assert context.verify_mode == ssl.CERT_REQUIRED
+
+
 class TestTLSAgainstSelfSignedServer:
     def test_handshake_with_custom_ca(
         self,

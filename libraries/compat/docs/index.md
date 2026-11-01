@@ -1,12 +1,12 @@
 ---
-title: "chumicro-compat: standard-library polyfills for CircuitPython and MicroPython"
+title: "chumicro-compat: functools.partial for CircuitPython and MicroPython"
 ---
 
 # chumicro-compat
 
-**Cross-runtime compatibility polyfills for CircuitPython, MicroPython, and CPython.**
+**`functools.partial` for CircuitPython and MicroPython, which leave it out.**
 
-Lightweight reimplementations of the standard-library pieces CircuitPython and MicroPython leave out. Import the polyfill submodule (`from chumicro_compat.functools import partial`) and the same code runs on all three runtimes: on CPython the real C implementation is re-exported, so the import costs nothing there.
+`partial(set_led, 13)` returns a new function with some of its arguments already filled in.  It hands a callback the pin, sensor, or name it should work on, without a global variable or a wrapper function for each one.  With `from chumicro_compat.functools import partial`, the same code runs on CircuitPython, MicroPython, and CPython.
 
 ## Install
 
@@ -21,26 +21,43 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_compat
 pip install chumicro-compat
 ```
 
-No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
 
+Make one function per LED, then fade both pretend LEDs up and down forever:
+
 ```python
+import time
+
 from chumicro_compat.functools import partial
 
-def set_led(pin: int, brightness: int) -> None:
-    """Set an LED pin to a brightness level."""
-    print(f"pin {pin} → {brightness}%")
 
-# Freeze the pin, vary the brightness later.
-set_status_led = partial(set_led, 13)
-set_status_led(50)   # pin 13 → 50%
-set_status_led(100)  # pin 13 → 100%
+def set_led(pin, brightness, label="LED"):
+    print(f"{label} on pin {pin}: {brightness}%")
+
+
+# set_status_led(50) now runs set_led(13, 50, label="status LED").
+set_status_led = partial(set_led, 13, label="status LED")
+set_power_led = partial(set_led, 2, label="power LED")
+leds = [set_status_led, set_power_led]
+
+brightness = 0
+step = 25
+while True:
+    for set_brightness in leds:
+        set_brightness(brightness)
+
+    brightness += step
+    if brightness == 0 or brightness == 100:
+        step = -step
+
+    time.sleep(0.5)
 ```
 
 ## Documentation
 
-- [User Guide](guide.md): `functools.partial` across runtimes, platform notes, examples
+- [User Guide](guide.md): filling in positional and keyword arguments, callbacks, the `func` / `args` / `keywords` attributes, and platform notes
 - [API Reference](api.md): `partial` and its `func` / `args` / `keywords` attributes
 
 ---

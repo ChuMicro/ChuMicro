@@ -1,4 +1,14 @@
-"""Non-blocking HTTP/1.1 client for CircuitPython, MicroPython, and CPython."""
+"""``chumicro_requests`` sends HTTP and HTTPS requests on CircuitPython, MicroPython, and CPython,
+one small step per pass of the main loop.
+
+``HttpClient`` sends the requests.  ``client.get(url)`` returns a
+``RequestHandle`` at once.  The main loop then calls ``client.check(now_ms)``
+and ``client.handle(now_ms)``, which move the request forward until
+``handle.done`` turns ``True``.  This package also holds the ``HttpError``
+family, ``CaseInsensitiveDict``, and the wire helpers for code that frames
+its own HTTP.  ``HttpClient``, ``RequestHandle``, ``Response``, and
+``WhenOversized`` load from ``chumicro_requests.client`` on first use.
+"""
 
 import gc
 

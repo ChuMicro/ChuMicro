@@ -1,29 +1,35 @@
-"""A button that flips the onboard LED, on CircuitPython.
+"""Toggle the onboard LED with a button, on CircuitPython.
 
-Reads a physical button and toggles the LED on every press.  A long press
-turns the LED off and prints how long it was held, so you can feel the
-difference between a tap and a hold without any extra wiring.
+Each press flips the onboard LED.  Hold the button for half a second and the
+LED turns off, whatever the press did, so you can feel the difference
+between a tap and a hold.  The console prints each one.  The library
+debounces the button for you, and a tap shorter than one pass of the loop
+still counts.
 
-Setup:
-1. Install ``chumicro_buttons`` (``circup install chumicro_buttons``).
-2. Wire a momentary button between the chosen GPIO and **GND**.  The internal
-   pull-up is switched on for you, so no extra parts are needed.  Many boards
-   (Feather, QT Py, Metro) expose a built-in button as ``board.BUTTON``.
-3. Save this file as ``code.py`` on the board.
+Wiring: a momentary button from GP14 to GND on a Pi Pico W.  The pin's
+internal pull-up is switched on for you, so the button is the only part.  On
+an ESP32-S2 board, wire it to IO14 and set ``BUTTON_PIN`` to ``board.IO14``,
+or use a built-in button with ``board.BUTTON`` where the board has one, such
+as the Lolin S2 Mini.
 
 Example output::
 
     Press to toggle the LED.  Hold to turn it off.
 
-      [  815 ms] press -> LED on
-      [ 1407 ms] press -> LED off
-      [ 2260 ms] held 500 ms -> LED off
+      press, LED on
+      press, LED off
+      press, LED on
+      held 500 ms, LED off
+
+Setup:
+1. Install the library: ``circup install chumicro_buttons``.  It brings
+   ``chumicro_timing`` along.
+2. Save this file as ``code.py`` on the CIRCUITPY drive.
 
 Runs on CircuitPython.
 """
 
-#: CircuitPython-only.  Uses ``board`` + ``digitalio`` (CP API).
-#: Pair: ``micropython_button_toggle.py`` for the MP equivalent.
+# ChuMicro's example tools read this line: this file needs CircuitPython.
 __chumicro_runtimes__ = ("circuitpython",)
 
 import board
@@ -31,27 +37,31 @@ import digitalio
 from chumicro_buttons import Button
 from chumicro_timing import ticks, ticks_ms
 
-# Set BUTTON_PIN to the pin attribute on the `board` module
-# (e.g. "D5", "GP14", "BUTTON") for your wiring.
-BUTTON_PIN = "GP14"
-
-button = Button(pin=getattr(board, BUTTON_PIN), ticks=ticks, long_press_ms=500)
+BUTTON_PIN = board.GP14     # board.IO14 on an ESP32-S2, or board.BUTTON for a built-in one
 
 led = digitalio.DigitalInOut(board.LED)
 led.direction = digitalio.Direction.OUTPUT
+
+# ticks is the clock the button times presses with.  A hold of long_press_ms
+# or more counts as a long press.
+button = Button(pin=BUTTON_PIN, ticks=ticks, long_press_ms=500)
 
 print("Press to toggle the LED.  Hold to turn it off.\n")
 
 while True:
     now = ticks_ms()
+
+    # Collect whatever the button did since the last pass.  Never waits.
     button.check(now)
 
+    # True on exactly one pass per press.
     if button.just_pressed:
         led.value = not led.value
-        print(f"  [{now:5d} ms] press -> LED {'on' if led.value else 'off'}")
+        print("  press, LED on" if led.value else "  press, LED off")
 
+    # True on exactly one pass, once a press has lasted long_press_ms.
     if button.just_long_pressed:
         led.value = False
-        print(f"  [{now:5d} ms] held {button.held_ms} ms -> LED off")
+        print(f"  held {button.held_ms} ms, LED off")
 
-    # Everything else your device does goes here, one small step at a time.
+    # Nothing above waits, so code you add here runs on every pass.

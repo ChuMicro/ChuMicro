@@ -1,58 +1,62 @@
-"""TLS example: connect with a custom CA bundle.
+"""Fetch a page over TLS, trusting only the certificate authority you choose.
 
-Demonstrates :func:`ssl_context_with_ca`, the "default everything
-except the trust anchor" recipe for TLS clients.  Useful when
-talking to a self-hosted HTTPS / MQTT / etc. server with its own
-CA, when you don't want to add the CA to the device's system trust
-store.
+The board joins your wifi, opens an encrypted connection to
+letsencrypt.org on port 443, sends a short HTTP request, and prints the
+first line of the reply.  Then it closes the connection, waits 30
+seconds, and does it all again for as long as it has power.  When a
+round trip fails, the board prints what went wrong and tries again on
+the next pass.
 
-This example uses ``letsencrypt.org:443`` + an embedded ISRG Root
-X1 PEM as a stable public test target.  ``ssl_context_with_ca``
-builds an SSL context whose only trust anchor is what you pass.
-The device's system trust store is *not* consulted.  REPLACE
-``CA_PEM`` with your homelab CA bytes and the host string with
-your own server when adapting.
+The connection trusts exactly one certificate authority (CA): the ISRG
+Root X1 certificate pasted into ``CA_PEM`` below, which sits at the top
+of letsencrypt.org's certificate chain.  The board's built-in list of
+trusted CAs plays no part.  This is the recipe for a server whose
+certificate your own CA signed, such as an HTTPS or MQTT server on your
+home network.  ``ssl_context_with_ca(CA_PEM)`` builds the trust setting
+once, and every pass hands it to
+``connector(..., tls=True, context=context)``.
 
-ISRG Root X1 valid through 2035-06-04.  If the example ever fails
-after a Let's Encrypt CA rotation, re-pin via::
+Before you run it:
 
-    openssl s_client -connect letsencrypt.org:443 -showcerts
+1. Set ``WIFI_SSID`` and ``WIFI_PASSWORD`` below.  If you deploy with
+   chumicro-workspace, ``wifi.ssid`` and ``wifi.password`` in your
+   ``secrets.toml`` are used instead.
+2. Put ``chumicro_sockets`` and this folder's ``helpers.py`` on the
+   board, and save this file as ``code.py``.  From a ChuMicro
+   workspace, one command does all of that::
 
-Edit ``WIFI_SSID`` / ``WIFI_PASSWORD`` below for raw deploys, or
-set ``wifi.ssid`` / ``wifi.password`` in your ``secrets.toml`` and
-deploy via::
+       chumicro-workspace deploy-example sockets tls_with_custom_ca --device <id>
 
-    chumicro-workspace deploy-example sockets tls_with_custom_ca --device <id>
-
-Example output::
+What you will see::
 
     WIFI_OK ip=10.0.0.42
-    sent: GET / HTTP/1.0
-    received 256 bytes (head): b'HTTP/1.1 200 OK\\r\\nServer: ...'
-    closed cleanly
+    connecting to letsencrypt.org:443
+    reply: HTTP/1.1 200 OK
+    next round trip in 30 s
+    connecting to letsencrypt.org:443
+    reply: HTTP/1.1 200 OK
+    next round trip in 30 s
 
-Substrate quirks observed on real boards:
+A pass that fails prints ``connect failed:`` or ``send or receive
+failed:`` followed by the error, and the next pass starts on schedule.
 
-* **Pi Pico W on MicroPython (rp2 mbedTLS)** rejects self-signed
-  certs with ``ValueError('invalid cert')`` regardless of SAN
-  shape.  Use a properly-CA-signed cert (or skip TLS to that
-  specific server-side combination).
-* **MicroPython rp2 firmware boots with the system clock at
-  2021-01-01.**  TLS validation fails with ``ValueError: The
-  certificate validity starts in the future`` against any leaf
-  cert whose ``notBefore`` is more recent.  Sync the clock from
-  NTP (built-in ``ntptime.settime()``) before the TLS handshake
-  or use a CircuitPython board (CP sets the clock from cyw43 /
-  firmware base sufficiently close to current).  This example is
-  marked CircuitPython-only via ``__chumicro_runtimes__`` to
-  avoid the trap on the sweep matrix.
-* **IP-only SAN certs** trip stricter mbedTLS builds.  Generate
-  certs with at least one DNS SAN (mDNS ``hostname.local`` works
-  on a LAN); set ``server_hostname=`` to that DNS name.
+Pointing it at your own server:
+
+* Paste your CA's PEM text into ``CA_PEM`` and set ``HOST`` to the
+  server's DNS name.
+* Give the server's certificate at least one DNS name.  Stricter TLS
+  builds reject a certificate that names only an IP address; on a home
+  network, ``<hostname>.local`` works.
+
+ISRG Root X1 stays valid until 2035-06-04.  If letsencrypt.org moves to
+another root first, the connect fails with a certificate error; download
+the current root from https://letsencrypt.org/certificates/ and paste
+it into ``CA_PEM``.
 """
 
-#: CircuitPython-only: MicroPython rp2 needs an NTP-synced clock before a
-#: TLS handshake validates (see Substrate quirks in the docstring).
+#: CircuitPython only.  MicroPython on a Pi Pico W boots with its clock at
+#: 2021-01-01, so every certificate looks not yet valid until the clock is
+#: set from NTP (``ntptime.settime()``) before the first connect.
 __chumicro_runtimes__ = ("circuitpython",)
 
 import time
@@ -63,9 +67,13 @@ from helpers import wifi_up
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 - replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 - replace before deploying
 
-# ISRG Root X1, the trust anchor for letsencrypt.org's cert chain.
-# Self-signed; valid through 2035-06-04.  Replace with your real CA
-# bundle bytes when adapting to a homelab / self-hosted endpoint.
+HOST = "letsencrypt.org"
+PORT = 443
+REQUEST = f"GET / HTTP/1.0\r\nHost: {HOST}\r\nConnection: close\r\n\r\n".encode()
+REPEAT_EVERY_S = 30  # pause between round trips
+TIMEOUT_S = 5  # longest wait for the server on each send and read
+
+# ISRG Root X1, the root CA at the top of letsencrypt.org's certificate chain.
 CA_PEM = (
     b"-----BEGIN CERTIFICATE-----\n"
     b"MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw\n"
@@ -100,29 +108,44 @@ CA_PEM = (
     b"-----END CERTIFICATE-----\n"
 )
 
+# Join wifi.  wifi_up waits until the board has an IP address.
 radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)
 print(f"WIFI_OK ip={ip}")
 
+# Build the trust setting once: this context accepts only certificates
+# that chain up to CA_PEM.
 context = ssl_context_with_ca(CA_PEM)
 
-# A one-shot script drives the connector inline until it lands ready;
-# runner-shaped apps register the connector with the runner instead.
-dial = connector("letsencrypt.org", 443, tls=True, context=context, radio=radio)
-while dial.state not in ("ready", "failed"):
-    dial.tick(0)
-    time.sleep(0.01)
-if dial.state == "failed":
-    raise dial.last_error
+buffer = bytearray(256)  # one receive buffer, reused on every pass
 
-sock = dial.socket
-sock.setblocking(True)  # one-shot script: blocking reads are fine here
-try:
-    sock.send(b"GET / HTTP/1.0\r\nHost: letsencrypt.org\r\nConnection: close\r\n\r\n")
-    print("sent: GET / HTTP/1.0")
-    buffer = bytearray(256)
-    nbytes_read = sock.recv_into(buffer, 256)
-    head = bytes(buffer[:nbytes_read])[:80]
-    print(f"received {nbytes_read} bytes (head): {head!r}")
-finally:
-    sock.close()
-    print("closed cleanly")
+while True:
+    print(f"connecting to {HOST}:{PORT}")
+
+    # connector() returns at once.  Each tick() takes the next step (look up
+    # the address, open the connection, check the server's certificate)
+    # until the state is "ready" or "failed".  tick() takes the time in
+    # milliseconds for services that keep deadlines; a connector keeps
+    # none, so 0 is fine.
+    dial = connector(HOST, PORT, tls=True, context=context, radio=radio)
+    while dial.state not in ("ready", "failed"):
+        dial.tick(0)
+        time.sleep(0.01)
+
+    if dial.state == "failed":
+        print(f"connect failed: {dial.last_error!r}")
+    else:
+        sock = dial.socket
+        try:
+            # A timeout bounds every send and read, so a server that stops
+            # answering costs one pass, not the rest of the program.
+            sock.settimeout(TIMEOUT_S)
+            sock.send(REQUEST)
+            count = sock.recv_into(buffer)
+            first_line = bytes(buffer[:count]).split(b"\r\n")[0]
+            print(f"reply: {first_line.decode()}")
+        except OSError as error:
+            print(f"send or receive failed: {error!r}")
+        sock.close()
+
+    print(f"next round trip in {REPEAT_EVERY_S} s")
+    time.sleep(REPEAT_EVERY_S)

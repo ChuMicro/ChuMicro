@@ -1,6 +1,6 @@
-"""Test helpers for libraries that depend on chumicro-websockets.
+"""``FakeConnection`` and ``FakeListener`` stand in for real sockets in tests.
 
-The public fakes are :class:`FakeConnection` and :class:`FakeListener`.
+A test drives a ``WebSocketClient`` or ``WebSocketServer`` over them with no network.
 """
 
 __chumicro_test_support__ = True
@@ -79,7 +79,11 @@ class FakeConnection:
 
 
 class FakeListener:
-    """Stand-in for :func:`chumicro_sockets.listener`."""
+    """Stand-in for ``chumicro_sockets.listener()``.
+
+    ``accept()`` returns the ``FakeConnection`` objects that ``queue_accept()``
+    queued, oldest first.
+    """
 
     def __init__(self) -> None:
         self._pending = []

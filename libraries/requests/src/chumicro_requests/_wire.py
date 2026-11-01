@@ -1,4 +1,5 @@
-"""HTTP/1.1 wire format primitives for chumicro-requests."""
+"""``chumicro_requests._wire`` encodes HTTP/1.1 requests and parses responses from bytes
+its caller supplies."""
 
 try:
     from micropython import const
@@ -8,27 +9,55 @@ except ImportError:
 
 
 class HttpError(Exception):
-    """Base class for every chumicro-requests failure."""
+    """``HttpError`` is the base class of every request failure.
+
+    A failed connect or socket read arrives as a plain ``HttpError`` whose
+    message names the cause.
+    """
 
 
 class HttpProtocolError(HttpError):
-    """Server sent bytes the spec doesn't allow."""
+    """``HttpProtocolError`` reports a response that breaks HTTP/1.1.
+
+    That covers malformed framing, a status or header line longer than
+    ``max_header_bytes``, and a server that closed the connection before the
+    response ended.
+    """
 
 
 class HttpTimeoutError(HttpError):
-    """Per-request ``timeout_ms`` budget elapsed before the response completed."""
+    """``HttpTimeoutError`` reports a request that ran past its ``timeout_ms`` before the response finished.
+
+    The clock starts when the request is issued.
+    """
 
 
 class HttpBusyError(HttpError):
-    """Caller issued a request while another was still in flight."""
+    """``HttpBusyError`` reports a new request on an ``HttpClient`` that still has one in flight.
+
+    One client runs one request at a time.
+    """
 
 
 class HttpURLError(HttpError):
-    """URL doesn't parse as a supported HTTP/HTTPS URL."""
+    """``HttpURLError`` reports a URL or request line the client cannot send.
+
+    That covers a URL that is not an absolute ``http://`` or ``https://`` URL,
+    a redirect ``Location`` with another scheme, and a method, path, or header
+    holding a control or non-ASCII character.
+    """
 
 
 class HttpOversizedError(HttpError):
-    """Response body exceeded ``max_body_bytes``."""
+    """``HttpOversizedError`` reports a response body larger than ``max_body_bytes``.
+
+    ``HttpClient`` reports it only under ``WhenOversized.DISCONNECT``.
+
+    Attributes:
+        reported_length: Body size in bytes when the limit tripped, taken
+            from ``Content-Length`` or from the bytes and chunk sizes seen so
+            far.
+    """
 
     def __init__(self, message: str, *, reported_length: int) -> None:
         super().__init__(message)
@@ -84,13 +113,16 @@ NO_BODY_STATUS_CODES = frozenset({204, 304})
 
 
 def parse_charset(content_type: str | None) -> str:  # noqa: CHU027 - same primitive in chumicro-http-server _wire.py; per-consumer duplication kept intentionally
-    """Extract the ``charset=...`` parameter from a Content-Type header.
+    """Return the ``charset`` parameter of a ``Content-Type`` header value.
+
+    ``"text/html; charset=iso-8859-1"`` gives ``"iso-8859-1"``.
 
     Args:
         content_type: Raw ``Content-Type`` header value, or ``None``.
 
     Returns:
-        The detected charset name, or ``"utf-8"`` as the safe default.
+        The charset name, or ``"utf-8"`` when the header is missing or names
+            no charset.
     """
     if not content_type:
         return "utf-8"
@@ -107,16 +139,22 @@ def parse_charset(content_type: str | None) -> str:  # noqa: CHU027 - same primi
 
 
 def parse_url(url: str) -> tuple[str, str, int, str]:
-    """Split *url* into ``(scheme, host, port, path)``.
+    """Split ``url`` into ``(scheme, host, port, path)``.
+
+    ``"https://example.com/data?x=1"`` gives
+    ``("https", "example.com", 443, "/data?x=1")``.  The port defaults to 80
+    for ``http`` and 443 for ``https``.
 
     Args:
-        url: HTTP or HTTPS URL to split.
+        url: Absolute ``http://`` or ``https://`` URL.
 
     Returns:
-        4-tuple ``(scheme, host, port, path)``; *path* starts with ``/``.
+        The scheme, host, port, and request path.  The path starts with ``/``
+            and keeps any query string.
 
     Raises:
-        HttpURLError: Bad scheme, missing host, or non-integer port.
+        HttpURLError: ``url`` is not a string, has another scheme, lacks a
+            host, or has a port that is not a number from 1 to 65535.
     """
     if not isinstance(url, str):
         raise HttpURLError(f"url must be str, got {type(url).__name__}")
@@ -177,17 +215,23 @@ def parse_url(url: str) -> tuple[str, str, int, str]:
 
 
 def resolve_redirect_url(current_url: str, location: str) -> str:
-    """Resolve a ``Location`` header value against the current request URL.
+    """Return the absolute URL a ``Location`` header points to, resolved against
+    ``current_url``.
+
+    An absolute ``http://`` or ``https://`` location comes back unchanged.  A
+    location starting with ``/`` replaces the path of ``current_url``.  Any
+    other location replaces the last segment of that path.
 
     Args:
-        current_url: The URL of the request being redirected.
-        location: The raw ``Location`` header value from the response.
+        current_url: URL of the request that got the redirect.
+        location: Raw ``Location`` header value.
 
     Returns:
-        Absolute URL the redirected request should target.
+        The absolute URL to request next.
 
     Raises:
-        HttpURLError: *current_url* doesn't parse, or *location* is empty.
+        HttpURLError: ``location`` is empty or names another scheme, such as
+            ``ftp:``, or ``current_url`` does not parse.
     """
     if not location:
         raise HttpURLError("redirect Location header is empty")
@@ -216,7 +260,13 @@ def resolve_redirect_url(current_url: str, location: str) -> str:
 
 
 class CaseInsensitiveDict:
-    """Header dict whose lookups fold to lowercase."""
+    """``CaseInsensitiveDict`` holds HTTP headers, with lookups that ignore letter case.
+
+    ``Response.headers`` is one, so ``response.headers["content-type"]`` finds
+    a ``Content-Type`` entry.  It supports ``[]`` lookup and assignment,
+    ``in``, ``len``, iteration over names in the order they were first added,
+    ``get``, ``items``, and ``add``.
+    """
 
     def __init__(self):  # noqa: CHU027 - same primitive in chumicro-http-server _wire.py; per-consumer duplication kept intentionally
         # _order preserves insertion order where MicroPython /
@@ -263,7 +313,7 @@ class CaseInsensitiveDict:
         return f"CaseInsensitiveDict({{{pairs}}})"
 
     def get(self, name, default=None):
-        """Return the value for *name* or *default* if missing."""
+        """Return the value for ``name`` in any letter case, or ``default``."""
         entry = self._entries.get(name.lower())
         if entry is None:
             return default
@@ -275,7 +325,7 @@ class CaseInsensitiveDict:
             yield self._entries[lower]
 
     def add(self, name, value):  # noqa: CHU027 - same primitive in chumicro-http-server _wire.py; per-consumer duplication kept intentionally
-        """Append *value* to the existing header, joining with ``, ``."""
+        """Add ``value`` under ``name``, joined to any existing value with a comma and a space."""
         lower = name.lower()
         existing = self._entries.get(lower)
         if existing is None:
@@ -306,21 +356,30 @@ def encode_request(
     body: bytes | None = None,
     user_agent: str | None = None,
 ) -> bytes:
-    """Encode an HTTP/1.1 request into bytes ready for the wire.
+    """Return the bytes of an HTTP/1.1 request, ready to send.
+
+    The request carries ``Host``, ``User-Agent``, ``Accept: */*``,
+    ``Accept-Encoding: identity``, and ``Connection: close``, plus
+    ``Content-Length`` when ``body`` is set.  An entry in ``headers`` replaces
+    the default of the same name.
 
     Args:
-        method: HTTP verb, sent verbatim.
-        host: Value for the ``Host:`` header.
-        path: Request-target, typically the URL path + query.
-        headers: Optional ``(name, value)`` pairs, dict, or CaseInsensitiveDict; override the defaults.
-        body: Optional ``bytes`` body; adds ``Content-Length`` when set.
-        user_agent: Override for the default ``User-Agent`` string.
+        method: HTTP method, such as ``"GET"``, sent as given.
+        host: Value for the ``Host`` header, with ``:port`` for a non-default
+            port.
+        path: Request target, the URL path plus any query string.
+        headers: Extra headers as a dict, a ``CaseInsensitiveDict``, or
+            ``(name, value)`` pairs.
+        body: Request body bytes, or ``None``.
+        user_agent: ``User-Agent`` value, or ``None`` for
+            ``"chumicro-requests/0.1"``.
 
     Returns:
-        Encoded request as ``bytes``.
+        The encoded request.
 
     Raises:
-        HttpURLError: A method, path, or header holds CR / LF / NUL or non-ASCII.
+        HttpURLError: ``method``, ``path``, or a header name or value holds
+            CR, LF, NUL, or a non-ASCII character.
     """
     merged = CaseInsensitiveDict()
     merged["Host"] = host
@@ -352,7 +411,14 @@ def encode_request(
 
 
 class ParseState:
-    """Streaming response parser states."""
+    """``ParseState`` names the values ``ResponseParser.state`` takes.
+
+    A response moves from ``STATUS`` to ``HEADERS``.  A plain body then moves
+    to ``BODY``, and a chunked body cycles through ``CHUNK_SIZE`` and
+    ``CHUNK_DATA`` and ends in ``CHUNK_TRAILER``.  ``DONE`` means the whole
+    response arrived.  ``ERROR`` means ``ResponseParser.error`` holds the
+    failure.
+    """
 
     STATUS = "status"
     HEADERS = "headers"
@@ -365,7 +431,24 @@ class ParseState:
 
 
 class ResponseParser:
-    """Streaming HTTP/1.1 response parser."""
+    """``ResponseParser`` turns the bytes of one HTTP/1.1 response into a status, headers,
+    and body as they arrive.
+
+    ``feed`` takes each received chunk, and ``feed_eof`` records that the
+    server closed the connection.  At ``ParseState.DONE`` the attributes hold
+    the response.  At ``ParseState.ERROR``, ``error`` holds the exception.
+
+    Attributes:
+        state: Current ``ParseState`` value.
+        status_code: Status code as an ``int``, or ``None`` before the status
+            line arrives.
+        reason: Reason phrase, such as ``"OK"``.
+        http_version: Version from the status line, such as ``"HTTP/1.1"``.
+        headers: ``CaseInsensitiveDict`` of the response headers.
+        headers_complete: ``True`` once the headers of the final, non-1xx
+            response are parsed.
+        error: The ``HttpError`` that stopped the parser, or ``None``.
+    """
 
     def __init__(
         self,
@@ -376,16 +459,24 @@ class ResponseParser:
         body_buffer_view: memoryview | None = None,
         stream_body: bool = False,
     ) -> None:
-        """Construct the parser.
+        """Create a parser for one response.
 
         Args:
-            max_body_bytes: Cap on the buffered body size; ignored when *stream_body* is set.
-            max_header_bytes: Cap on unparsed staged bytes outside the
-                plain-body state, so it bounds the status line, headers,
-                and chunked-framing lines.
-            body_buffer: Optional caller-owned ``bytearray`` reused as the body buffer.
-            body_buffer_view: Pre-cached ``memoryview(body_buffer)``; required with *body_buffer*.
-            stream_body: When ``True``, stage the body in a fixed window instead of buffering whole.
+            max_body_bytes: Largest body the parser buffers, in bytes.  A
+                larger body fails the parser with ``HttpOversizedError``.
+                Ignored when ``stream_body`` is ``True``.  Default 65536.
+            max_header_bytes: Most bytes the parser holds unparsed outside the
+                body, which caps the length of the status line, of each
+                header line, and of each chunk-size line.  More fails the
+                parser with ``HttpProtocolError``.  Default 16384.
+            body_buffer: ``bytearray`` to reuse for the body, or ``None`` to
+                allocate one.  A body larger than the buffer gets a new
+                allocation.
+            body_buffer_view: ``memoryview(body_buffer)``, or ``None`` to
+                create it.
+            stream_body: ``True`` holds the body in a fixed window that
+                ``read_body_into`` drains, in place of buffering it whole.
+                The window is ``body_buffer``, or 1024 bytes without one.
         """
         self._max_body_bytes = max_body_bytes
         self._max_header_bytes = max_header_bytes
@@ -411,7 +502,6 @@ class ResponseParser:
             self._body_capacity = 0
         self._body_write_offset = 0
         self._body_read_offset = 0
-        #: ``True`` once the final (non-1xx) response's headers are parsed.
         self.headers_complete = False
         # -1 = length unknown (read until close).
         self._body_remaining = -1
@@ -447,15 +537,23 @@ class ResponseParser:
 
     @property
     def body(self):
-        """Body bytes received so far (final once :attr:`state` is ``DONE``)."""
+        """A copy of the body bytes held so far.
+
+        The body is complete once ``state`` is ``ParseState.DONE``.  With
+        ``stream_body`` it holds only the bytes ``read_body_into`` has not
+        taken yet.
+        """
         return bytes(self._body_view[self._body_read_offset:self._body_write_offset])
 
     def body_free(self):
-        """Writable staging space in the streamed-body window, in bytes."""
+        """Return the free space left in the streamed-body window, in bytes."""
         return self._body_capacity - self._body_write_offset
 
     def read_body_into(self, buffer):
-        """Copy staged body bytes into caller-owned *buffer*; return the count."""
+        """Copy held body bytes into ``buffer`` and return how many were copied.
+
+        Returns 0 when no body bytes are waiting.
+        """
         available = self._body_write_offset - self._body_read_offset
         if available <= 0:
             return 0
@@ -473,12 +571,17 @@ class ResponseParser:
         return count
 
     def discard_body(self):
-        """Drop every staged body byte and reset both cursors."""
+        """Drop every held body byte without reading it."""
         self._body_read_offset = 0
         self._body_write_offset = 0
 
     def feed(self, chunk):
-        """Append *chunk* to the parser's buffer and advance the state."""
+        """Parse ``chunk``, the next bytes received from the server, and advance ``state``.
+
+        A malformed or oversized response moves ``state`` to
+        ``ParseState.ERROR`` and stores the exception in ``error``.  A call
+        after ``DONE`` or ``ERROR`` does nothing.
+        """
         if self.state in (ParseState.DONE, ParseState.ERROR):
             return
         if chunk:
@@ -498,7 +601,12 @@ class ResponseParser:
         self._advance()
 
     def feed_eof(self):
-        """Signal that the peer closed the connection."""
+        """Record that the server closed the connection.
+
+        A body with neither ``Content-Length`` nor chunked framing ends at the
+        close, and ``state`` becomes ``ParseState.DONE``.  A close anywhere
+        else before ``DONE`` fails the parser with ``HttpProtocolError``.
+        """
         if self.state == ParseState.DONE:
             return
         if self.state == ParseState.ERROR:

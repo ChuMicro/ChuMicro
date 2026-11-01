@@ -247,7 +247,10 @@ class _CPythonUDPWrapper:
 
 def ssl_context_with_ca(ca_pem):
     """Build a CPython SSLContext that trusts only the CA(s) in *ca_pem*."""
-    context = ssl.create_default_context()
+    # A bare client context starts with an empty trust store, where
+    # create_default_context() would also load the operating system's CAs.
+    # It still checks the hostname and requires a verified certificate.
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     if isinstance(ca_pem, str):
         context.load_verify_locations(cadata=ca_pem)
     else:

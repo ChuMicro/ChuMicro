@@ -180,7 +180,9 @@ def test_inbound_wait_registers_no_socket():
     # (registering it here too would collide with the session's
     # connect-phase write interest); the generator just re-checks the
     # queue each tick.
-    wait = _InboundWait()
+    clock = FakeTicks()
+    client, _socket = _make_open_client(clock)
+    wait = _InboundWait(client)
     assert wait.io_socket is None
 
 
@@ -190,3 +192,35 @@ def test_next_message_yields_the_no_register_wait():
     gen = client.next_message()
     wait = gen.send(None)  # queue empty -> yields the resume-every-tick wait
     assert getattr(wait, "io_socket", None) is None
+
+
+def test_inbound_wait_has_no_deadline_while_the_queue_is_empty():
+    """An open session with nothing queued gives Runner.wait() nothing to wake for."""
+    clock = FakeTicks()
+    client, _socket = _make_open_client(clock)
+    wait = client.next_message().send(None)
+    assert wait.next_deadline(clock.ticks_ms()) is None
+
+
+def test_inbound_wait_is_due_now_once_a_message_is_queued():
+    """A message the session queued after the generator's check makes the wait due now."""
+    clock = FakeTicks()
+    client, socket = _make_open_client(clock)
+    wait = client.next_message().send(None)
+    socket.feed_inbound(_server_frame(OPCODE_TEXT, b"hello"))
+    client.handle(clock.ticks_ms())
+    now_ms = clock.ticks_ms()
+    assert wait.next_deadline(now_ms) == now_ms
+
+
+def test_inbound_wait_is_due_now_once_the_session_closes():
+    """A closed session makes the wait due now so next_message can return None."""
+    clock = FakeTicks()
+    client, socket = _make_open_client(clock)
+    wait = client.next_message().send(None)
+    socket.close_inbound()
+    for _ in range(5):
+        client.handle(clock.ticks_ms())
+    assert client.state == WebSocketState.CLOSED
+    now_ms = clock.ticks_ms()
+    assert wait.next_deadline(now_ms) == now_ms

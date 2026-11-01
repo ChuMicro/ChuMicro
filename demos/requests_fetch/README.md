@@ -1,34 +1,43 @@
-# requests_fetch: one-shot HTTP GET as a generator
+# requests_fetch: your board fetches a web page every five seconds
 
-End-to-end demo of `chumicro_requests` generator API on a real board.
-The driver runs a stdlib HTTP server on the host's LAN IP; the board
-joins the same wifi and fetches one URL from it with a single
-`yield from`.
+Your board joins wifi and fetches a page from a small web server the
+driver runs on your laptop. It prints what came back, waits five
+seconds, and fetches it again, forever. A heartbeat prints once a
+second the whole time, so you can see the board never freezes while it
+waits on the network.
 
-The board reads top-to-bottom (connect, send, receive, return the
-response) instead of polling a request handle or wiring an `on_done`
-callback:
+## What you will see
 
-```python
-def fetch_run(wifi, link_up, url):
-    yield from wait_for(link_up)            # suspend until wifi is up
-    factory = connector_factory(radio=wifi.adapter.radio)
-    response = yield from get(factory, url)
-    print(f"FETCHED status={response.status_code} bytes={len(response.body)}")
+The driver's own lines start with `driver:`. Everything the board
+prints shows up as it happens, after `board |`:
 
-runner.add_generator(fetch_run(wifi, link_up, fetch_url))
+```
+driver: http server up at http://10.0.0.5:54321/hello
+driver: targeting pi-pico-w-circuitpython-board (circuitpython @ /dev/cu.usbmodem...)
+board |   ...still ticking
+board |   ...still ticking
+board | WIFI_OK ip=10.0.0.42
+driver: board WIFI_OK ip=10.0.0.42
+driver: board fetching http://10.0.0.5:54321/hello
+board |   GET http://10.0.0.5:54321/hello
+board | FETCHED status=200 bytes=49
+board | DEMO_COMPLETE
+board |   {"message": "hello from the requests_fetch demo"}
+driver: board FETCHED status=200 bytes=49
+driver: demo completed cleanly; the board keeps fetching.
 ```
 
-## What it shows
+The driver stops there and takes its web server with it. The board
+carries on: the heartbeat keeps printing every second, and every five
+seconds the board tries the page again and prints `FETCH_FAILED` now
+that nothing answers. To watch it after the driver exits, run
+`chumicro-workspace repl --tail 60 --device <id>`.
 
-- **One-shot fetch as a generator.** `chumicro_requests.generators.get`
-  runs the whole request lifecycle under `Runner.add_generator`; the
-  caller gets the `Response` back from the `yield from`.
-- **Reuses the connector factory.** `connector_factory`
-  is the same non-blocking connector the long-lived `HttpClient` uses.
-- **Generator vs reactive client.** Pair with
-  `libraries/requests/examples/periodic_get.py`, which drives the
-  `check` / `handle` `HttpClient` for repeated requests on one client.
+## What you need
+
+- A board registered with `chumicro-workspace add-device`.
+- `secrets.toml` at the repo root with `wifi.ssid` and `wifi.password`.
+- A wifi network that your board and your laptop both join.
 
 ## Run it
 
@@ -36,24 +45,42 @@ runner.add_generator(fetch_run(wifi, link_up, fetch_url))
 .venv/bin/python demos/requests_fetch/driver.py
 ```
 
-Defaults: targets the first CircuitPython device in `devices.yml`.
+The driver picks the first CircuitPython board in `devices.yml`. Pass
+`--device <id>` for a specific board or `--runtime micropython` for the
+first MicroPython one. `--help` lists the timeouts.
 
-Override:
+## How it works
 
-- `--device <id>`: a specific device id from `devices.yml`.
-- `--runtime micropython`: pick the first MicroPython device.
-- `--wifi-timeout-s <n>`: how long to wait for the board's `WIFI_OK`
-  marker (default 45 s).
-- `--completion-timeout-s <n>`: how long to wait for the board's
-  `FETCHED` marker after `FETCHING` (default 30 s).
+The fetch in [`app.py`](app.py) reads top to bottom, the way you would
+describe it out loud:
 
-## Expected output
-
+```python
+def fetch_forever(wifi, link_up, url):
+    yield from wait_for(link_up)                 # wait for wifi
+    factory = connector_factory(radio=wifi.adapter.radio)
+    while True:
+        response = yield from get(factory, url)  # fetch the page
+        print(f"FETCHED status={response.status_code} bytes={len(response.body)}")
+        yield from sleep_until(ticks_add(ticks_ms(), FETCH_EVERY_MS))  # wait five seconds
 ```
-driver: http server up at http://10.0.0.5:54321/hello
-driver: targeting raspberry-pi-pico-w-cp (circuitpython @ /dev/cu.usbmodem...)
-driver: board WIFI_OK ip=10.0.0.42
-driver: board FETCHING url=http://10.0.0.5:54321/hello
-driver: board FETCHED status=200 bytes=49
-driver: demo completed cleanly.
-```
+
+Each `yield from` is a place the fetch pauses and the rest of the board
+runs, which is how the heartbeat keeps printing. `runner.add_generator`
+registers the function with the same `Runner` that drives wifi and the
+heartbeat, and the program ends in the `while True:` loop every board
+program runs. The real file wraps the fetch in `try`/`except`, so a
+failed fetch prints `FETCH_FAILED` and the board tries again five
+seconds later.
+
+[`driver.py`](driver.py) starts the web server on your laptop's network
+address, deploys `app.py` with that URL baked into the board's config,
+and waits for the first `FETCHED`.
+
+## Try next
+
+- Change `FETCH_EVERY_MS` in `app.py` and run the demo again.
+- [`press_through_fetch`](../press_through_fetch/) adds a button to
+  this loop, and the press lands even mid-fetch.
+- [`libraries/requests/examples/periodic_get.py`](../../libraries/requests/examples/periodic_get.py)
+  does the same repeated fetch with `HttpClient`, checking a request
+  object on each pass of the loop instead of using `yield from`.

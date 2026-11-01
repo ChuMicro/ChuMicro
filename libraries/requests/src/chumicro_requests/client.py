@@ -1,6 +1,7 @@
-"""HTTP/1.1 client built on chumicro-sockets + chumicro-timing.
+"""``chumicro_requests.client`` defines ``HttpClient`` and the objects around a request.
 
-:class:`HttpClient` is the entry point.
+Each request returns a ``RequestHandle``, which resolves to a ``Response``.
+``WhenOversized`` names what happens to a body past ``max_body_bytes``.
 """
 
 import errno
@@ -51,15 +52,20 @@ def _is_would_block(socket_error):
 
 
 class WhenOversized:
-    """Policy for response bodies exceeding ``max_body_bytes``."""
+    """``WhenOversized`` names what ``HttpClient`` does with a response body larger than ``max_body_bytes``.
 
-    #: Drop the body silently; the request finishes ``done`` with an empty body.
+    ``HttpClient(when_oversized=...)`` takes one of its values.
+    ``DROP_WITH_EVENT``, the default, finishes the request with an empty body,
+    sets ``Response.oversized_dropped``, and calls
+    ``client.on_oversized(reported_length, url)``.  ``DROP_SILENT`` does the
+    same without the call.  ``DISCONNECT`` fails the request with
+    ``HttpOversizedError``.  A ``stream=True`` request has no size limit.
+    """
+
     DROP_SILENT = "drop_silent"
 
-    #: Default: drop the body and fire ``on_oversized(reported_length, url)``.
     DROP_WITH_EVENT = "drop_with_event"
 
-    #: Fail the request with :class:`HttpOversizedError`.
     DISCONNECT = "disconnect"
 
 
@@ -100,17 +106,24 @@ def _force_non_blocking(socket):
 
 
 class Response:
-    """Result of a completed HTTP request.
+    """``Response`` holds the status, headers, and body of a finished request.
+
+    ``RequestHandle.result`` returns it.  ``text`` decodes the body, and
+    ``json()`` parses it.
 
     Attributes:
-        status_code: Integer HTTP status (e.g. ``200``).
-        reason: Reason phrase from the status line (e.g. ``"OK"``).
-        http_version: Protocol version string (e.g. ``"HTTP/1.1"``).
-        headers: :class:`CaseInsensitiveDict` of response headers.
-        body: Raw response body as ``bytes``; empty when :attr:`streamed`.
-        url: The URL that was requested.
-        oversized_dropped: ``True`` when the body was dropped per the ``when_oversized`` policy.
-        streamed: ``True`` when issued with ``stream=True``; the body is consumed incrementally.
+        status_code: HTTP status as an ``int``, such as ``200``.
+        reason: Reason phrase from the status line, such as ``"OK"``.
+        http_version: Version from the status line, such as ``"HTTP/1.1"``.
+        headers: ``CaseInsensitiveDict`` of the response headers.
+        body: Whole body as ``bytes``.  Empty when ``streamed`` or
+            ``oversized_dropped`` is ``True``.
+        url: URL of the request that produced this response, after any
+            redirects.
+        oversized_dropped: ``True`` when the body passed ``max_body_bytes``
+            and the ``WhenOversized`` policy dropped it.
+        streamed: ``True`` for a ``stream=True`` request, whose body arrives
+            through ``RequestHandle.read_body_into``.
     """
 
     def __init__(
@@ -145,7 +158,11 @@ class Response:
 
     @property
     def encoding(self) -> str:
-        """Charset used to decode :attr:`body` into :attr:`text`."""
+        """Charset ``text`` uses to decode ``body``.
+
+        It is the value last assigned to this property, else the ``charset``
+        of the ``Content-Type`` header, else ``"utf-8"``.
+        """
         if self._encoding_override is not None:
             return self._encoding_override
         return parse_charset(self.headers.get("Content-Type"))
@@ -156,11 +173,11 @@ class Response:
 
     @property
     def text(self) -> str:
-        """:attr:`body` decoded to ``str`` using :attr:`encoding`.
+        """``body`` decoded to ``str`` with ``encoding``.
 
         Raises:
-            UnicodeError: The body bytes don't match the encoding.
-            HttpError: The response is :attr:`streamed`, so has no whole body.
+            UnicodeError: The body bytes are invalid in ``encoding``.
+            HttpError: The response is ``streamed`` and has no whole body.
         """
         if self.streamed:
             raise HttpError(
@@ -170,16 +187,31 @@ class Response:
         return self.body.decode(self.encoding)
 
     def json(self) -> object:
-        """Parse :attr:`body` as JSON and return the decoded object.
+        """Parse ``text`` as JSON and return the resulting object.
 
         Raises:
             ValueError: The body is not valid JSON.
+            HttpError: The response is ``streamed`` and has no whole body.
         """
         return json.loads(self.text)
 
 
 class RequestHandle:
-    """Caller-visible handle to an in-flight (or completed) request."""
+    """``RequestHandle`` tracks one request that ``HttpClient`` runs.
+
+    Each ``HttpClient`` request method returns one at once.  ``done`` turns
+    ``True`` when the request finishes, and ``result`` then returns the
+    ``Response`` or raises the failure.
+
+    Attributes:
+        url: URL the request was issued with.
+        done: ``True`` once the request has finished, with a response or an
+            error.
+        response: The ``Response``, or ``None`` until it arrives.  For a
+            ``stream=True`` request it appears once the headers arrive,
+            before ``done``.
+        error: The ``HttpError`` the request failed with, or ``None``.
+    """
 
     def __init__(self, *, url, on_done=None, stream=False):
         self.url = url
@@ -191,7 +223,14 @@ class RequestHandle:
         self._body_source = None
 
     def read_body_into(self, buffer):
-        """Copy received body bytes into caller-owned *buffer*; return the count.
+        """Copy the next body bytes of a ``stream=True`` request into ``buffer``, and return the count.
+
+        ``buffer`` is a ``bytearray`` or ``memoryview``, and up to
+        ``len(buffer)`` bytes are copied.  Reading frees room in the client's
+        ``stream_buffer_size`` window, and the client stops reading the socket
+        while that window is full.  A return of 0 means no bytes are waiting
+        yet.  Once ``done`` is ``True``, a return of 0 means the body has
+        ended.
 
         Raises:
             HttpError: The request was not issued with ``stream=True``.
@@ -215,10 +254,11 @@ class RequestHandle:
 
     @property
     def result(self):
-        """Return the :class:`Response`; raise the failure if any.
+        """The ``Response`` of the finished request.
 
         Raises:
-            HttpError: The request failed, or ``result`` was read before ``done``.
+            HttpError: ``done`` is still ``False``, or the request failed.
+                A failed request raises its own ``error``.
         """
         if not self.done:
             raise HttpError(
@@ -246,7 +286,26 @@ class _RequestState:
 
 
 class HttpClient:
-    """Non-blocking HTTP/1.1 client."""
+    """``HttpClient`` sends one HTTP or HTTPS request at a time and advances it one step per ``handle`` call.
+
+    ``get``, ``post``, ``put``, ``patch``, ``delete``, and ``request`` start a
+    request and return a ``RequestHandle`` at once.  The main loop then calls
+    ``check(now_ms)`` and ``handle(now_ms)``, or a ``Runner`` does after
+    ``runner.add(client)``, until ``handle.done`` is ``True``.  Each request
+    opens its own connection, follows redirects, and closes the connection
+    when it finishes.
+
+    Sending and reading run in small slices.  With the ``chumicro_sockets``
+    transport, opening the connection holds the main loop for the DNS lookup
+    on every runtime, for the TCP connect on CircuitPython, and for the TLS
+    handshake of an ``https://`` URL on CircuitPython and MicroPython.
+
+    Attributes:
+        url: URL of the request in flight, or ``None`` when idle.
+        on_oversized: Function called as ``on_oversized(reported_length, url)``
+            when ``WhenOversized.DROP_WITH_EVENT`` drops a body.  The default
+            does nothing.
+    """
 
     @classmethod
     def from_config(
@@ -258,12 +317,31 @@ class HttpClient:
         transport_factory: object | None = None,
         **constructor_kwargs: object,
     ) -> "HttpClient":
-        """Build an :class:`HttpClient` from runtime config.
+        """Build an ``HttpClient`` from deployed settings, with the ``chumicro_sockets`` transport.
 
-        Config keys carry the deployment-varying values; any other
-        constructor knob (buffer sizes, budgets, ``ticks``) passes
-        through verbatim as a keyword, and an explicit keyword wins
-        over its config-derived value.
+        It reads ``requests.default_timeout_ms``,
+        ``requests.default_max_redirects``, ``requests.user_agent``, and
+        ``requests.max_body_bytes``, each optional.  Each keyword in
+        ``constructor_kwargs`` passes straight to the constructor and wins
+        over a value read here.
+
+        Args:
+            config: Flat settings dict or ``chumicro_config.RuntimeConfig``.
+            radio: The CircuitPython radio, ``wifi.radio``, for the default
+                transport.  MicroPython and CPython ignore it.
+            ssl_context: ``ssl.SSLContext`` for ``https://`` URLs, or
+                ``None`` for the runtime's default certificate store.
+            transport_factory: Transport to use in place of the
+                ``chumicro_sockets`` one.  ``radio`` and ``ssl_context`` then
+                go unused.
+            **constructor_kwargs: Other constructor keywords, such as ``ticks=``.
+
+        Returns:
+            The new ``HttpClient``.
+
+        Raises:
+            RuntimeError: ``transport_factory`` is ``None`` and
+                ``chumicro_sockets.sockets_factory`` is missing from the board.
         """
         if transport_factory is None:
             try:
@@ -311,19 +389,35 @@ class HttpClient:
         user_agent: str | None = None,
         ticks: object | None = None,
     ) -> None:
-        """Wire up the client.
+        """Create a client.  It touches the network only when a request starts.
 
         Args:
-            transport_factory: Callable ``(host, port, use_tls)`` opening a socket per hop.
-            recv_budget_per_tick: Soft cap on bytes drained per :meth:`handle` call.
-            max_body_bytes: Cap on a buffered body; not applied to ``stream=True``.
-            max_header_bytes: Cap on the response's unparsed header section.
-            when_oversized: Policy for over-cap responses (see :class:`WhenOversized`).
-            default_timeout_ms: Default per-request timeout in ms.
-            default_max_redirects: Default cap on 3xx hops; ``0`` returns the 3xx as-is.
-            stream_buffer_size: Staging capacity in bytes for each ``stream=True`` body window.
-            user_agent: Override for the default ``User-Agent`` header.
-            ticks: Optional ``chumicro_timing.ticks``-shaped source; defaults to that submodule.
+            transport_factory: Function ``(host, port, use_tls)`` that returns
+                a connector for one connection, such as
+                ``chumicro_sockets.sockets_factory.connector_factory(radio=wifi.radio)``.
+                The client calls it once per request and once per redirect.
+            recv_budget_per_tick: Most response bytes one ``handle`` call
+                reads.  Default 1024.
+            max_body_bytes: Largest response body the client buffers, in
+                bytes.  ``when_oversized`` decides what happens past it.
+                ``stream=True`` requests ignore it.  Default 65536.
+            max_header_bytes: Most unparsed bytes the client holds outside
+                the body, which caps the length of the status line and of each
+                header line.  More fails the request with
+                ``HttpProtocolError``.  Default 16384.
+            when_oversized: A ``WhenOversized`` value.
+            default_timeout_ms: Time limit in ms for a request that passes no
+                ``timeout_ms``.  Default 10000.
+            default_max_redirects: Redirects to follow for a request that
+                passes no ``max_redirects``.  ``0`` returns the 3xx response
+                as it is.  Default 5.
+            stream_buffer_size: Size in bytes of the window that holds a
+                ``stream=True`` body between ``read_body_into`` calls.
+                Default 1024.
+            user_agent: ``User-Agent`` header value, or ``None`` for
+                ``"chumicro-requests/0.1"``.
+            ticks: Clock with ``ticks_ms``, ``ticks_diff``, and ``ticks_add``,
+                or ``None`` for ``chumicro_timing.ticks``.
         """
         self._transport_factory = transport_factory
         self._connector = None
@@ -373,20 +467,29 @@ class HttpClient:
 
     @property
     def busy(self):
-        """``True`` while a request is in flight."""
+        """``True`` while a request is in flight.
+
+        A new request raises ``HttpBusyError`` until this turns ``False``.
+        """
         return self._state != _RequestState.IDLE
 
     @property
     def io_socket(self):
-        """Underlying pollable socket while in flight, else ``None``."""
+        """The socket ``Runner.wait`` polls for this client, or ``None`` when idle.
+
+        It is the connector's socket while connecting, and the connection
+        while sending or reading.
+        """
         if self._state == _RequestState.AWAITING_TRANSPORT:
             return self._connector.io_socket if self._connector is not None else None
         return self._socket
 
     def io_interest(self, now_ms):
-        """Runner poll-interest bit for the current phase.
+        """Return the poll bits ``Runner.wait`` watches on ``io_socket``.
 
-        Read while receiving, write while sending, ``0`` otherwise.
+        The bits are the connector's while connecting, write while sending,
+        and read while reading.  The result is 0 when idle, and while a full
+        ``stream=True`` window waits for ``read_body_into``.
         """
         if self._state == _RequestState.AWAITING_TRANSPORT:
             return self._connector.io_interest(now_ms) if self._connector is not None else 0
@@ -403,7 +506,12 @@ class HttpClient:
         return 0
 
     def next_deadline(self, now_ms):
-        """Return the per-request timeout deadline, or ``None`` when idle."""
+        """Return the tick by which ``handle`` must run next, or ``None`` when idle.
+
+        It is ``now_ms`` while the connector has no socket yet, so the
+        connector's next step runs on the next pass.  After that it is the
+        request's timeout deadline.
+        """
         if self._state == _RequestState.IDLE:
             return None
         if (
@@ -426,13 +534,42 @@ class HttpClient:
         on_done: object | None = None,
         stream: bool = False,
     ) -> "RequestHandle":
-        """Issue *method* against *url*; return a :class:`RequestHandle`.
+        """Start an HTTP request and return its ``RequestHandle`` at once.
+
+        The request runs over later ``handle`` calls.  A 301, 302, or 303
+        redirect continues as a ``GET`` with no body.  A 307 or 308 redirect
+        repeats the method and body.
+
+        Args:
+            method: HTTP method, such as ``"GET"`` or ``"POST"``.
+            url: Absolute ``http://`` or ``https://`` URL.
+            body: Request body as ``bytes``, ``bytearray``, or ``str``.  A
+                ``str`` is sent as UTF-8.
+            json: Object to send as a JSON body, with
+                ``Content-Type: application/json``.  Pass at most one of
+                ``body`` and ``json``.
+            headers: Extra headers as a dict, a ``CaseInsensitiveDict``, or
+                ``(name, value)`` pairs.
+            timeout_ms: Time limit in ms for the whole request, counted from
+                this call, or ``None`` for ``default_timeout_ms``.  The limit
+                is checked between steps, so it cannot cut a blocking connect
+                step short.
+            max_redirects: Redirects to follow, or ``None`` for
+                ``default_max_redirects``.
+            on_done: Function called as ``on_done(handle)`` from ``handle``
+                once the request finishes.
+            stream: ``True`` delivers the body in pieces through
+                ``RequestHandle.read_body_into``, with no size limit.
+
+        Returns:
+            The ``RequestHandle`` that tracks the request.
 
         Raises:
-            HttpBusyError: A request is already in flight.
-            HttpURLError: *url* is not an absolute http/https URL.
-            ValueError: ``json=`` combined with ``body=``.
-            TypeError: *body* is not bytes / bytearray / str.
+            HttpBusyError: Another request is in flight.
+            HttpURLError: ``url`` is not an absolute ``http://`` or
+                ``https://`` URL.
+            ValueError: Both ``json`` and ``body`` were given.
+            TypeError: ``body`` is not ``bytes``, ``bytearray``, or ``str``.
         """
         return self._start_request(
             method, url,
@@ -451,9 +588,9 @@ class HttpClient:
         on_done: object | None = None,
         stream: bool = False,
     ) -> "RequestHandle":
-        """Issue a GET request; return a :class:`RequestHandle`.
+        """Start a GET request for ``url`` and return its ``RequestHandle`` at once.
 
-        Raises the same exceptions as :meth:`request`.
+        The keywords and exceptions match ``request``.
         """
         return self._start_request(
             "GET", url, headers=headers, timeout_ms=timeout_ms,
@@ -472,9 +609,9 @@ class HttpClient:
         on_done: object | None = None,
         stream: bool = False,
     ) -> "RequestHandle":
-        """Issue a POST request; return a :class:`RequestHandle`.
+        """Start a POST request with ``body`` or ``json`` and return its ``RequestHandle`` at once.
 
-        Raises the same exceptions as :meth:`request`.
+        The keywords and exceptions match ``request``.
         """
         return self._start_request(
             "POST", url,
@@ -495,8 +632,9 @@ class HttpClient:
         on_done: object | None = None,
         stream: bool = False,
     ) -> "RequestHandle":
-        """Issue a PUT request; same body / json / stream semantics as
-        :meth:`post`.  Raises the same exceptions as :meth:`request`.
+        """Start a PUT request with ``body`` or ``json`` and return its ``RequestHandle`` at once.
+
+        The keywords and exceptions match ``request``.
         """
         return self._start_request(
             "PUT", url,
@@ -517,8 +655,9 @@ class HttpClient:
         on_done: object | None = None,
         stream: bool = False,
     ) -> "RequestHandle":
-        """Issue a PATCH request; same body / json / stream semantics as
-        :meth:`post`.  Raises the same exceptions as :meth:`request`.
+        """Start a PATCH request with ``body`` or ``json`` and return its ``RequestHandle`` at once.
+
+        The keywords and exceptions match ``request``.
         """
         return self._start_request(
             "PATCH", url,
@@ -537,9 +676,9 @@ class HttpClient:
         on_done: object | None = None,
         stream: bool = False,
     ) -> "RequestHandle":
-        """Issue a DELETE request; v1 sends no body.
+        """Start a DELETE request for ``url``, with no body, and return its ``RequestHandle`` at once.
 
-        Raises the same exceptions as :meth:`request`.
+        The keywords and exceptions match ``request``.
         """
         return self._start_request(
             "DELETE", url, headers=headers, timeout_ms=timeout_ms,
@@ -547,11 +686,18 @@ class HttpClient:
         )
 
     def check(self, now_ms):  # noqa: ARG002 - runner contract uses now_ms
-        """Return ``True`` while a request is in flight, so the runner ticks it."""
+        """Return ``True`` while a request is in flight, so ``handle`` gets called."""
         return self._state != _RequestState.IDLE
 
     def handle(self, now_ms):
-        """One tick of progress on the in-flight request."""
+        """Advance the request in flight by one step, then call its ``on_done`` callback if it finished.
+
+        ``now_ms`` is the current time from ``ticks_ms()``.  Each call checks
+        the timeout, steps the connector, sends what the socket accepts, and
+        reads up to ``recv_budget_per_tick`` bytes.  While the connection
+        opens, the connector step can hold the main loop, as the
+        ``HttpClient`` description lists.  An idle client returns at once.
+        """
         if self._state == _RequestState.IDLE:
             return
         self._drive_tick(now_ms)
@@ -560,7 +706,11 @@ class HttpClient:
         self._fire_completion()
 
     def cancel(self):
-        """Abort the in-flight request; no-op when idle."""
+        """Abort the request in flight, close its socket, and finish its handle with an ``HttpError``.
+
+        The request's ``on_done`` callback runs before ``cancel`` returns.  An
+        idle client ignores the call.
+        """
         if self._state == _RequestState.IDLE:
             return
         self._fail(HttpError(f"request to {self.url!r} cancelled"))

@@ -26,6 +26,7 @@ from chumicro_workspace.deploy_api import (
     DeployApiError,
     DeviceNotFoundError,
     deploy_project,
+    echo_board_line,
 )
 from chumicro_workspace.markers import MarkerTimeoutError
 
@@ -66,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--completion-timeout-s", type=float, default=90.0,
-        help="seconds to wait for the bootstrap to finish after the round trip",
+        help="seconds to wait for DEMO_COMPLETE after the three requests",
     )
     args = parser.parse_args(argv)
 
@@ -77,6 +78,7 @@ def main(argv: list[str] | None = None) -> int:
             runtime=args.runtime,
             deploy_mode="flash",
             workspace_root=_REPO_ROOT,
+            on_line=echo_board_line,
         )
     except DeviceNotFoundError as device_error:
         print(f"driver: {device_error}", file=sys.stderr)
@@ -129,9 +131,9 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         print("driver: waiting for board to print DEMO_COMPLETE...")
-        # The board keeps serving after the third route, like any board
-        # program does, so wait on the marker rather than on the process
-        # finishing.  session.shutdown() in the finally tears it down.
+        # The board keeps serving after the third request, like any board
+        # program does, so wait on the marker rather than on the program
+        # ending.  session.shutdown() in the finally closes the connection.
         try:
             session.wait_for(
                 "DEMO_COMPLETE", timeout_s=args.completion_timeout_s,
@@ -143,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 3
-        print("driver: demo completed cleanly.")
+        print("driver: demo completed cleanly; the board keeps serving.")
         return 0
     finally:
         session.shutdown()

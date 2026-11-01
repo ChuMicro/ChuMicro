@@ -1,6 +1,8 @@
-"""MQTT 3.1.1 client built on chumicro-sockets + chumicro-timing.
+"""``MQTTClient`` holds one connection to an MQTT broker and moves messages through it one step at a time.
 
-:class:`MQTTClient` is the public entry point.
+This module also defines the ``ProtocolState`` names, the ``InboundPublish``
+message record, the ``WhenOversized`` policy names, and
+``default_client_id()``.
 """
 
 import errno
@@ -38,7 +40,22 @@ _IO_WRITE = 2
 
 
 class ProtocolState:
-    """Connection lifecycle states."""
+    """Names for the states ``MQTTClient.state`` moves through, each a plain string.
+
+    Attributes:
+        DISCONNECTED: Before the first ``connect()``, and after
+            ``disconnect()``.
+        AWAITING_TRANSPORT: Opening the network connection: DNS lookup, TCP
+            connect, and TLS handshake.  A client built on a ready socket
+            skips this state.
+        CONNECTING: Connection open, waiting for the broker's CONNACK reply
+            to the client's CONNECT packet.
+        CONNECTED: The broker accepted the connection.  Messages flow.
+        FAILED: The connection dropped or the broker refused it.
+            ``last_error`` holds the cause.  A client with a
+            ``transport_factory`` reconnects from here unless the refusal
+            was final.
+    """
 
     DISCONNECTED = "disconnected"
     AWAITING_TRANSPORT = "awaiting_transport"
@@ -48,7 +65,12 @@ class ProtocolState:
 
 
 class InboundPublish:
-    """One inbound PUBLISH returned by :meth:`MQTTClient.next_message`."""
+    """One message from the broker, as ``MQTTClient.next_message()`` returns it.
+
+    Attributes:
+        topic: Topic the message was published to, as a ``str``.
+        payload: Message body as ``bytes``.
+    """
 
     def __init__(self, topic, payload):
         self.topic = topic
@@ -83,7 +105,11 @@ _MAX_INBOUND_QUEUE_SIZE = 16
 
 
 class InFlightPublish:
-    """One outstanding QoS 1 PUBLISH awaiting a PUBACK."""
+    """Record ``MQTTClient`` keeps for each sent QoS 1 message until the broker's PUBACK confirms it.
+
+    The client resends ``packet_bytes`` with the DUP flag set each time
+    ``deadline_ticks`` passes, up to ``publish_retry_max`` times.
+    """
 
     def __init__(self, packet_id, packet_bytes, deadline_ticks, callback=None):
         self.packet_id = packet_id
@@ -95,7 +121,10 @@ class InFlightPublish:
 
 
 class PendingResponse:
-    """A non-publish response we're waiting for (CONNACK / SUBACK / UNSUBACK / PINGRESP)."""
+    """Record ``MQTTClient`` keeps for each broker reply it waits on: CONNACK, SUBACK, UNSUBACK, or PINGRESP.
+
+    The client moves to ``FAILED`` when the reply misses ``deadline_ticks``.
+    """
 
     def __init__(self, awaiting, deadline_ticks, packet_id=None, callback=None, topic=None):
         self.awaiting = awaiting
@@ -106,15 +135,27 @@ class PendingResponse:
 
 
 class WhenOversized:
-    """Policy for inbound PUBLISH whose total wire size exceeds ``rx_buffer_size``."""
+    """Values for ``when_oversized``: what ``MQTTClient`` does with a message too big for ``rx_buffer_size``.
 
-    #: Drop the payload silently and PUBACK the broker.
+    The whole PUBLISH packet counts against ``rx_buffer_size``: header,
+    topic, and payload.  The client reads an oversized message off the socket
+    in buffer-sized pieces and throws the pieces away, so the board never
+    allocates memory for the full message.  Both drop policies still send the
+    PUBACK for a QoS 1 message, so the broker stops resending it.
+
+    Attributes:
+        DROP_SILENT: Drop the message and stay connected.
+        DROP_WITH_EVENT: Drop the message, call
+            ``on_oversized(reported_length, topic)``, and stay connected.
+            The default.
+        DISCONNECT: Treat the message as a protocol error.  The client moves
+            to ``FAILED`` with an ``MQTTProtocolError`` in ``last_error``.
+    """
+
     DROP_SILENT = "drop_silent"
 
-    #: Default. Drop the payload, fire ``on_oversized(reported_length, topic)``, still PUBACK.
     DROP_WITH_EVENT = "drop_with_event"
 
-    #: Treat as a protocol error and disconnect.
     DISCONNECT = "disconnect"
 
 
@@ -143,13 +184,18 @@ def _force_non_blocking(socket):
 
 
 def default_client_id(prefix="chumicro"):
-    """Return a stable per-device MQTT client id ``<prefix>-<uid-hex>``.
+    """Return an MQTT client id built from this board's chip id, as ``"<prefix>-<chip id in hex>"``.
 
-    Unique across devices, stable across reboots (so a persistent session
-    resumes rather than colliding on a shared broker).  The UID comes from
-    ``microcontroller.cpu.uid`` (CircuitPython), ``machine.unique_id()``
-    (MicroPython), or the host MAC via ``uuid.getnode()`` (CPython); each is
-    guarded, and if none works the historical ``<prefix>-mqtt`` is returned.
+    A broker identifies each session by its client id, so every board needs
+    its own.  This id differs between boards and stays the same across
+    reboots, which lets a broker resume the board's session after a power
+    cycle.  The chip id comes from ``microcontroller.cpu.uid`` on
+    CircuitPython, ``machine.unique_id()`` on MicroPython, and the network
+    card's MAC address (``uuid.getnode()``) on CPython.  When none of those
+    lookups works, the function returns ``"<prefix>-mqtt"``.  Two boards with
+    that same fallback id disconnect each other from the broker.
+    ``default_client_id("greenhouse")`` returns a string such as
+    ``"greenhouse-e8db84a1b2c3"``.
     """
     guarded = (ImportError, AttributeError, OSError, NotImplementedError)
     uid = None
@@ -172,7 +218,46 @@ def default_client_id(prefix="chumicro"):
 
 
 class MQTTClient:
-    """Non-blocking MQTT 3.1.1 client (QoS 0 + 1)."""
+    """Connects to an MQTT broker, then publishes and receives messages without blocking the main loop.
+
+    ``connect()`` starts the connection and returns at once.  The main loop
+    then calls ``check(now_ms)`` and ``handle(now_ms)`` on every pass, where
+    ``now_ms`` comes from ``chumicro_timing.ticks_ms()``.  Each ``handle()``
+    call does one bounded step of network work.  A ``chumicro_runner.Runner``
+    makes both calls itself after ``runner.add(client)``.  ``publish()``,
+    ``subscribe()``, and ``unsubscribe()`` work in every state.
+    ``from_config()`` builds a client that reconnects by itself after a drop.
+
+    Every ``on_*`` callback below starts as a function that does nothing.
+    The client calls them from inside ``handle()``.  ``disconnect()`` calls
+    ``on_disconnect`` too.
+
+    Attributes:
+        state: The current ``ProtocolState`` value.
+        last_error: The ``MQTTError`` behind the most recent failure, or
+            ``None``.
+        on_message: Called as ``on_message(topic, payload)`` for each message
+            on a subscribed topic, with ``topic`` a ``str`` and ``payload``
+            ``bytes``.  It stops firing once ``next_message()`` is called.
+        on_connect: Called as ``on_connect()`` each time the broker accepts
+            the connection, reconnects included.
+        on_disconnect: Called as ``on_disconnect()`` when ``disconnect()``
+            runs and when an accepted connection drops.  A failed reconnect
+            attempt stays silent.
+        on_publish: Called as ``on_publish(topic, payload)`` for every
+            message this client publishes, at the same moment as the
+            ``on_publish`` argument of ``publish()``.
+        on_subscribe: Called as ``on_subscribe(topic, granted_qos)`` when the
+            broker first confirms a ``subscribe()``.
+        on_unsubscribe: Called as ``on_unsubscribe(topic)`` when the broker
+            confirms an ``unsubscribe()``.
+        on_oversized: Called as ``on_oversized(reported_length, topic)`` when
+            a message bigger than ``rx_buffer_size`` is dropped under
+            ``WhenOversized.DROP_WITH_EVENT``.  ``reported_length`` is the
+            size in bytes the packet announced for its topic, packet id, and
+            payload together.  ``topic`` is ``None`` when the topic itself did
+            not fit in the buffer.
+    """
 
     @classmethod
     def from_config(
@@ -186,16 +271,46 @@ class MQTTClient:
         ticks: object | None = None,
         **constructor_kwargs: object,
     ) -> "MQTTClient":
-        """Build an :class:`MQTTClient` from runtime config.
+        """Build a client from a flat config mapping, with a transport that reconnects after a drop.
 
-        Config keys carry the deployment-varying values (broker address,
-        credentials, client id, keepalive, offline policy).  Every other
-        constructor knob is reachable as a keyword and passes through
-        verbatim; an explicit keyword wins over its config-derived value.
+        With neither ``socket`` nor ``transport_factory`` given, the client
+        dials ``mqtt.broker.host`` and ``mqtt.broker.port`` through
+        ``chumicro_sockets.sockets_factory`` and dials again after every drop.
+        The client reads these keys:
+
+        - ``mqtt.broker.host`` and ``mqtt.broker.port``: the broker's
+          address, required unless ``socket`` or ``transport_factory`` is
+          given.
+        - ``mqtt.client_id``: defaults to ``default_client_id()``.
+        - ``mqtt.keep_alive_seconds``: defaults to ``60``.
+        - ``mqtt.username`` and ``mqtt.password``: default to ``None``.
+        - ``mqtt.when_disconnected``: defaults to ``"queue"``.
+
+        Args:
+            config: A ``dict`` or other mapping with ``get()``, ``in``, and
+                ``[]``.
+            radio: The CircuitPython radio, such as ``wifi.radio``.
+                MicroPython and CPython ignore it.
+            ssl_context: TLS settings for the broker connection.  Passing one
+                turns TLS on.
+            socket: Connected socket to use instead of dialing the config's
+                broker address.
+            transport_factory: Connector factory to use instead of dialing
+                the config's broker address.
+            ticks: Clock object, passed to the constructor.
+            **constructor_kwargs: Any other constructor argument.  A keyword
+                given here wins over the config value.
+
+        Returns:
+            A new ``MQTTClient`` in the ``DISCONNECTED`` state.
 
         Raises:
-            ValueError: *config* is not a mapping-like object.
-            MissingConfigKey: A required broker key is missing.
+            ValueError: ``config`` has no ``get()`` method.
+            MissingConfigKey: ``mqtt.broker.host`` or ``mqtt.broker.port``
+                is missing.
+            RuntimeError: Neither ``socket`` nor ``transport_factory`` was
+                given, and ``chumicro_sockets.sockets_factory`` is missing
+                from the board.
         """
         if not hasattr(config, "get"):
             raise ValueError(
@@ -266,30 +381,73 @@ class MQTTClient:
         send_timeout_seconds: float | None = None,
         ticks: object | None = None,
     ) -> None:
-        """Wire up the client.
+        """Build a client in the ``DISCONNECTED`` state.  Network traffic starts at ``connect()``.
 
         Args:
-            socket: Already-connected non-blocking socket; ``None`` when *transport_factory* is given.
-            transport_factory: Zero-arg ``SocketConnector`` factory; used when *socket* is ``None``.
-            client_id: MQTT client identifier, unique per broker.
-            keep_alive_seconds: Broker idle timeout; PINGREQ runs at half this interval.
-            ack_timeout_seconds: Per-ack deadline, also bounding each transport attempt.
-            publish_retry_max: Max QoS 1 PUBLISH retries before FAILED.
-            username: Optional auth username.
-            password: Optional auth password.
-            clean_session: ``False`` resumes persistent broker session state across reconnects.
-            will_topic: Last-will topic; ``None`` disables the will.
-            will_message: Last-will payload.
-            will_qos: Will QoS (0 or 1).
-            will_retain: ``True`` retains the will on the broker.
-            rx_buffer_size: Steady-state RX buffer (default 256); larger PUBLISHes use the oversized tier.
-            when_oversized: Policy for inbound messages larger than ``rx_buffer_size``.
-            when_disconnected: :meth:`publish` policy before CONNECTED, ``"queue"`` (default) or ``"raise"``.
-            pre_connect_queue_size: Bound on the pre-connect publish queue (default 8).
-            recv_budget_per_tick: Cap on bytes pulled per tick (default 1024).
-            max_tx_queue_size: Maximum pending outbound packets (default 20).
-            send_timeout_seconds: Max unsent time before FAILED; ``None`` inherits *ack_timeout_seconds*.
-            ticks: Optional tick source (``chumicro_timing.ticks`` shape); defaults to the real clock.
+            socket: Connected TCP or TLS socket to the broker, with
+                ``recv_into()``, ``send()``, and ``close()``.  The client sets
+                it non-blocking.  Pass ``socket``, ``transport_factory``, or
+                both.  With both, the client starts on ``socket`` and uses
+                the factory to reconnect.
+            transport_factory: Zero-argument callable that returns a new
+                connector, an object that opens the connection over several
+                ``tick(now_ms)`` calls, such as ``chumicro_sockets.connector``.
+                The client calls it at ``connect()`` when it has no socket,
+                and again for every reconnect.
+            client_id: Name the broker knows this client by.  Each client on
+                a broker needs its own, and ``default_client_id()`` builds
+                one.
+            keep_alive_seconds: Keep-alive interval in seconds, sent to the
+                broker on connect.  The broker drops a client that stays
+                silent for one and a half intervals, so the client sends a
+                PINGREQ packet, the MQTT keep-alive ping, every half
+                interval, at least 1 s apart.
+                ``0`` turns keep-alive off.
+            ack_timeout_seconds: Seconds the client waits for each broker
+                reply, and for the network connection to open.  A late PUBACK
+                makes the client resend the message.  Any other late reply
+                moves the client to ``FAILED``.
+            publish_retry_max: How many times the client resends an
+                unconfirmed QoS 1 message before it moves to ``FAILED``.
+            username: User name the broker checks, or ``None``.
+            password: Password the broker checks, or ``None``.
+            clean_session: ``True`` asks the broker for a fresh session on
+                every connect.  ``False`` asks it to keep this client's
+                subscriptions and undelivered QoS 1 messages across
+                reconnects.  With ``False`` the client also keeps its own
+                unconfirmed QoS 1 messages to resend.
+            will_topic: Topic of the last will, or ``None`` for no will.
+                ``set_will()`` explains the last will and changes it later.
+            will_message: Payload of the last will.
+            will_qos: QoS level of the last will, 0 or 1.
+            will_retain: ``True`` makes the last will the topic's retained
+                message.
+            rx_buffer_size: Size in bytes of the receive buffer, allocated
+                once.  ``None`` selects 256.  An incoming message whose packet
+                is bigger is dropped under ``when_oversized``.
+            when_oversized: A ``WhenOversized`` value.
+            when_disconnected: What ``publish()`` does before the client is
+                ``CONNECTED``.  ``"queue"`` holds the message in the
+                pre-connect queue, which goes out, oldest first, once the
+                broker accepts the connection.  ``"raise"`` raises
+                ``MQTTError``.
+            pre_connect_queue_size: How many messages the pre-connect queue
+                holds.
+            recv_budget_per_tick: Most bytes one ``handle()`` call reads from
+                the socket.
+            max_tx_queue_size: Most packets ``publish()``, ``subscribe()``,
+                and ``unsubscribe()`` can leave waiting to be sent.  The next
+                call raises ``MQTTBackpressureError``.
+            send_timeout_seconds: Seconds the send queue may sit with no
+                bytes written before the client moves to ``FAILED``.
+                ``None`` uses ``ack_timeout_seconds``.
+            ticks: Clock object with ``ticks_ms()``, ``ticks_add()``, and
+                ``ticks_diff()``.  ``None`` selects ``chumicro_timing.ticks``.
+
+        Raises:
+            ValueError: Neither ``socket`` nor ``transport_factory`` was
+                given, or ``when_disconnected`` is not ``"queue"`` or
+                ``"raise"``.
         """
         if socket is None and transport_factory is None:
             raise ValueError(
@@ -378,7 +536,17 @@ class MQTTClient:
         self._reconnect_held = False
 
     def connect(self):
-        """Express the intent "be connected", acting on it now."""
+        """Start connecting to the broker and return at once.
+
+        Later ``handle()`` calls open the network connection, send the
+        CONNECT packet, and wait for the broker's CONNACK reply.
+        ``on_connect`` fires when the broker accepts.  ``connect()`` is safe
+        in every state.  In ``DISCONNECTED`` it starts a connection.  In
+        ``FAILED`` it clears ``hold()`` and any final refusal.  A client with
+        a ``transport_factory`` then retries on the next ``handle()`` without
+        waiting out the backoff.  While connecting or connected it does
+        nothing.
+        """
         self._reconnect_held = False
         self._user_wants_connected = True
         if self.state == ProtocolState.DISCONNECTED:
@@ -399,7 +567,13 @@ class MQTTClient:
             return
 
     def hold(self):
-        """Suspend timer-driven reconnection until the next :meth:`connect`."""
+        """Pause automatic reconnects until the next ``connect()``.
+
+        A held client in ``FAILED`` stays there, keeps ``last_error``, and
+        makes no reconnect attempts.  ``publish()`` still queues.  A program
+        calls ``hold()`` when it knows the network link is down, and
+        ``connect()`` when the link returns.
+        """
         self._reconnect_held = True
 
     def _start_transport(self, now_ms=None):
@@ -433,7 +607,14 @@ class MQTTClient:
         self._await_ack(_AWAIT_CONNACK, now_ms=now_ms)
 
     def disconnect(self):
-        """Queue a DISCONNECT packet, close the socket, mark DISCONNECTED."""
+        """Close the connection to the broker and move to ``DISCONNECTED``.
+
+        A connecting or connected client first writes the DISCONNECT packet
+        straight to the socket, which tells the broker to discard the last
+        will.  Packets still waiting to be sent and messages in the
+        pre-connect queue are dropped.  The subscriptions stay.  The next
+        ``connect()`` sends them again.  ``on_disconnect`` fires.
+        """
         if self.state == ProtocolState.DISCONNECTED:
             return
         if self.state == ProtocolState.AWAITING_TRANSPORT:
@@ -478,16 +659,22 @@ class MQTTClient:
         qos: int = 0,
         retain: bool = False,
     ):
-        """Update the Last Will + Testament, taking effect on the next CONNECT.
+        """Set the last will, a message the broker publishes if this client drops without ``disconnect()``.
+
+        The will travels in the CONNECT packet, so a change takes effect at
+        the next connect or reconnect.  A power cut, a wifi loss, or a crash
+        triggers the will.  A clean ``disconnect()`` cancels it.
 
         Args:
-            topic: Will topic; ``None`` disables the will.
-            message: Will payload; ``None`` becomes empty bytes.
-            qos: Will QoS (0 or 1).
-            retain: ``True`` retains the will on the broker.
+            topic: Topic the broker publishes the will to.  ``None`` turns
+                the will off.
+            message: Will payload as ``bytes``.  ``None`` sends an empty
+                payload.
+            qos: QoS level of the will, 0 or 1.
+            retain: ``True`` makes the will the topic's retained message.
 
         Raises:
-            UnsupportedQoSError: ``qos > 1``.
+            UnsupportedQoSError: ``qos`` is 2 or higher.
         """
         if qos > 1:
             raise UnsupportedQoSError(
@@ -507,18 +694,37 @@ class MQTTClient:
         retain: bool = False,
         on_publish: object | None = None,
     ) -> None:
-        """Queue a PUBLISH packet for *topic*.
+        """Queue a message to ``topic`` and return at once.
+
+        A connected client adds the PUBLISH packet to its send queue.  Later
+        ``handle()`` calls write the queue out.  Before ``CONNECTED``, the
+        default ``when_disconnected="queue"`` holds the message in the
+        pre-connect queue until the broker accepts the connection.
+
+        QoS 0 sends the message once and gets no confirmation.  QoS 1
+        resends the message, up to ``publish_retry_max`` times, until the
+        broker confirms it with a PUBACK packet, so the message can arrive
+        twice.
 
         Args:
-            topic: Publish topic, sent on the wire as written.
-            payload: ``bytes`` or ``str`` (``str`` is auto-encoded as UTF-8).
-            qos: 0 or 1; QoS 2 raises :class:`UnsupportedQoSError`.
-            retain: ``True`` for retained messages.
-            on_publish: Callback ``(topic, payload_bytes)`` fired on delivery.
+            topic: Topic name, such as ``"home/kitchen/temp"``, sent as
+                written.
+            payload: Message body.  A ``str`` is encoded as UTF-8.
+            qos: 0 or 1.
+            retain: ``True`` asks the broker to keep this message as the
+                topic's retained message and hand it to every later
+                subscriber.
+            on_publish: Called as ``on_publish(topic, payload)`` once this
+                message is done, with ``payload`` as ``bytes``.  A QoS 1
+                message is done when the broker's PUBACK arrives.  A QoS 0
+                message is done once its bytes are written to the socket.
 
         Raises:
-            MQTTError: ``when_disconnected="raise"`` and not yet CONNECTED.
-            MQTTBackpressureError: The tx queue or pre-connect queue is full.
+            UnsupportedQoSError: ``qos`` is 2 or higher.
+            MQTTBackpressureError: The send queue or the pre-connect queue is
+                full.
+            MQTTError: The client is not ``CONNECTED`` and was built with
+                ``when_disconnected="raise"``.
         """
         if qos > 1:
             raise UnsupportedQoSError(
@@ -610,16 +816,37 @@ class MQTTClient:
         *,
         on_subscribe: object | None = None,
     ) -> None:
-        """Declare a subscription for *topic*, valid in any state.
+        """Add ``topic`` to the subscriptions, so its messages reach ``on_message`` or ``next_message()``.
+
+        ``subscribe()`` works in every state.  A connected client sends the
+        SUBSCRIBE packet now.  Any other client sends it once the broker
+        accepts the connection.  The client sends every subscription again
+        after each reconnect, unless the broker resumed a
+        ``clean_session=False`` session that still holds them.  A filter the
+        broker refuses sends the client to ``FAILED`` with an
+        ``MQTTProtocolError``.  The client then drops that filter from its
+        subscriptions.
 
         Args:
-            topic: Topic filter (``+`` / ``#`` wildcards ok), sent as written.
-            qos: 0 or 1.
-            on_subscribe: One-shot ``(topic, granted_qos)`` fired on the first SUBACK granting *topic*.
+            topic: Topic filter.  ``+`` matches one level and ``#`` matches
+                every level below, as in ``"home/+/temp"`` or ``"home/#"``.
+            qos: Highest QoS level the broker should deliver at, 0 or 1.
+            on_subscribe: Called once as ``on_subscribe(topic, granted_qos)``
+                when the broker first confirms this subscription.
+                ``granted_qos`` is the list of granted levels from the
+                broker's SUBACK reply, such as ``[1]``.
 
         Raises:
-            MQTTBackpressureError: Already CONNECTED and the tx queue is full.
+            MQTTBackpressureError: The client is connected and its send queue
+                is full.  The subscriptions stay unchanged.
+            UnsupportedQoSError: ``qos`` is 2 or higher, in any state.  The
+                subscriptions stay unchanged.
         """
+        if qos > 1:
+            raise UnsupportedQoSError(
+                "subscribe qos must be 0 or 1; QoS 2 is reserved-not-implemented",
+            )
+
         def _wrapped(granted_qos):
             if on_subscribe is not None:
                 on_subscribe(topic, granted_qos)
@@ -636,7 +863,19 @@ class MQTTClient:
         self._subscriptions[topic] = [qos, _wrapped]
 
     def unsubscribe(self, topic, *, on_unsubscribe=None):
-        """Retract a subscription for *topic*, valid in any state."""
+        """Remove ``topic`` from the client's subscriptions.
+
+        ``unsubscribe()`` works in every state.  A connected client also
+        sends an UNSUBSCRIBE packet to the broker.  Any other client only
+        forgets the filter, so the next connect leaves it out.  ``topic`` is
+        the filter string passed to ``subscribe()``.  The optional
+        ``on_unsubscribe`` is called as ``on_unsubscribe(topic)`` when the
+        broker confirms with its UNSUBACK reply.
+
+        Raises:
+            MQTTBackpressureError: The client is connected and its send queue
+                is full.  The subscriptions stay unchanged.
+        """
         if self.state != ProtocolState.CONNECTED:
             self._subscriptions.pop(topic, None)
             return
@@ -653,7 +892,19 @@ class MQTTClient:
         self._await_ack(_AWAIT_UNSUBACK, packet_id=packet_id, callback=_wrapped)
 
     def next_message(self):
-        """Suspend until the next inbound PUBLISH; return it, or ``None`` when parked."""
+        """Wait in a generator task for the next message: ``message = yield from client.next_message()``.
+
+        A generator task is a function with ``yield`` in it that
+        ``chumicro_runner.Runner.add_generator()`` runs one step per tick.
+        The first call switches delivery from ``on_message`` to a queue of up
+        to 16 messages.  A full queue drops its oldest message.
+
+        The ``yield from`` expression evaluates to the next
+        ``InboundPublish``, or to ``None`` once the client has stopped for
+        good.  The client stops for good after ``disconnect()``, after a
+        refusal that retrying cannot fix, and after a drop on a client with
+        no ``transport_factory``.
+        """
         if self._inbound_queue is None:
             # 2-arg deque drops the oldest when full, unlike the raising TX queue.
             self._inbound_queue = deque((), _MAX_INBOUND_QUEUE_SIZE)
@@ -676,7 +927,13 @@ class MQTTClient:
         )
 
     def check(self, now_ms):  # noqa: ARG002 (runner contract uses now_ms)
-        """Return ``True`` when the client wants a ``handle()`` this tick."""
+        """Return ``True`` when the client has work for ``handle()`` on this pass of the loop.
+
+        ``check()`` returns ``False`` in ``DISCONNECTED``, and in ``FAILED``
+        after ``hold()`` or after a refusal that retrying cannot fix.  The
+        client ignores ``now_ms`` and accepts it to match the runner's calling
+        convention.
+        """
         if self.state == ProtocolState.FAILED and (
             self._permanent_failure or self._reconnect_held
         ):
@@ -685,7 +942,11 @@ class MQTTClient:
 
     @property
     def io_socket(self):
-        """The MQTT socket-ish object while connected, connecting, or bringing up transport, else ``None``."""
+        """Socket ``Runner.wait()`` watches for this client, or ``None`` when there is none to watch.
+
+        While the network connection opens, it is the connector's socket.
+        In ``DISCONNECTED`` and ``FAILED`` it is ``None``.
+        """
         if self.state == ProtocolState.AWAITING_TRANSPORT:
             return self._connector.io_socket if self._connector is not None else None
         if self._socket is None:
@@ -695,7 +956,13 @@ class MQTTClient:
         return self._socket
 
     def io_interest(self, now_ms):
-        """Poll-interest bitmask (``_IO_READ`` / ``_IO_WRITE``) for ``Runner.wait``."""
+        """Return the socket events ``Runner.wait()`` should wake for, as a bitmask.
+
+        Bit value 1 asks to wake when ``io_socket`` is readable, and 2 when
+        it is writable.  The client asks to read while connecting or
+        connected, and to write while packets wait in its send queue.  ``0``
+        asks for neither.  ``now_ms`` is the current ``ticks_ms()`` reading.
+        """
         if self.state == ProtocolState.AWAITING_TRANSPORT:
             if self._connector is None:
                 return 0
@@ -714,7 +981,14 @@ class MQTTClient:
         return interest
 
     def io_error(self, now_ms, eventmask):  # noqa: ARG002 - runner contract uses now_ms
-        """Runner hook: POLLERR / POLLHUP surfaced on the registered socket."""
+        """Fail the connection after ``Runner.wait()`` sees an error or hang-up on ``io_socket``.
+
+        ``eventmask`` holds the poll event bits the runner saw, such as
+        ``POLLERR`` or ``POLLHUP``.  The client moves to ``FAILED`` with an
+        ``MQTTError`` naming ``eventmask`` in ``last_error``.  A client with
+        a ``transport_factory`` then reconnects as after any drop.  The
+        client ignores ``now_ms``.
+        """
         if self.state in (ProtocolState.DISCONNECTED, ProtocolState.FAILED):
             return
         if self.state == ProtocolState.AWAITING_TRANSPORT and self._connector is not None:
@@ -727,7 +1001,13 @@ class MQTTClient:
         self._enter_failed()
 
     def next_deadline(self, now_ms):
-        """Earliest tick at which ``handle()`` must run even on a quiet socket."""
+        """Return the ``ticks_ms()`` value by which ``handle()`` must run, or ``None`` with no timer set.
+
+        ``Runner.wait()`` wakes no later than this tick, even when the socket
+        stays quiet.  The client reports the nearest of its keep-alive ping,
+        reply deadlines, QoS 1 resends, send timeout, and reconnect time.
+        ``now_ms`` is the current ``ticks_ms()`` reading.
+        """
         if self.state == ProtocolState.AWAITING_TRANSPORT:
             if self._connector is None:
                 return None
@@ -770,7 +1050,24 @@ class MQTTClient:
         return nearest
 
     def handle(self, now_ms):
-        """One tick of progress."""
+        """Do one bounded step of network work, whenever ``check()`` returns ``True``.
+
+        One call advances the connection attempt, checks reply deadlines and
+        resends late QoS 1 messages, sends a keep-alive ping when one is due,
+        reads up to ``recv_budget_per_tick`` bytes, dispatches the packets
+        those bytes complete, and sends one queued packet.  Callbacks run
+        inside this call.  The DNS lookup and the TLS handshake each run to
+        completion inside one call, which holds up the loop until they
+        finish.
+
+        An MQTT or socket error moves the client to ``FAILED`` and lands in
+        ``last_error`` instead of raising.  Any other exception a callback
+        raises propagates out of ``handle()``.  In ``FAILED``, a client with a
+        ``transport_factory`` reconnects, waiting 1 s before the second
+        attempt and doubling the wait after each failure up to 60 s.
+        ``now_ms`` is the current ``ticks_ms()`` reading that every deadline
+        is measured against.
+        """
         if self.state == ProtocolState.FAILED:
             if not self._self_heal_active():
                 return

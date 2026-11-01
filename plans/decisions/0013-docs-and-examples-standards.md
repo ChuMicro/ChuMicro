@@ -3,7 +3,7 @@
 Status: `accepted`
 Date: `2026-04-02`
 Summary: Each library ships `README.md` + `docs/` + `examples/`; examples import only the owning lib, declared deps, and sibling files; `verify-examples` is AST-only, not execution.
-Related: Decision 0011 (platform targeting determines doc-publishing), Decision 0021 (docstring type policy)
+Related: Decision 0011 (platform targeting determines doc-publishing), Decision 0021 (docstring type policy), Decision 0130 (examples never exit)
 
 ## Context
 
@@ -17,7 +17,7 @@ Each library under `libraries/<name>/` ships:
 
 1. **`README.md`** at the library root — landing page with one-line description, install instructions (pip / circup / mip), quick example, links to hosted docs (`https://chumicro.com/ChuMicro/<name>/{stable,experimental}/`), GitHub-browsable docs links, and platform compatibility notes.
 2. **`docs/`** — `index.md` (landing), `guide.md` (user guide), `api.md` (auto-generated from docstrings via mkdocstrings `:::` directives), and topic pages as needed (`testing.md` etc.).
-3. **`examples/`** — runnable scripts: simulated examples that run on CPython without hardware, plus optional hardware examples named `circuitpython_*.py` / `micropython_*.py` with `# requires: hardware` first line.  Top-level code only, no `if __name__ == "__main__":` guards (CP/MP run `code.py` at top level).
+3. **`examples/`** — runnable scripts: simulated examples that run on CPython without hardware, plus optional hardware examples named `circuitpython_*.py` / `micropython_*.py` with `# requires: hardware` first line.  Top-level code only, no `if __name__ == "__main__":` guards (CP/MP run `code.py` at top level).  Each example ends in a module-level `while True:` and never exits ([Decision 0130](0130-examples-and-demos-never-exit.md)).
 
 The full quality checklist — guide structure, docstring requirements, example realism rules, inline-comment policy — lives in [`docs/contributing/new-library.md`](../../docs/contributing/new-library.md).  This ADR fixes the slot shape; that doc fixes the per-slot content.
 

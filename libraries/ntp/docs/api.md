@@ -1,5 +1,7 @@
 # API Reference
 
+`chumicro_ntp` exports `NTPClient`, `NTPResult`, and `NTPError`.  `NTPClient` is the class a program builds first.  Its `query()` returns an `NTPResult`, and a failed query stores an `NTPError` on that result.
+
 ## `chumicro_ntp`
 
 ::: chumicro_ntp

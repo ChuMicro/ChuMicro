@@ -123,44 +123,52 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         choices=("device", "device-unit", "unix-port"),
         default="device",
         help=(
-            "execution backend: 'device' (functional_tests on a board "
-            "via the chumicro-deploy transport), 'device-unit' (the "
-            "cross-runtime libraries/<name>/tests suite on a board, "
-            "the on-device unit sweep), or 'unix-port' (that same unit "
-            "suite in a MicroPython / CircuitPython unix-port "
-            "subprocess)"
+            "where the tests run: 'device' runs functional_tests/ files "
+            "on a board, 'device-unit' runs a library's tests/ suite on "
+            "a board, and 'unix-port' runs that tests/ suite in a "
+            "MicroPython or CircuitPython unix-port subprocess"
         ),
     )
     group.addoption(
         "--runtime",
         choices=("micropython", "circuitpython", "both"),
         default=None,
-        help="override devices.yml defaults.ide_runtime",
+        help=(
+            "runtime to test on.  Board targets default to "
+            "defaults.ide_runtime in devices.yml, and the unix-port "
+            "target defaults to both"
+        ),
     )
     group.addoption(
         "--micropython-device",
         default=None,
-        help="override devices.yml defaults.micropython device ID",
+        help=(
+            "devices.yml id of the MicroPython board to use in place of "
+            "defaults.micropython"
+        ),
     )
     group.addoption(
         "--circuitpython-device",
         default=None,
-        help="override devices.yml defaults.circuitpython device ID",
+        help=(
+            "devices.yml id of the CircuitPython board to use in place "
+            "of defaults.circuitpython"
+        ),
     )
     group.addoption(
         "--micropython-binary",
         default=None,
         help=(
-            "unix-port MicroPython binary path "
-            "(overrides .tools/micropython.path and PATH lookup)"
+            "MicroPython unix-port binary for --target unix-port, used "
+            "ahead of .tools/micropython.path and PATH"
         ),
     )
     group.addoption(
         "--circuitpython-binary",
         default=None,
         help=(
-            "unix-port CircuitPython binary path "
-            "(overrides .tools/circuitpython.path and PATH lookup)"
+            "CircuitPython unix-port binary for --target unix-port, used "
+            "ahead of .tools/circuitpython.path and PATH"
         ),
     )
     group.addoption(
@@ -168,48 +176,52 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         type=float,
         default=_DEFAULT_EXECUTE_TIMEOUT_SECONDS,
         help=(
-            "per-file wall-clock ceiling (seconds) for a unix-port "
-            "worker subprocess; a file that exceeds it is killed and "
-            f"fails cleanly (default {_DEFAULT_EXECUTE_TIMEOUT_SECONDS:g})"
+            "seconds one test file may run under --target unix-port.  "
+            "The plugin stops a file that runs longer and fails it "
+            f"(default {_DEFAULT_EXECUTE_TIMEOUT_SECONDS:g})"
         ),
     )
     group.addoption(
         "--unix-port-heapsize",
         default=HEAPSIZE_FROM_CONFIG,
         help=(
-            "heap ceiling for unix-port workers (e.g. 192K); default "
-            "reads per-runtime budgets from target-runtimes.toml "
-            "[heap]; pass 0 or off to spawn with the port's native "
-            "multi-MB heap"
+            "heap size for each unix-port run, such as 192K.  The "
+            "default is the target-runtimes.toml [heap] budget, and 0 "
+            "or off gives the port its own multi-megabyte heap"
         ),
     )
     group.addoption(
         "--deploy-mode",
         choices=tuple(mode.value for mode in DeployMode),
         default=None,
-        help="override per-device deploy_mode (ram / flash)",
+        help=(
+            "copy the tests to the board's flash or run them from RAM, "
+            "in place of the deploy_mode in devices.yml"
+        ),
     )
     group.addoption(
         "--pr-summary",
         action="store_true",
         default=False,
-        help="print a Markdown PR block at session end",
+        help=(
+            "print a Markdown summary of the board results at the end "
+            "of the run, ready to paste into a pull request"
+        ),
     )
     group.addoption(
         "--pr-summary-command",
         default=None,
-        help="command string to render inside the PR block",
+        help="command the --pr-summary block shows (default: pytest)",
     )
     group.addoption(
         "--per-file",
         action="store_true",
         default=False,
         help=(
-            "flash/copy device-unit only: soft-reset before each test "
-            "*file* (not just each library), so a large class-organized "
-            "module runs on a fresh interpreter.  Opt-in: the default "
-            "per-library reset is faster and enough for PSRAM boards / "
-            "small libraries. Use this for large suites on a 256 KB board"
+            "in flash mode, soft-reset the board and copy one test file "
+            "at a time, so each file starts on a fresh interpreter.  The "
+            "default resets once per library, which is faster.  Use it "
+            "for large suites on a 256 KB board"
         ),
     )
 

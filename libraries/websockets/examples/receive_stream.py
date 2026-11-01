@@ -1,88 +1,129 @@
-"""WebSocket receive-stream client via next_message on a real board.
+"""Print every message a WebSocket server streams to your board, and reconnect when the stream ends.
 
-Brings wifi up via the local ``helpers`` module, connects to a
-configured server, then receives every message with a
-``yield from ws.next_message()`` loop driven by ``Runner.add_generator``:
-wait for a message, print it, wait for the next, until the server
-closes the stream.
+The board joins wifi, connects to a WebSocket server, and prints each
+message the server sends.  When the server closes the connection, or
+the connection fails, the board prints why and connects again within
+five seconds.
 
-Pair with ``client.py``, which uses the ``on_text`` / ``on_binary``
-callbacks and a hand-rolled tick loop; this one shows the linear
-receive loop where the session and the consumer are both registered
-with the runner.
+``client.py`` handles incoming messages with callbacks.  This example
+reads them with a generator instead: a function that pauses at each
+``yield`` and carries on from that line on a later pass of the loop.
+``message = yield from client.next_message()`` pauses until the next
+message arrives, so the receive code reads top to bottom.
 
-Prerequisite
-============
-
-Needs a reachable websocket server that sends messages.  Run
-``chumicro_websockets`` server on a desktop or a second board and set
-``websockets.client.connect_url`` (see ``client.py`` for the same
-setup).  If no URL is configured, the example prints a SETUP message
-and exits cleanly.
-
-Configuration
+What you need
 =============
 
-Reads the deployed ``runtime_config.msgpack`` via the flat-key API:
+A WebSocket server that sends messages on its own.  The quickest one
+runs on your laptop: install the ``websockets`` package with
+``pip install websockets``, then run this line.  It sends the time once
+a second, ten times, then closes the connection, so you also see the
+board reconnect::
 
-* WiFi (read by ``helpers.wifi_up``): ``wifi.ssid`` / ``wifi.password``.
-* App-level: ``websockets.client.connect_url``, the server to connect
-  to, passed to ``ws.connect(url)``.
+    python -c "import time; from websockets.sync.server import serve; serve(lambda ws: [(ws.send(time.strftime('%H:%M:%S')), time.sleep(1)) for _ in range(10)], '0.0.0.0', 8765).serve_forever()"
 
-Deploying
-=========
+Your laptop's IP address goes in ``SERVER_URL``.  Find it with
+``ipconfig getifaddr en0`` on macOS, ``hostname -I`` on Linux, or
+``ipconfig`` on Windows.
 
-Deploy with ``chumicro-workspace``::
+A second board running ``server.py`` from this folder works too.  It
+prints the URL to use when it starts and sends a ``count`` message
+every five seconds.
 
-    chumicro-workspace deploy-example websockets receive_stream --device <id>
-"""
+Setup
+=====
+
+1. Set ``SERVER_URL`` below, for example ``ws://192.168.1.42:8765/``.
+2. Set ``WIFI_SSID`` and ``WIFI_PASSWORD`` below.
+3. Deploy and watch the output::
+
+       chumicro-workspace deploy-example websockets receive_stream
+
+A deploy from a ``chumicro-workspace`` also copies your ``secrets.toml``
+to the board, and its values win over the constants: ``ssid`` and
+``password`` under ``[wifi]``, and ``connect_url`` under
+``[websockets.client]``.
+
+Example output against the laptop server::
+
+    WIFI_OK ip=192.168.1.57
+    [client] connecting to ws://192.168.1.42:8765/
+    [client] received: 14:02:11
+    [client] received: 14:02:12
+    ...
+    [client] received: 14:02:20
+    [client] closed after 10 message(s): code=1000 reason=''
+    [client] connecting to ws://192.168.1.42:8765/
+    [client] received: 14:02:25
+"""  # noqa: E501 - the laptop command has to stay on one line to copy and paste
 
 #: Tooling reads this marker to allow the example on either runtime.
 __chumicro_runtimes__ = ("circuitpython", "micropython")
 
 from chumicro_runner import Runner
-from chumicro_websockets import WebSocketClient
+from chumicro_websockets import WebSocketClient, WebSocketState
 from helpers import runtime_config, wifi_up
 
 WIFI_SSID = "your-wifi-ssid"  # noqa: S105 - replace before deploying
 WIFI_PASSWORD = "your-wifi-password"  # noqa: S105 - replace before deploying
+SERVER_URL = "ws://192.168.1.42:8765/"  # replace with your server's address
+RETRY_EVERY_MS = 5000
 
 config = runtime_config()
-connect_url = config.get("websockets.client.connect_url")
-if not connect_url:
-    print("SETUP: this example needs a reachable websocket server.")
-    print("       Set `websockets.client.connect_url` in secrets.toml")
-    print("       (e.g. ws://192.168.1.42:8765/) and redeploy.")
-    raise SystemExit(0)
+server_url = config.get("websockets.client.connect_url", SERVER_URL)
 
 radio, ip = wifi_up(WIFI_SSID, WIFI_PASSWORD)
 print(f"WIFI_OK ip={ip}")
 
-ws = WebSocketClient.from_config(config, radio=radio)
-ws.on_open = lambda: print("[client] open")
-ws.connect(connect_url, timeout_ms=10_000)
+# A Runner gives every task registered with it a turn on each pass of
+# the loop at the bottom of this file.
+runner = Runner()
 
 
-def receive_stream():
+def print_messages(client):
+    """Print each message from one connection, until that connection closes."""
     received = 0
     while True:
-        message = yield from ws.next_message()
+        # Pause here until a message arrives.  None means the connection closed.
+        message = yield from client.next_message()
         if message is None:
             break
         received += 1
-        text = message.text if message.is_text else repr(message.data)
-        print(f"[client] message {received}: {text}")
-    print(f"[client] stream closed after {received} message(s)")
+        if message.is_text:
+            print(f"[client] received: {message.text}")
+        else:
+            print(f"[client] received {len(message.data)} bytes")
+    print(
+        f"[client] closed after {received} message(s): "
+        f"code={client.last_close_code} reason={client.last_close_reason!r}",
+    )
 
 
-runner = Runner()
-runner.add(ws)
-runner.add_generator(receive_stream())
+def start_client():
+    """Open a new connection and register it, then its printer, with the runner."""
+    client = WebSocketClient.from_config(config, radio=radio)
+    print(f"[client] connecting to {server_url}")
+    client.connect(server_url)
+    # The client reads the network; the generator prints what it read.
+    client_task = runner.add(client)
+    runner.add_generator(print_messages(client))
+    return client, client_task
 
-# The main loop.  tick() gives the client and the receive generator one
-# small step each; wait() idles the CPU until the next socket event or
-# timer deadline instead of spinning.  It never exits, which is what a
-# board program does: press Ctrl-C in the serial console to stop it.
+
+client, client_task = start_client()
+
+
+def reconnect_if_closed(now_ms):
+    """Start a new connection once the old one has closed."""
+    global client, client_task
+    if client.state == WebSocketState.CLOSED:
+        # A client connects only once, so a closed one is swapped for a new one.
+        client_task.remove()
+        client, client_task = start_client()
+
+
+runner.add_periodic(reconnect_if_closed, period_ms=RETRY_EVERY_MS)
+
 while True:
-    now_ms = runner.tick()
-    runner.wait(now_ms)
+    now_ms = runner.tick()  # the client reads the network; the generator prints what arrived
+    runner.wait(now_ms)  # then the CPU idles until a message arrives or a retry is due

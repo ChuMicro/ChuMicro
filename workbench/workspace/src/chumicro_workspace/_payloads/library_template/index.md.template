@@ -21,10 +21,10 @@ from chumicro_timing import ticks_ms
 countdown = Countdown(period_ms=5000)
 
 while True:
-    now = ticks_ms()
-    if countdown.fired(now):
+    now_ms = ticks_ms()
+    if countdown.fired(now_ms):
         print("time's up")
-        break
+        countdown.reset(now_ms)
 ```
 
 ## Documentation

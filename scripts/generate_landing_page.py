@@ -36,9 +36,9 @@ from site_host import host_url, site_root
 #: Names missing from the tuple sort after the curated set, alphabetically,
 #: so a newly added library appears without editing this file.
 LIBRARY_ORDER = (
-    "timing", "runner", "wifi", "requests", "http_server", "mqtt",
-    "websockets", "sockets", "ntp", "config", "kvstore", "msgpack",
-    "compat",
+    "timing", "runner", "buttons", "knobs", "wifi", "requests",
+    "http_server", "mqtt", "websockets", "sockets", "ntp", "config",
+    "kvstore", "msgpack", "compat",
 )
 
 #: Workbench card order: the root README's bench-tools order, front door
@@ -458,6 +458,19 @@ def generate_llms_txt() -> str:
         "",
         "## Guides",
         "",
+        f"- [Start here]({SITE_ROOT}/{GUIDES_PREFIX}/start-here/): from a board "
+        "still in its packaging to your own code running on it.",
+        f"- [Coming from Arduino]({SITE_ROOT}/{GUIDES_PREFIX}/coming-from-arduino/): "
+        "each Arduino and Adafruit Learn habit (delay(), millis(), "
+        "time.sleep(), debouncing, settings.toml) mapped to its ChuMicro "
+        "equivalent, with side-by-side code.",
+        f"- [Project: a WiFi temperature sensor]({SITE_ROOT}/{GUIDES_PREFIX}/"
+        "tutorial-wifi-sensor/): one board built up in six steps, from a "
+        "blink to MQTT readings that survive a reboot.",
+        f"- [How it works]({SITE_ROOT}/{GUIDES_PREFIX}/how-it-works/): one "
+        "`while True:` loop sharing many jobs, from time.sleep() to the runner.",
+        f"- [Glossary]({SITE_ROOT}/{GUIDES_PREFIX}/glossary/): every term the "
+        "documentation uses, each linked to the page that explains it.",
         f"- [Questions people ask]({SITE_ROOT}/{GUIDES_PREFIX}/faq/): why a board "
         "freezes on the network, whether the libraries use async, what they cost "
         "in flash, and how to test without hardware.",

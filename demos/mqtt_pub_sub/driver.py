@@ -5,9 +5,10 @@ board's ``app.py`` via :func:`chumicro_workspace.deploy_api.deploy_project`
 with broker coords baked into the runtime_config payload, and runs a
 CPython-side :class:`MQTTClient` as the counterparty: subscribes to
 wildcard topics (``demo/+/state``, ``demo/+/telemetry``) to verify the
-board's retained "online" + three QoS 1 telemetry publishes, and
-publishes a QoS 1 command back so the board's inbound path (its
-``on_message`` callback) fires in one run.
+board's retained "online" and its first three QoS 1 telemetry
+publishes, and publishes a QoS 1 command back so the board's inbound
+path (its ``on_message`` callback) fires in one run.  The board keeps
+publishing every two seconds after the driver leaves.
 
 Pinned ``deploy_mode="flash"`` so the demo always runs the
 production-shaped path regardless of any per-device override in
@@ -34,6 +35,7 @@ from chumicro_workspace.deploy_api import (
     DeployApiError,
     DeviceNotFoundError,
     deploy_project,
+    echo_board_line,
 )
 from chumicro_workspace.markers import MarkerTimeoutError
 
@@ -108,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--telemetry-timeout-s", type=float, default=30.0,
-        help="seconds to wait for all three telemetry receipts on the host",
+        help="seconds to wait for the first three telemetry messages on the host",
     )
     parser.add_argument(
         "--completion-timeout-s", type=float, default=120.0,
@@ -139,6 +141,7 @@ def main(argv: list[str] | None = None) -> int:
                     "mqtt.client_id": _BOARD_CLIENT_ID,
                 },
                 workspace_root=_REPO_ROOT,
+                on_line=echo_board_line,
             )
         except DeviceNotFoundError as device_error:
             print(f"driver: {device_error}", file=sys.stderr)
@@ -188,10 +191,9 @@ def main(argv: list[str] | None = None) -> int:
 
         host_client.on_message = _on_host_message
 
-        # Subscribe to telemetry BEFORE the board reaches the broker:
-        # the board's first samples drain from its pre-connect publish
-        # queue at CONNACK, and a late subscriber misses them.  The
-        # board is still doing wifi bring-up while this SUBACK lands.
+        # Subscribe to telemetry before the board reaches the broker, so
+        # the host sees every message from the first one.  The board is
+        # still doing wifi bring-up while this SUBACK lands.
         telemetry_subscribed = [False]
         host_client.subscribe(
             "demo/+/telemetry", qos=1,
@@ -276,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
         # The board's on_message fires when the command lands.
         session.wait_for("CMD_RECEIVED", timeout_s=15.0, pump=pump)
 
-        # Drive host until all three telemetry samples have arrived.
+        # Drive host until the first three telemetry messages have arrived.
         if not _drive_host(
             host_client, lambda: len(telemetry_received) >= 3,
             timeout_s=args.telemetry_timeout_s,
@@ -287,13 +289,13 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 7
-        print(f"driver: telemetry {len(telemetry_received)}/3 received")
+        print("driver: first 3 telemetry messages received")
 
         session.wait_for(
             "DEMO_COMPLETE", timeout_s=args.completion_timeout_s, pump=pump,
         )
 
-        print("driver: demo completed cleanly.")
+        print("driver: demo completed cleanly; the board keeps publishing.")
         return 0
     except MarkerTimeoutError as marker_error:
         print(f"driver: {marker_error}", file=sys.stderr)

@@ -1,4 +1,4 @@
-"""Core ``KVStore`` class, exception hierarchy, and the ``Backend`` protocol base."""
+"""``KVStore``, its exceptions, and ``Backend``, the base class of the built-in backends."""
 
 import gc
 import sys
@@ -7,19 +7,35 @@ from chumicro_msgpack import packb, unpackb
 
 
 class KVStoreError(Exception):
-    """Base for every kvstore-specific failure."""
+    """Base class of ``KVStoreFull`` and ``KVStoreCorrupt``.
+
+    ``except KVStoreError:`` catches both.
+    """
 
 
 class KVStoreFull(KVStoreError):
-    """A commit would exceed ``capacity``; the in-memory state is left unchanged."""
+    """Raised when the packed values take more than ``capacity`` bytes.
+
+    ``commit()`` and ``commit_if_changed()`` raise it before writing, so the
+    store saves nothing and the values in memory stay as they were.
+    """
 
 
 class KVStoreCorrupt(KVStoreError):
-    """Persisted state failed its integrity check on load."""
+    """Raised by ``reload()`` when the saved bytes are damaged.
+
+    The bytes fail the backend's check, are not valid msgpack, or do not
+    unpack to a dict. Creating a ``KVStore`` catches it and sets
+    ``is_corrupt`` instead.
+    """
 
 
 class Backend:
-    """Interface that every concrete backend implements."""
+    """Base class of the built-in backends, the storage that holds a ``KVStore``'s bytes.
+
+    A subclass sets ``name`` and ``capacity`` and overrides ``load()`` and
+    ``save(payload)``.
+    """
 
     # A plain class, not typing.Protocol: MicroPython has no typing module.
     name: str = "base"
@@ -32,7 +48,7 @@ class Backend:
         raise NotImplementedError
 
     def _check_capacity(self, payload: bytes) -> None:
-        # One guard for every backend's save(); capacity 0 means unbounded.
+        # One guard for every backend's save(). Capacity 0 means unbounded.
         if 0 < self.capacity < len(payload):
             raise KVStoreFull(
                 f"payload size {len(payload)} exceeds "
@@ -78,14 +94,54 @@ def _resolve_backend(backend: Backend | str) -> Backend:
 
 
 class KVStore:
-    """Persisted key-value store with a mapping-style public API.
+    """``KVStore`` holds a dict in memory and saves it to the board's flash or NVM on ``commit()``.
 
-    Construction reads the backend once; a corrupt payload parks the store
-    empty with ``is_corrupt`` set, but a backend that cannot reach its
-    substrate at all (missing NVM, unreadable filesystem) raises.
+    The saved values survive a reset or a power cut. ``KVStore()`` reads the
+    saved bytes once. After that ``store[key]``, ``store[key] = value``,
+    ``del store[key]``, ``key in store``, ``len(store)``, and
+    ``for key in store`` work on the dict in memory, as do ``get``, ``keys``,
+    ``items``, ``values``, ``pop``, ``clear``, and ``update``. A change stays
+    in memory until ``commit()`` or ``commit_if_changed()`` saves it.
+
+    ``chumicro_msgpack`` packs the values, which limits what a value can be:
+    ``None``, a ``bool``, ``int``, ``float``, ``str``, or ``bytes``, or a
+    ``list`` or ``dict`` of those, nested at most 8 deep. An ``int`` lies
+    between ``-2**31`` and ``2**32 - 1``, and between ``-2**30`` and
+    ``2**30 - 1`` on CircuitPython. A ``float`` saves as 32 bits, about 7
+    significant digits.
+
+    Damaged saved data leaves the new store empty with ``is_corrupt`` set,
+    so the program keeps running.
 
     Args:
-        backend: ``"auto"``, ``"memory"``, ``"nvm"``, ``"nvs"``, ``"littlefs"``, or a backend instance.
+        backend: Where the bytes go. ``"auto"`` picks ``"nvm"``
+            (``microcontroller.nvm``) on CircuitPython, ``"nvs"``
+            (``esp32.NVS``) on MicroPython boards with the ``esp32`` module,
+            ``"littlefs"`` (the file ``/_chu_kv.msgpack``) on other
+            MicroPython boards, and ``"memory"`` on CPython. One of those
+            names skips the choice and uses that backend. An object with a
+            ``name`` string, a ``capacity`` in bytes (``0`` for no limit), a
+            ``load()`` that returns the saved bytes (empty when nothing is
+            saved), and a ``save(payload)`` that stores them works as a
+            backend too. Its ``load()`` raises ``KVStoreCorrupt`` for damaged
+            bytes.
+
+    Attributes:
+        capacity: Most bytes ``commit()`` saves. The backend sets it: the NVM
+            size minus a 10-byte header for ``"nvm"``, 512 for ``"nvs"``,
+            16384 for ``"littlefs"``, and ``sys.maxsize`` for ``"memory"``.
+            A backend object passed as ``backend`` sets any other limit
+            through its own ``capacity``.
+        backend_name: The backend's ``name``, such as ``"nvm"``.
+        is_corrupt: ``True`` when the saved data was damaged and the store
+            started empty. The next successful ``commit()`` or ``reload()``
+            sets it back to ``False``.
+
+    Raises:
+        ValueError: ``backend`` is an unknown name, or the board's NVM holds
+            10 bytes or fewer.
+        RuntimeError: The named backend's hardware module is missing, such as
+            ``"nvm"`` off CircuitPython or ``"nvs"`` without ``esp32``.
     """
 
     def __init__(self, backend: Backend | str = "auto") -> None:
@@ -96,8 +152,6 @@ class KVStore:
         self._last_payload: bytes = b""
         self.is_corrupt: bool = False
         self._dirty: bool = False
-        # Construction reads the backend once; corruption parks the store
-        # empty with is_corrupt latched instead of raising.
         try:
             self.reload()
         except KVStoreCorrupt:
@@ -106,10 +160,14 @@ class KVStore:
             self.is_corrupt = True
 
     def reload(self) -> None:
-        """Discard in-memory state and reread from backend.
+        """Drop unsaved changes and read the saved values back from the backend.
+
+        An empty backend gives an empty store. A successful ``reload()`` sets
+        ``is_corrupt`` to ``False``.
 
         Raises:
-            KVStoreCorrupt: Backend payload failed integrity check.
+            KVStoreCorrupt: The saved bytes are damaged. The values in memory
+                stay as they were.
         """
         self._dirty = False
         payload = self._backend.load()
@@ -127,24 +185,39 @@ class KVStore:
         self._data = dict(loaded)
         self._last_payload = bytes(payload)
         self.is_corrupt = False
-        # The raw payload and decode scratch can be a 16 KB-class blob;
-        # release them now rather than waiting on natural collection.
+        # Loading and decoding leave temporary buffers behind. Collecting now
+        # returns that heap at once, before the next automatic collection.
         del payload, loaded
         gc.collect()
 
     def commit(self) -> None:
-        """Encode the current dict and persist it through the backend.
+        """Pack every value and save the bytes through the backend, changed or not.
+
+        Each save writes flash. Flash wears out after many writes, so code
+        that saves in a loop or on a timer calls ``commit_if_changed()``
+        instead. A value msgpack cannot pack makes ``commit()`` raise the
+        packer's error before anything is saved.
 
         Raises:
-            KVStoreFull: Encoded payload exceeds ``capacity``.
+            KVStoreFull: The packed values take more than ``capacity`` bytes.
         """
         self._persist(packb(self._data))
 
     def commit_if_changed(self) -> bool:
-        """Commit only when the encoded payload changed since the last persist.
+        """Save the values only when they differ from the saved copy, and report whether it saved.
+
+        ``commit_if_changed()`` returns ``False`` at once when no
+        ``store[key] = value``, ``del``, ``pop``, ``clear``, or ``update`` ran
+        since the last save or ``reload()``. Otherwise it packs the values and
+        saves only when the bytes differ from the saved bytes. A change inside
+        a stored list or dict, such as ``store["log"].append(1)``, marks
+        nothing. Assigning the key again marks it.
 
         Returns:
-            ``True`` if a write happened, ``False`` if the commit was skipped.
+            ``True`` when it saved, ``False`` when it skipped the save.
+
+        Raises:
+            KVStoreFull: The packed values take more than ``capacity`` bytes.
         """
         if not self._dirty:
             return False
@@ -187,19 +260,27 @@ class KVStore:
         return len(self._data)
 
     def get(self, key: str, default: object = None) -> object:
+        """Return the value for ``key``, or ``default`` when ``key`` is missing."""
         return self._data.get(key, default)
 
     def keys(self):
+        """Return a view of the keys in memory, as ``dict.keys()`` does."""
         return self._data.keys()
 
     def items(self):
+        """Return a view of the ``(key, value)`` pairs in memory, as ``dict.items()`` does."""
         return self._data.items()
 
     def values(self):
+        """Return a view of the values in memory, as ``dict.values()`` does."""
         return self._data.values()
 
     def pop(self, key: str, *default: object) -> object:
-        """Remove *key* and return its value, or *default* when supplied."""
+        """Remove ``key`` and return its value, or return ``default`` when ``key`` is missing.
+
+        Raises:
+            KeyError: ``key`` is missing and no ``default`` was given.
+        """
         if default:
             value = self._data.pop(key, default[0])
         else:
@@ -210,16 +291,20 @@ class KVStore:
         return value
 
     def clear(self) -> None:
-        """Remove every key from the in-memory dict (commit not implied)."""
+        """Remove every key from memory. The saved copy stays until the next save."""
         self._data.clear()
         self._dirty = True
 
     def update(self, other: dict[str, object]) -> None:
-        """Merge *other* into the in-memory dict (commit not implied)."""
+        """Copy every key and value from ``other`` into the store, replacing existing keys."""
         self._data.update(other)
         self._dirty = True
 
     @property
     def bytes_used(self) -> int:
-        """Encoded size of the current in-memory dict, not the persisted payload."""
+        """Bytes the values in memory take once packed, saved or not.
+
+        ``commit()`` raises ``KVStoreFull`` when ``bytes_used`` is above a
+        nonzero ``capacity``. Each read packs the whole dict.
+        """
         return len(packb(self._data))

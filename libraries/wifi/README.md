@@ -3,9 +3,9 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-**Wifi that auto-reconnects so your app code doesn't have to.**
+**Wifi that reconnects on its own, so your code doesn't have to.**
 
-One WiFi service across CircuitPython (Adafruit boards) and MicroPython on both ESP32 and Pi Pico W.  Owns the radio (no `CIRCUITPY_WIFI_*` settings, no firmware-level auto-reconnect competing with you), surfaces state transitions as events you can wire into the rest of your app via [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner), and reads its config section via [`chumicro-config`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config).  CircuitPython's substrate-level `connect()` is blocking.  See [Platform support](#platform-support) for what that means in practice.
+`WifiService` joins your network, watches the link, and rejoins after a drop, doubling the pause between failed tries up to one minute.  The same code runs on CircuitPython boards and on MicroPython boards with an ESP32 or a Pi Pico W radio.  It expects to drive the radio alone.  On CircuitPython, leave the `CIRCUITPY_WIFI_*` keys out of `settings.toml`, so the firmware's own auto-connect stays out of its way.  On CircuitPython each join attempt also pauses your loop.  [Platform support](#platform-support) says for how long.
 
 <br clear="left">
 
@@ -24,65 +24,108 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_wifi
 pip install chumicro-wifi
 ```
 
-For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and details on PyPI naming, see the [ChuMicro install guide](https://chumicro.com/ChuMicro/guides/install/).
+The quick example runs on a `Runner` from `chumicro-runner`.  Install it the same way.
+
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
 
-User-app pattern (the 4-line bring-up):
+Join the network, then print the state and IP address every five seconds, forever:
 
 ```python
 from chumicro_config import load_runtime_config
 from chumicro_runner import Runner
 from chumicro_wifi import WifiService
 
-config = load_runtime_config()
-runner = Runner()
+config = load_runtime_config()  # wifi.ssid and wifi.password, deployed to the board
 wifi = WifiService.from_config(config)
-runner.add(wifi)
+
+
+def print_status(now_ms):
+    print(f"state={wifi.state} ip={wifi.ip}")
+
+
+runner = Runner()
+runner.add(wifi)                # joins, watches the link, rejoins after a drop
+runner.add_periodic(print_status, period_ms=5_000)
+
+while True:
+    now_ms = runner.tick()      # wifi and the status timer each take one small step
+    runner.wait(now_ms)         # sleep until wifi or the status timer is due
 ```
 
-State + IP introspection any time:
+`load_runtime_config()` reads the settings a `chumicro-workspace` deploy writes to the board.  [Wifi credentials](#wifi-credentials) shows that file, and the way to build the settings in code.
+
+`runner.tick()` runs every job that is due.  `runner.wait(now_ms)` sleeps until the next one is.  `wifi` is a service, an object a loop drives through two methods.  `check(now_ms)` returns `True` when the service has work to do.  `handle(now_ms)` does one small step of that work.  `WifiService` tells `wait()` when it next needs `handle()`, so a loop holding wifi alone still sleeps between passes.  Put your own code in place of `print_status`, and wifi keeps reconnecting in the same loop.
+
+Read the state any time:
 
 ```python
-wifi.state          # "disconnected" | "connecting" | "connected" | "reconnecting" | "failed"
-wifi.connected
-wifi.ip
-wifi.last_error
-wifi.on_state_change(lambda old, new: print(f"{old} -> {new}"))
+wifi.state          # "disconnected", "connecting", "connected", "reconnecting", or "failed"
+wifi.connected      # True while the link is up
+wifi.ip             # "192.168.1.42" while connected, otherwise None
+wifi.last_error     # the last exception the service caught, or None
+wifi.on_state_change(lambda old, new: print(f"{old} -> {new}"))   # runs on every change
 ```
+
+## Wifi credentials
+
+`WifiService` reads no file itself.  It takes a `WifiConfig`, built from the deployed settings or directly in code.
+
+**From the deployed settings.**  In a [ChuMicro workspace](https://chumicro.com/ChuMicro/workspace/stable/), put the credentials in `secrets.toml`:
+
+```toml
+[wifi]
+ssid = "your-network"
+password = "your-password"
+```
+
+A deploy writes that file to the board as `/runtime_config.msgpack`.  `load_runtime_config()` reads it back, and `WifiService.from_config(config)` picks out the `wifi.*` keys.  The quick example and `connect_to_ap.py` work this way.  The [guide's Configuration table](https://chumicro.com/ChuMicro/wifi/stable/guide/#configuration) lists every optional key.
+
+**Directly in code**, with no workspace:
+
+```python
+from chumicro_wifi import WifiConfig, WifiService
+
+wifi = WifiService(WifiConfig(ssid="your-network", password="your-password"))
+```
+
+Keep a real password out of any file you commit.
 
 ## What's included
 
-| Symbol | What it does |
+| Symbol | Description |
 |---|---|
-| `WifiConfig` | Typed connection settings (`ssid`, `password`, hostname, timeouts, reconnect tuning).  `from_config(config)` reads the flat `wifi.*` keys; `try_from_config(config)` returns `None` when the section isn't deployed. |
-| `WifiService` | State machine + reconnect supervisor; implements `Runner.add()`-compatible `check`/`handle`.  `from_config(config, radio=None, ...)` builds it straight from the flat `wifi.*` keys; extra keywords pass through to the constructor. Auto-detects the runtime adapter at construction time (the `CpythonWifiAdapter` host stand-in on CPython, `CpWifiAdapter` on CircuitPython, substrate-aware `MpWifiAdapter` on MicroPython, handling ESP-IDF + CYW43 transparently). |
-| `WifiState` | String-sentinel state names: `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `RECONNECTING`, `FAILED`. |
-| `chumicro_wifi.testing.FakeWifi` | Drop-in `WifiService` wrapping a `FakeWifiAdapter` with `set_connect_outcome`, `drop_link`, `calls` hooks for downstream library tests. |
+| `WifiConfig` | Connection settings: `ssid`, `password`, and optional hostname, timeouts, and reconnect tuning.  `WifiConfig.from_config(config)` reads them from the `wifi.*` keys of the deployed settings.  `try_from_config(config)` returns `None` when no wifi section was deployed |
+| `WifiService` | Joins the network, watches the link, and rejoins after a drop.  Hand it to a `Runner`, or call its `check(now_ms)` and `handle(now_ms)` from your own loop.  `WifiService.from_config(config)` builds it from the `wifi.*` keys.  It picks the radio code for CircuitPython, MicroPython, or CPython when constructed |
+| `WifiState` | The five state names, as plain strings: `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `RECONNECTING`, `FAILED` |
+| `chumicro_wifi.testing.FakeWifi` | A `WifiService` on a pretend radio, for testing code that depends on wifi without a board.  `set_connect_outcome`, `drop_link`, `restore_link`, and `calls` script and record what the radio does |
 
 ## Where this fits
 
-Depends on [`chumicro-config`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config) for its config section and registers with [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) for its tick contract.  Provides the radio the networking layers sit on top of: [`chumicro-sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets) on CircuitPython, with the HTTP / MQTT / WebSocket / NTP libraries downstream of that.
+Depends on [`chumicro-config`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/config) for `from_config` and [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) for the millisecond clock.  Both install with this library.  Runs as a service on a [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) loop, as the quick example shows.
+
+The network libraries run on the link it brings up: pass `wifi.adapter.radio` as the `radio=` argument to [`chumicro-sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets) and the HTTP, MQTT, WebSocket, and NTP clients built on it.  On CircuitPython that value is `wifi.radio`.  On MicroPython it is `None`, because sockets there use the active network interface on their own.
 
 ## Platform support
 
-Works on CPython, MicroPython, and CircuitPython.  Ships three runtime adapters: CircuitPython `wifi.radio` (`_adapters/cp.py`), MicroPython `network.WLAN` covering both ESP-IDF (ESP32 family) and CYW43 (Pi Pico W) stacks (`_adapters/mp.py`), and a CPython host stand-in that reports success immediately (`_adapters/cpython.py`); `chumicro_wifi.testing.FakeWifiAdapter` covers host-side tests.  The right adapter is selected at runtime via `sys.implementation.name`; the MP adapter then auto-detects ESP-IDF vs CYW43 by matching `sys.implementation._machine` against a positive whitelist of known CYW43 boards.
+Runs on CircuitPython (`wifi.radio`), on MicroPython with an ESP32-family chip or a Pi Pico W / Pico 2 W (`network.WLAN`), and on CPython.  `WifiService` picks the radio code from `sys.implementation.name`.  On MicroPython it tells the Pico W radio, a CYW43 chip, apart from an ESP32 by the board name the firmware reports.  On CPython the operating system owns the network, so a stand-in reports a connection to `127.0.0.1` straight away.  Tests that need failures and drops use `chumicro_wifi.testing.FakeWifi`.
 
-### CircuitPython connect is blocking (read this if you're shipping to CP)
+### On CircuitPython, joining pauses the loop
 
-CircuitPython's substrate-level `wifi.radio.connect()` is blocking.  There is no non-blocking variant exposed by the firmware.  While `WifiService` is `CONNECTING` or `RECONNECTING` on a CircuitPython board, `handle()` stalls for up to `connect_timeout_ms` (default 15 000 ms).  Other services in the same `Runner` (your LED heartbeat, an HTTP request, an MQTT keep-alive) pause for that window.  Once the state reaches `CONNECTED`, the loop runs at full speed again and stays there until the link drops.
+CircuitPython's `wifi.radio.connect()` blocks.  The firmware has no non-blocking version.  While `WifiService` is joining on a CircuitPython board, each try holds the loop for up to `connect_timeout_ms`, 15 seconds by default.  Everything else in the same `Runner` waits with it: an LED blink, an HTTP request, MQTT keep-alives.  Once connected, the loop runs at full speed until the link drops.
 
-MicroPython's `wlan.connect()` is genuinely non-blocking on both ESP32 and Pi Pico W substrates: association happens in the background and `handle()` returns immediately.  If non-blocking connect is load-bearing for your app, prefer MicroPython on RP2040 / RP2350 or ESP32-family boards.
+On MicroPython, `wlan.connect()` returns at once on both ESP32 and Pi Pico W.  The radio joins in the background while the loop keeps running.  A board that must keep doing other work while it reconnects wants MicroPython on an RP2040, RP2350, or ESP32-family board.
 
 ## Examples
 
 | Example | What it shows |
 |---|---|
-| [`connect_to_ap.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/wifi/examples/connect_to_ap.py) | Connect to a real AP, print state transitions, observe IP, reading `wifi.ssid` / `wifi.password` from `runtime_config.msgpack`. |
+| [`connect_to_ap.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/wifi/examples/connect_to_ap.py) | Joins your network, prints every state change, and prints the state and IP address every five seconds.  Switch the access point off and on to watch it reconnect |
 
-## Wiring wifi credentials
+### Running the examples
 
-The library never reads TOML itself: it takes a `WifiConfig` and connects.  `WifiService.from_config(config)` is the construction path the standard pipeline uses, reading credentials from your project's runtime config under the `wifi.*` keys (`wifi.ssid`, `wifi.password`) through the same `WifiConfig.from_config(config)` loader that also works standalone.  To get those credentials onto the device, deploy them as part of a workspace-based deploy or a raw single-file deploy.  The bundled `connect_to_ap.py` example and the on-device acceptance test both read the credentials this way and skip silently when none are configured.
+`connect_to_ap.py` reads the wifi settings a deploy writes to the board, so it runs through a deploy.  From a clone of the [ChuMicro repository](https://github.com/ChuMicro/ChuMicro), `chumicro-workspace deploy-example wifi connect_to_ap` copies the example and the libraries it imports to the board and takes the wifi settings from `secrets.toml`.  [Wiring wifi credentials](https://chumicro.com/ChuMicro/guides/wiring-wifi-credentials/) walks through `secrets.toml`.
 
 ## Contributing
 

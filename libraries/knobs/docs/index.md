@@ -1,29 +1,54 @@
+---
+title: "chumicro-knobs: rotary encoders and analog knobs for CircuitPython and MicroPython"
+---
+
 # chumicro-knobs
 
 **Rotary encoders and analog knobs, read as a number that holds still.**
 
-Turn a shaft and `encoder.position` counts the clicks.  Turn a potentiometer and `knob.value` lands on a step and stays there.  A fast spin arrives whole even when your loop was busy elsewhere, a parked wiper keeps reporting the same number, and the same code runs on CircuitPython, MicroPython, and your laptop.
+`encoder.position` counts the clicks of a rotary encoder.  `knob.value` lands a potentiometer on a numbered step and keeps it there.  A fast spin counts in full even when the loop was busy elsewhere.  A knob left alone keeps reporting the same number.  The same code runs on CircuitPython, MicroPython, and CPython.
+
+## Install
+
+```bash
+# CircuitPython (after `circup bundle-add ChuMicro/ChuMicro-Bundle`)
+circup install chumicro_knobs
+
+# MicroPython
+mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_knobs
+
+# CPython
+pip install chumicro-knobs
+```
+
+The quick example reads the clock with `chumicro-timing`.  Its `Runner` loop comes from `chumicro-runner`.  Install both the same way.
+
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
+
+Turn a rotary encoder to change a number on a CircuitPython board.  On a Pi Pico W, wire the encoder's two signal pins, often labelled CLK and DT, to GP16 and GP17, and its common pin to GND.  On an ESP32-S2 board, use IO16 and IO17.  The library switches on the pins' internal pull-ups:
 
 ```python
 import board
 from chumicro_knobs import Encoder
 from chumicro_timing import ticks_ms
 
-volume = Encoder(board.GP16, board.GP17, bounds=(0, 20))
+volume = Encoder(board.GP16, board.GP17, bounds=(0, 20))    # holds the number between 0 and 20
 
 while True:
-    now = ticks_ms()
-    volume.check(now)
+    now_ms = ticks_ms()
+    volume.check(now_ms)                    # read how far the shaft turned, without waiting
 
-    if volume.just_moved:
+    if volume.just_moved:                   # True on exactly one pass per change
         print("volume", volume.position)
 ```
 
-`just_moved` is true for exactly one pass of the loop, so you can read it as often as you like without it firing twice.  `bounds` walks the number between 0 and 20 and stops it at both ends.
+Each click you feel as the shaft turns is a *detent*.  `position` moves by one per detent.  An encoder whose `position` moves only on every other click wants `detent_steps=2`.
 
-In a program with more going on, hand the loop to `chumicro-runner` and let the callback do the reading:
+On MicroPython, pass `machine.Pin` objects: `Encoder(Pin(16), Pin(17), bounds=(0, 20))`.
+
+In a program with more going on, hand the loop to [`chumicro-runner`](https://chumicro.com/ChuMicro/runner/stable/) and let a callback react to the turn:
 
 ```python
 from chumicro_runner import Runner
@@ -31,19 +56,19 @@ from chumicro_runner import Runner
 volume.on_change = lambda detents: print("volume", volume.position)
 
 runner = Runner()
-runner.add(volume)
+runner.add(volume, period_ms=20)        # read the encoder fifty times a second
 
 while True:
-    now = runner.tick()
-    runner.wait(now)
+    now_ms = runner.tick()
+    runner.wait(now_ms)
 ```
 
-Every service in your program shares those same two lines.
+`runner.tick()` checks the encoder and calls `on_change` on the pass it turned.  `runner.wait(now_ms)` sleeps until the next job is due.  Turning a knob cannot wake the runner, so `period_ms=20` has it read the encoder fifty times a second, faster than a hand turns.
 
 ## Documentation
 
-- [User Guide](guide.md): wiring an encoder, bounds and wrap, reading a potentiometer, the deadband that holds it still, callbacks, and wiring into a runner
-- [API Reference](api.md): every public class and method, generated from the source docstrings
+- [User Guide](guide.md): wiring an encoder, matching its clicks, bounds and wrap, reading a potentiometer, callbacks, and the runner pattern, then how the analog reading holds still and why a hard-spun encoder drifts
+- [API Reference](api.md): `Encoder` and `AnalogKnob`, with their readings, callbacks, and defaults
 - [Testing Helpers](testing.md): turning a shaft and parking a wiper from a unit test
 
 ---

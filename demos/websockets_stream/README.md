@@ -1,39 +1,51 @@
-# websockets_stream: receive a message stream with `yield from`
+# websockets_stream: your board reads a stream of websocket messages
 
-End-to-end demo of the `chumicro_websockets` receive-stream API on a
-real board.  The driver runs a WebSocket server on the host's LAN IP,
-built on `chumicro_websockets.WebSocketServer` itself, so both ends of
-the library run in one demo.  On each connection the server streams a
-few text messages then closes; the board receives them with a linear
-loop:
+Your board joins wifi and opens a websocket to a small server the
+driver runs on your laptop. The server sends three text messages and
+closes the connection. The board prints each message as it arrives,
+waits five seconds, and connects again, forever. A heartbeat prints
+once a second the whole time, so you can see the board never freezes
+while it waits on the network.
 
-```python
-def receive_stream(wifi, link_up, session, url):
-    yield from wait_for(link_up)            # suspend until wifi is up
-    session.connect(url)
-    runner.add(session)                     # session drives frame I/O each tick
-    while True:
-        message = yield from session.next_message()
-        if message is None:
-            break
-        handle(message)
+Both ends run `chumicro_websockets`: the board runs `WebSocketClient`,
+and the laptop runs `WebSocketServer` on CPython.
 
-runner.add_generator(receive_stream(wifi, link_up, session, url))
+## What you will see
+
+The driver's own lines start with `driver:`. Everything the board
+prints shows up as it happens, after `board |`:
+
+```
+driver: websocket stream server up at ws://10.0.0.5:54344/
+driver: targeting pi-pico-w-circuitpython-board (circuitpython @ /dev/cu.usbmodem...)
+board |   ...still ticking
+board |   ...still ticking
+board | WIFI_OK ip=10.0.0.42
+driver: board WIFI_OK ip=10.0.0.42
+board |   connecting to ws://10.0.0.5:54344/
+board | MESSAGE seq=1
+board |   text: stream message 1
+board | MESSAGE seq=2
+board |   text: stream message 2
+board | MESSAGE seq=3
+board |   text: stream message 3
+board | STREAM_CLOSED count=3 code=1000
+board | DEMO_COMPLETE
+driver: board STREAM_CLOSED count=3 code=1000
+driver: demo completed cleanly; the board keeps reconnecting.
 ```
 
-## What it shows
+The driver stops there and takes its server with it. The board carries
+on: the heartbeat keeps printing every second, and every five seconds
+the board connects again and prints `STREAM_CLOSED count=0` now that
+nothing answers. To watch it after the driver exits, run
+`chumicro-workspace repl --tail 60 --device <id>`.
 
-- **Receive stream as a generator.** `ws.next_message()` suspends until
-  the next inbound message and returns it, or `None` once the stream
-  closes: wait-process-wait instead of an `on_text` / `on_binary`
-  callback.
-- **Session + consumer split.** The `WebSocketClient` is registered with
-  `runner.add(...)` (it does the recv + frame parse each tick); the
-  receive generator is registered with `runner.add_generator(...)` and
-  drains the bounded inbound queue the session fills.
-- **Both ends of the library.** The host server uses
-  `chumicro_websockets.WebSocketServer` on CPython, so a single demo
-  exercises the server, the client, and the receive stream.
+## What you need
+
+- A board registered with `chumicro-workspace add-device`.
+- `secrets.toml` at the repo root with `wifi.ssid` and `wifi.password`.
+- A wifi network that your board and your laptop both join.
 
 ## Run it
 
@@ -41,23 +53,45 @@ runner.add_generator(receive_stream(wifi, link_up, session, url))
 .venv/bin/python demos/websockets_stream/driver.py
 ```
 
-Defaults: targets the first CircuitPython device in `devices.yml`.
+The driver picks the first CircuitPython board in `devices.yml`. Pass
+`--device <id>` for a specific board or `--runtime micropython` for the
+first MicroPython one. `--help` lists the timeouts.
 
-Override:
+## How it works
 
-- `--device <id>`: a specific device id from `devices.yml`.
-- `--runtime micropython`: pick the first MicroPython device.
-- `--wifi-timeout-s <n>`: how long to wait for the board's `WIFI_OK`
-  marker (default 45 s).
-- `--completion-timeout-s <n>`: how long to wait for the board's
-  `STREAM_CLOSED` marker (default 30 s).
+The reader in [`app.py`](app.py) is one function that reads top to
+bottom:
 
-## Expected output
-
+```python
+while True:
+    ws = WebSocketClient.from_config(config, radio=wifi.adapter.radio)
+    ws.connect(url)
+    ws_task = runner.add(ws)               # the client reads its socket each pass
+    while True:
+        message = yield from ws.next_message()
+        if message is None:
+            break                          # the server closed the stream
+        print(message.text)
+    ws_task.remove()
+    yield from sleep_until(ticks_add(ticks_ms(), RECONNECT_AFTER_MS))
 ```
-driver: websocket stream server up at ws://10.0.0.5:54344/
-driver: targeting raspberry-pi-pico-w-cp (circuitpython @ /dev/cu.usbmodem...)
-driver: board WIFI_OK ip=10.0.0.42
-driver: board STREAM_CLOSED count=3 code=1000
-driver: demo completed cleanly.
-```
+
+`ws.next_message()` pauses the function until the next message arrives
+and hands it back, or returns `None` once the server closes. Each
+`yield from` is a place the rest of the board runs, which is how the
+heartbeat keeps printing. A `WebSocketClient` connects once, so each
+pass builds a fresh one.
+
+The other way to read messages is the `on_text` / `on_binary`
+callbacks, where the library calls your handler for each message
+instead. `libraries/websockets/examples/client.py` shows that style.
+
+[`driver.py`](driver.py) starts the websocket server on your laptop's
+network address, deploys `app.py` with the server URL baked into the
+board's config, and checks that the first stream delivered all three
+messages.
+
+## Try next
+
+- Change what the server sends in `on_connection` in `driver.py`, or
+  change `RECONNECT_AFTER_MS` in `app.py`, and run the demo again.

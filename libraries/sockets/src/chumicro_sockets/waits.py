@@ -1,10 +1,21 @@
-"""The socket I/O wait vocabulary: ``ReadWait`` and ``WriteWait``."""
+"""``ReadWait`` and ``WriteWait`` tell ``Runner.wait`` which socket a generator is waiting on.
+
+A generator that ``Runner.add_generator`` drives yields one of them when a
+socket would block.  ``Runner.wait`` then sleeps until the socket is ready or
+``deadline_ms`` passes, and the next ``Runner.tick`` resumes the generator.
+"""
 
 from chumicro_sockets._connector import _IO_READ, _IO_WRITE
 
 
 class ReadWait:
-    """Wait for *sock* to become readable, optionally bounded by a deadline."""
+    """``ReadWait(sock)`` asks ``Runner.wait`` to wake when ``sock`` has bytes to read.
+
+    Args:
+        sock: The socket to watch.
+        deadline_ms: Tick at which ``Runner.wait`` wakes even if ``sock`` stays
+            idle, or ``None`` to wait on the socket alone.
+    """
 
     def __init__(self, sock: object, deadline_ms: int | None = None) -> None:
         self.io_socket = sock
@@ -18,7 +29,13 @@ class ReadWait:
 
 
 class WriteWait:
-    """Wait for *sock* to become writable, optionally bounded by a deadline."""
+    """``WriteWait(sock)`` asks ``Runner.wait`` to wake when ``sock`` can take more bytes.
+
+    Args:
+        sock: The socket to watch.
+        deadline_ms: Tick at which ``Runner.wait`` wakes even if ``sock`` stays
+            full, or ``None`` to wait on the socket alone.
+    """
 
     def __init__(self, sock: object, deadline_ms: int | None = None) -> None:
         self.io_socket = sock

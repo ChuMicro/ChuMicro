@@ -1,83 +1,70 @@
-"""Basic handler patterns: the most common way to use Runner.
+"""Run three plain functions from one loop: two on timers, one on every pass.
 
-- **Every-tick handler**: fires on every ``tick()`` call.
-  Use for work that must run as often as possible (polling buttons,
-  reading input buffers).
-- **Periodic handler**: fires on a fixed time schedule.
-  Use for regular intervals (blinking LEDs, logging, heartbeats).
+The program prints a report once a second and a reminder every five seconds,
+forever.  A third job has no period, so the runner calls it on every pass of
+the loop.  It counts the passes, and the report shows how few there are:
+``runner.wait()`` sleeps until the next timed job is due, so the loop goes
+round once each time a timed job comes due, not thousands of times a second.
+That is one pass a second here, plus one for each reminder.
 
-No task objects needed: pass a callable and optionally a period.
+A job with no period only runs when something else wakes the loop.  Give a
+job that reads hardware, like a button, its own ``period_ms`` instead.
+
+Setup:
+1. Install ``chumicro_runner`` and ``chumicro_timing``.
+2. Run ``python basic_handler.py`` on your computer, or save this file as
+   ``code.py`` (CircuitPython) or ``main.py`` (MicroPython) on a board.
 
 Example output::
 
-    Running...
-
-      [1005 ms] status report (10 ticks)
-      [2003 ms] status report (20 ticks)
-      [2003 ms] heartbeat
-      [3008 ms] status report (30 ticks)
-      [4002 ms] status report (40 ticks)
-      [4002 ms] heartbeat
-      ...
+    Running three jobs...
+    1 s: the loop has gone round 2 times
+    2 s: the loop has gone round 3 times
+    3 s: the loop has gone round 4 times
+    4 s: the loop has gone round 5 times
+    five-second reminder
+    5 s: the loop has gone round 7 times
+    6 s: the loop has gone round 8 times
+    ...
 
 Runs on CPython, MicroPython, and CircuitPython.
 """
 
-import time
-
 from chumicro_runner import Runner
 
-tick_count = 0
+passes = 0
+seconds = 0
 
 
-def poll_inputs(now_ms: int) -> None:
-    """Poll hardware inputs every tick.
+def count_pass(now_ms: int) -> None:
+    """Count one pass of the loop.
 
-    On a real board this might scan a button matrix or read
-    a UART buffer.  Here it just counts ticks.
-
-    Args:
-        now_ms: Current tick value.
+    The runner passes every job ``now_ms``, the time of the current tick in
+    milliseconds.  None of the jobs here need it.
     """
-    global tick_count  # noqa: PLW0603
-    tick_count += 1
+    global passes
+    passes += 1
 
 
-def report_status(now_ms: int) -> None:
-    """Print a periodic status report.
-
-    Args:
-        now_ms: Current tick value.
-    """
-    print(f"  [{now_ms} ms] status report ({tick_count} ticks)")
+def report(now_ms: int) -> None:
+    """Print how many times the loop has gone round so far."""
+    global seconds
+    seconds += 1
+    print(f"{seconds} s: the loop has gone round {passes} times")
 
 
-def heartbeat(now_ms: int) -> None:
-    """Print a heartbeat.
-
-    Args:
-        now_ms: Current tick value.
-    """
-    print(f"  [{now_ms} ms] heartbeat")
+def remind(now_ms: int) -> None:
+    """Print a reminder."""
+    print("five-second reminder")
 
 
 runner = Runner()
+runner.add(handler=count_pass)                 # no period: runs on every pass
+runner.add_periodic(report, period_ms=1000)    # once a second
+runner.add_periodic(remind, period_ms=5000)    # every five seconds
 
-# Every-tick: fires on every tick() call.
-runner.add(handler=poll_inputs)
-
-# Periodic: fires once per second.
-runner.add_periodic(report_status, period_ms=1000)
-
-# Periodic: fires every two seconds.
-runner.add_periodic(heartbeat, period_ms=2000)
-
-print("Running...\n")
+print("Running three jobs...")
 
 while True:
-    # tick() captures the current time once and fires every due handler.
-    runner.tick()
-
-    # In a real project, the rest of your main loop goes here.
-    # The sleep just keeps this demo from flooding the console.
-    time.sleep(0.1)
+    now_ms = runner.tick()   # run every job that is due right now
+    runner.wait(now_ms)      # sleep until the next timed job is due

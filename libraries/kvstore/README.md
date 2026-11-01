@@ -3,9 +3,9 @@
 <img src="https://raw.githubusercontent.com/ChuMicro/ChuMicro/main/support/docs/chumicro_tip.png"
 align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-**A persistent dict for counters, timestamps, and tokens that need to survive a reboot.**
+**A dict that keeps its values through a reset or a power cut.**
 
-A dict-shaped store with `commit()` semantics.  Auto-detects the right backend per runtime (NVM on CircuitPython, NVS on ESP32 MicroPython, LittleFS elsewhere, in-memory for tests), bounds writes with `commit_if_changed()` so unchanged state doesn't wear the flash, and surfaces capacity and corruption honestly.
+`KVStore` keeps a boot count, the last reading, a calibration value, or a login token on the board, and finds it again after a reset.  It works like a Python dict: change it as often as you like, then call `commit()` to save the change.  It picks the place to save for the board it runs on: `microcontroller.nvm` on CircuitPython, NVS (the ESP32's built-in settings storage) or a file in flash on MicroPython, and plain memory on a laptop.  NVM sits outside the CIRCUITPY drive.  On CircuitPython, saving works even while the drive is mounted on your laptop and your code cannot write files.
 
 <br clear="left">
 
@@ -24,37 +24,46 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_kvstore
 pip install chumicro-kvstore
 ```
 
-For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and details on PyPI naming, see the [ChuMicro install guide](https://chumicro.com/ChuMicro/guides/install/).
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
 
-Boot counter that survives reboot:
+Count how many times the board has started.  Press reset and the count goes up by one:
 
 ```python
+import time
+
 from chumicro_kvstore import KVStore
 
-store = KVStore(backend="auto")
+store = KVStore(backend="auto")            # picks NVM, NVS, or flash for this board
 store["boot_count"] = store.get("boot_count", 0) + 1
-store.commit_if_changed()              # no flash write if value unchanged
-print(store["boot_count"])             # → 1, 2, 3, … across power cycles
+store.commit()                             # saved: survives a reset or power cut
+print(f"Boot count: {store['boot_count']}")
+
+while True:
+    time.sleep(5)
+    print(f"Boot {store['boot_count']}, still running")
 ```
+
+Saving writes to flash, which wears out after many writes.  In a loop that might save often, `store.commit_if_changed()` writes only when a value changed.
 
 ## What's included
 
-| Symbol | What it does |
+| Symbol | Description |
 |---|---|
-| `KVStore(backend="auto")` | Mapping-shaped store; auto-detect picks NVM (CP), NVS (MP-ESP32), LittleFS (MP non-NVS), or memory (CPython) |
-| `store[key]` / `store[key] = v` / `del store[key]` | Standard dict semantics |
-| `store.commit()` | Encode + persist current state |
-| `store.commit_if_changed()` | Skip write when payload is unchanged (wear defense) |
-| `store.reload()` | Discard in-memory state, reread from backend |
-| `store.capacity` / `bytes_used` / `is_corrupt` / `backend_name` | Honest substrate introspection |
-| `KVStoreFull` / `KVStoreCorrupt` | Targeted exceptions (catch `KVStoreError` for both) |
-| `chumicro_kvstore.testing.FakeKVStore` | Drop-in for downstream tests with capacity + corruption hooks |
+| `KVStore(backend="auto")` | Open the store.  `"auto"` picks NVM (CircuitPython), NVS (MicroPython on ESP32), a flash file (other MicroPython boards), or memory (CPython) |
+| `store[key]`, `store[key] = value`, `del store[key]`, `store.get(key, default)` | Read and change values the way you would in a dict |
+| `store.commit()` | Save every value now |
+| `store.commit_if_changed()` | Save only when something changed since the last save.  A call with nothing new to save costs no flash write |
+| `store.reload()` | Throw away unsaved changes and read the saved values again |
+| `store.capacity`, `store.bytes_used` | How many bytes the store can hold, and how many the current values take |
+| `store.is_corrupt`, `store.backend_name` | Whether the saved data was damaged at startup, and where the store saves |
+| `KVStoreFull`, `KVStoreCorrupt` | Raised when a save does not fit, or `reload()` finds damaged data.  Catch `KVStoreError` for both |
+| `chumicro_kvstore.testing.FakeKVStore` | An in-memory store for your own tests, with switches to make it full or corrupt |
 
 ## Where this fits
 
-Leaf, with no upstream ChuMicro deps.  Used directly in app code; no other ChuMicro library depends on it.
+Depends on [`chumicro-msgpack`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/msgpack) to turn the dict into bytes for saving.  It installs with this library.
 
 ## Platform support
 
@@ -64,7 +73,7 @@ Works on CPython, MicroPython, and CircuitPython.
 
 | Example | What it shows |
 |---|---|
-| [`boot_counter.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/kvstore/examples/boot_counter.py) | Boot counter persisted across reboots; auto-detect picks the right backend per runtime |
+| [`boot_counter.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/kvstore/examples/boot_counter.py) | Counts board starts and keeps the count through a reset, then prints it every five seconds |
 
 ## Contributing
 

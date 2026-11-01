@@ -1,59 +1,67 @@
-"""A button that flips the onboard LED, on MicroPython.
+"""Toggle the onboard LED with a button, on MicroPython.
 
-Reads a physical button and toggles the LED on every press.  A long press
-turns the LED off and prints how long it was held, so you can feel the
-difference between a tap and a hold without any extra wiring.
+Each press flips the onboard LED.  Hold the button for half a second and the
+LED turns off, whatever the press did, so you can feel the difference
+between a tap and a hold.  The console prints each one.  The library
+debounces the button for you and installs the pin interrupt that catches a
+tap shorter than one pass of the loop.
 
-The library installs the capture interrupt for you.  A tap that starts and
-ends between two passes of this loop still registers, which is the part that
-is easy to get wrong by hand.
-
-Setup:
-1. Install ``chumicro_buttons``
-   (``mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_buttons``).
-2. Wire a momentary button between the chosen GPIO and **GND**.  The internal
-   pull-up is switched on for you, so no extra parts are needed.
-3. Copy this file to the board as ``main.py``.
+Wiring: a momentary button from GP14 to GND on a Pi Pico W.  The pin's
+internal pull-up is switched on for you, so the button is the only part.  On
+an ESP32 board, set ``BUTTON_PIN`` to 0 and press the BOOT button, which needs
+no wiring, and set ``LED_PIN`` to the onboard LED's GPIO number: 15 on a Lolin
+S2 Mini, 2 on most ESP32 dev boards.
 
 Example output::
 
     Press to toggle the LED.  Hold to turn it off.
 
-      [  815 ms] press -> LED on
-      [ 1407 ms] press -> LED off
-      [ 2260 ms] held 500 ms -> LED off
+      press, LED on
+      press, LED off
+      press, LED on
+      held 500 ms, LED off
+
+Setup:
+1. Install the library:
+   ``mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_buttons``.
+   It brings ``chumicro_timing`` along.
+2. Copy this file to the board as ``main.py``.
 
 Runs on MicroPython.
 """
 
-#: MicroPython-only.  Uses ``machine.Pin`` (MP API).
-#: Pair: ``circuitpython_button_toggle.py`` for the CP equivalent.
+# ChuMicro's example tools read this line: this file needs MicroPython.
 __chumicro_runtimes__ = ("micropython",)
 
 from chumicro_buttons import Button
 from chumicro_timing import ticks, ticks_ms
 from machine import Pin
 
-# Set BUTTON_PIN to the GPIO number your button is wired to.
-BUTTON_PIN = 14
+BUTTON_PIN = 14     # GP14 on a Pi Pico W.  0 is the BOOT button on most ESP32 boards.
+LED_PIN = "LED"     # Pi Pico W.  15 on a Lolin S2 Mini, 2 on most ESP32 dev boards.
 
-# Most boards expose the onboard LED as "LED"; some want a GPIO number here.
-led = Pin("LED", Pin.OUT)
+led = Pin(LED_PIN, Pin.OUT)
 
+# ticks is the clock the button times presses with.  A hold of long_press_ms
+# or more counts as a long press.
 button = Button(pin=Pin(BUTTON_PIN), ticks=ticks, long_press_ms=500)
 
 print("Press to toggle the LED.  Hold to turn it off.\n")
 
 while True:
     now = ticks_ms()
+
+    # Collect whatever the button did since the last pass.  Never waits.
     button.check(now)
 
+    # True on exactly one pass per press.
     if button.just_pressed:
         led.value(not led.value())
-        print(f"  [{now:5d} ms] press -> LED {'on' if led.value() else 'off'}")
+        print("  press, LED on" if led.value() else "  press, LED off")
 
+    # True on exactly one pass, once a press has lasted long_press_ms.
     if button.just_long_pressed:
         led.value(0)
-        print(f"  [{now:5d} ms] held {button.held_ms} ms -> LED off")
+        print(f"  held {button.held_ms} ms, LED off")
 
-    # Everything else your device does goes here, one small step at a time.
+    # Nothing above waits, so code you add here runs on every pass.
