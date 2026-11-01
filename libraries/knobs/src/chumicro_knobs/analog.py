@@ -1,17 +1,18 @@
-"""Analog knobs: a converter reading held still by a deadband and quantized into steps."""
+"""``AnalogKnob``: a potentiometer or slider read as a step number that holds still.
+
+Attributes:
+    RAW_RANGE: 65536, one more than the largest raw reading.  A raw reading divided by it is
+        the fraction of the sweep the knob has turned through.
+    DEFAULT_STEPS: The default number of positions in a full sweep, 100, numbered 0 to 99.
+    DEFAULT_DEADBAND: The default deadband, 512 raw counts.  A parked wiper still wanders a
+        few counts, more on a noisy part or a long lead.  512 clears that and stays under
+        one step at 100 steps, where a step spans 655 counts.
+"""
 
 import sys
 
-#: Full scale of the raw reading plus one.  Dividing a 0 to 65535 conversion by this turns
-#: it into a fraction of the sweep.
 RAW_RANGE = 65536
-
-#: How many positions a full sweep of the knob reports, numbered 0 to ``steps - 1``.
 DEFAULT_STEPS = 100
-
-#: How far the raw reading must move before ``value`` follows it.  A parked wiper still
-#: wanders a few counts, more on a noisy part or a long lead; 512 clears that and stays
-#: under one step at the default 100 steps, where a step spans 655 counts.
 DEFAULT_DEADBAND = 512
 
 
@@ -32,22 +33,37 @@ def _select_analog_source(pin):
 
 
 class AnalogKnob:
-    """One potentiometer or slider, read as a step number that stops rattling.
+    """One potentiometer or slider, read as a step number that holds still.
 
-    Every reading is a plain attribute refreshed by ``check(now_ms)``, and ``just_moved`` is
-    true only for the tick the knob moved on.  ``deadband`` is the analog counterpart of a
-    button's debounce, and ``steps`` gives the reading a size a person can aim at, so a
-    volume control lands on 47 and stays there.  Sampling happens on the tick that asks for
-    it, because a voltage has no edge to miss between two passes of the loop.
+    Call ``check(now_ms)`` once per pass of the loop and read ``value``.  Or set
+    ``on_change`` and register the knob with ``runner.add(knob, period_ms=20)``, and the
+    runner calls ``handle``, which calls it.  ``check`` samples the pin, ignores any move of
+    ``deadband`` counts or less, and scales the reading to a step from 0 to ``steps - 1``, so
+    a volume control set to 47 reads 47 until it is turned.
 
     Args:
-        pin: Analog-capable pin, named the way this runtime names pins.  Pass a pin or pass
-            ``source``.
-        source: Pre-built converter; overrides ``pin``.  Tests inject a fake here.
-        steps: How many positions the sweep reports.  ``value`` runs 0 to ``steps - 1``.
-        deadband: How far the raw 0 to 65535 reading must move before ``value`` follows.
-            Keep it under one step, ``65536 // steps`` counts, or the steps at the edges
-            become unreachable.
+        pin: An analog-capable pin, such as ``board.A0`` on CircuitPython, or a pin number
+            or ``machine.Pin`` on MicroPython.
+        source: A ready-made converter, used in place of ``pin``.  Tests pass
+            ``FakeAnalogSource`` from ``chumicro_knobs.testing``.
+        steps: How many positions a full sweep reports.  ``value`` runs from 0 to
+            ``steps - 1``.
+        deadband: How many raw counts, on the 0 to 65535 scale, a reading must move beyond
+            before ``value`` follows it.  Keep it under one step, ``65536 // steps`` counts,
+            or the steps at the ends of the sweep become unreachable.
+
+    Attributes:
+        value: The step the knob points at, 0 at one end of the sweep and ``steps - 1`` at
+            the other.
+        raw: The 0 to 65535 reading ``value`` was worked out from.  It moves only when a
+            reading clears the deadband, so it holds the settled reading.
+        delta: Steps this tick added to ``value``, negative for the other direction.
+        just_moved: True only on the tick ``value`` changed.
+        on_change: Called with the new ``value`` when the knob moves.
+
+    Raises:
+        ValueError: Neither ``pin`` nor ``source`` was given.
+        RuntimeError: ``pin`` was given on CPython, which has no converter to sample.
     """
 
     def __init__(
@@ -68,26 +84,22 @@ class AnalogKnob:
         self._steps = steps
         self._deadband = deadband
 
-        #: Where the knob points, 0 at one end of the sweep and ``steps - 1`` at the other.
         self.value = 0
-        #: The 0 to 65535 reading ``value`` was worked out from.  It moves only when the
-        #: knob clears the deadband, so it is the settled reading rather than the newest.
         self.raw = 0
-        #: Steps this tick added to ``value``, negative the other way round.
         self.delta = 0
-        #: True only on the tick ``value`` changed.
         self.just_moved = False
-        #: Called with the new step number when the knob moves.
         self.on_change = None
 
     def check(self, now_ms: int) -> bool:
-        """Sample the pin and let ``value`` follow it when the reading cleared the deadband.
+        """Sample the pin, and move ``value`` when the reading has moved past the deadband.
+
+        Call it once per pass of the loop.  It never waits.
 
         Args:
-            now_ms: Tick this pass of the loop is measured from.
+            now_ms: The current tick, from ``ticks_ms()``.
 
         Returns:
-            True when ``value`` changed, so a quiet tick can skip ``handle``.
+            True when ``value`` changed, which is when ``handle`` has ``on_change`` to call.
         """
         source = self._source
         source.poll(now_ms)
@@ -106,10 +118,13 @@ class AnalogKnob:
         return self.just_moved
 
     def handle(self, now_ms: int) -> None:
-        """Call ``on_change`` when this tick's movement earned it."""
+        """Call ``on_change(value)`` when ``check`` reported a change this tick."""
         if self.just_moved and self.on_change is not None:
             self.on_change(self.value)
 
     def deinit(self) -> None:
-        """Release the pin the source claimed."""
+        """Release the pin on CircuitPython, so it can be used for something else.
+
+        MicroPython's converter holds no claim on the pin, so there it does nothing.
+        """
         self._source.deinit()

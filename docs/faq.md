@@ -4,49 +4,51 @@ title: "CircuitPython and MicroPython questions: blocking, WiFi, MQTT, and stora
 
 # Questions people ask
 
-Short answers to what people ask first, each with a link to the library
-that does the work.
-
 ## Why does my board freeze while it talks to the network?
 
-Because most Python libraries for boards wait with the whole program
-stopped.  A request to a slow server, or a WiFi retry against a router
-that is unplugged, holds the processor until it finishes, and every
-other job on the board waits with it: the status LED, the button, the
-sensor read.
+Most Python libraries for boards stop the whole program while they
+wait.  A request to a slow server holds the processor until the
+server answers.  A WiFi retry against an unplugged router holds it
+until the retry gives up.  Every other job on the board waits too:
+the status LED, the button, the sensor read.
 
-ChuMicro libraries work in small steps instead.  Each pass through
-your loop, every library does a little and hands control back, so the
-LED keeps blinking and the button keeps answering while the network
-is slow, and you decide how long to wait and what happens when the
-waiting is over.  A few connection steps still wait, and
+A ChuMicro library does a small piece of its job on each pass of your
+loop, then hands control straight back.  The LED keeps blinking and
+the button keeps answering while the network is slow.  Your code sets
+how long to wait and what happens when the time runs out.
+
+A few connection steps still wait.
 [Does anything ever block?](#does-anything-ever-block) lists them.
 
 ## Where did time.sleep() go?
 
-ChuMicro programs check the clock instead of sleeping.  A
-`time.sleep(1)` stops the whole board for a second, so a sleeping
-program reads no buttons and answers no network.  A `Rate` from
-[chumicro-timing](https://chumicro.com/ChuMicro/timing/stable/)
-answers `True` from `due(now)` once per period, and the loop runs
-everything else in between.
+ChuMicro programs check the clock instead of sleeping.
+`time.sleep(1)` stops the whole board for a second.  A sleeping
+program reads no buttons and answers no network.  `Rate.due(now)`
+from [chumicro-timing](https://chumicro.com/ChuMicro/timing/stable/)
+returns `True` once per period.  The loop runs everything else in
+between.
 
 The loop is still a `while True:` at the bottom of your program.  Once
 it runs several jobs, a `Runner` from
 [chumicro-runner](https://chumicro.com/ChuMicro/runner/stable/) keeps
-the schedule, and its `wait()` sleeps only until the next job is due.
+their schedule.  `runner.wait()` sleeps only until the next job is
+due.
+
 [Coming from Arduino](coming-from-arduino.md) walks through blink,
-buttons, timers, and wifi side by side with the code you already know.
+buttons, timers, and WiFi side by side with Arduino and Adafruit Learn
+code.
 
 ## How do I use MQTT on CircuitPython without freezing everything else?
 
-Add the client from
+MQTT is the publish-and-subscribe protocol most home-automation setups
+speak.  Add an `MQTTClient` from
 [chumicro-mqtt](https://chumicro.com/ChuMicro/mqtt/stable/) to a runner
-next to the rest of your program.  MQTT is the small
-publish-and-subscribe protocol most home-automation setups speak, and
-the client sends, receives, and keeps the connection alive a little at
-a time on each pass, so an LED keeps blinking while the client waits
-for the broker.
+beside the rest of your program.
+
+The client sends, receives, and keeps the connection alive a little at
+a time on each pass.  An LED keeps blinking while the client waits for
+the broker.
 
 ```python
 import board
@@ -62,7 +64,7 @@ led.direction = digitalio.Direction.OUTPUT
 config = load_runtime_config()   # wifi and broker settings from secrets.toml
 wifi = WifiService.from_config(config)
 mqtt = MQTTClient.from_config(config, radio=wifi.adapter.radio)
-mqtt.connect()                   # returns at once; connecting happens in the loop
+mqtt.connect()                   # returns at once, before the broker answers
 
 
 def blink(now_ms):
@@ -84,136 +86,129 @@ while True:
     runner.wait(now_ms)
 ```
 
-A reading published before the broker answers waits in a short queue
-and goes out once the client connects, and the client reconnects on
-its own after a drop.  QoS 0 and 1, last will, retained messages, and
-TLS all work the same way.  [Wiring WiFi
-credentials](wiring-wifi-credentials.md) shows the `secrets.toml`
-entries for the broker.
+[`radio=`](glossary.md#radio) hands the client the WiFi radio that
+CircuitPython builds its sockets from.  A reading published before the
+broker answers waits in a queue of up to eight messages.  It goes out once the client connects.  The client
+reconnects on its own after a drop.  It also supports QoS 0 and 1,
+last will, retained messages, and TLS.
+[Wiring WiFi credentials](wiring-wifi-credentials.md#adding-an-mqtt-broker)
+shows the `secrets.toml` entries for the broker.
 
 ## Does this use async and await?
 
-No.  The libraries are plain objects your `while True:` loop calls, and
-none of them uses `async def`, `await`, or the `asyncio` module.  If
-your own program is built on `asyncio`, it can still drive them: call a
-library's `check(now_ms)` and `handle(now_ms)` from one of your tasks.
+No.  ChuMicro libraries are plain objects that your `while True:` loop
+calls.  No library uses `async def`, `await`, or the `asyncio` module.
+A program built on `asyncio` can still drive them: one of its tasks
+calls a library's `check(now_ms)` and `handle(now_ms)`.
 
-The libraries avoid `async` to save memory.  CircuitPython compiles
-every `await` into a method call that builds a new generator object
-each time it runs, which churns the heap on a 256 KB board, while
-MicroPython compiles the same `await` to a single bytecode.  Where a
-task reads best as steps in order, the libraries use generators with
-`yield from`, which compile to one bytecode on both.
+The libraries avoid `async` to save memory on CircuitPython.
+CircuitPython compiles every `await` into a method call that builds a
+new generator object each time it runs.  On a 256 KB board, those
+objects churn the heap.  MicroPython compiles the same `await` to a
+single bytecode.  For a task that reads best as steps in order, the
+libraries use generators with `yield from`, which compiles to one
+bytecode on both runtimes.
 
 ## How do I keep WiFi connected on a Pico W or an ESP32?
 
 Add a `WifiService` from
 [chumicro-wifi](https://chumicro.com/ChuMicro/wifi/stable/) to your
-runner.  It joins, retries a failed join after a pause that doubles
-from 1 second up to a minute, rejoins on its own after a drop, and
-calls you back on every change of state (`disconnected`, `connecting`,
-`connected`, `reconnecting`, and `failed` if you set a retry limit).
+runner.  The service joins your network and rejoins on its own after a
+drop.  After a failed join, it waits 1 second before the next try.
+Each further failure doubles the wait, up to a minute.
 
-On CircuitPython, keep `CIRCUITPY_WIFI_SSID` and
-`CIRCUITPY_WIFI_PASSWORD` out of `settings.toml`.  Those keys turn on
-the firmware's own auto-connect, which fights `WifiService` for the
-radio.  [Coming from Arduino](coming-from-arduino.md) has a complete
-program that blinks an LED through a router outage.
+On every change of state, the service calls your callback with the old
+and the new state: `disconnected`, `connecting`, `connected`,
+`reconnecting`, or `failed`.  It reaches `failed` only after a retry
+limit you set with `reconnect_max`.
+
+[CircuitPython auto-connect](wiring-wifi-credentials.md#circuitpython-auto-connect)
+explains why `CIRCUITPY_WIFI_SSID` stays out of `settings.toml`.
+[Coming from Arduino](coming-from-arduino.md#wifi-that-comes-back-wifiservice)
+has a complete program that blinks an LED through a router outage.
 
 ## Does anything ever block?
 
-Yes, a few network calls that the board's firmware offers only in a
-form that waits.  On CircuitPython, `wifi.radio.connect()` has no
-non-blocking form, so each WiFi join attempt holds your loop for up to
-the connect timeout, 15 seconds by default.
-MicroPython joins in the background on ESP32 and Pi Pico W, and your
-loop keeps running there.
+Yes.  A few network calls in the board's firmware come only in a form
+that waits.  On CircuitPython, `wifi.radio.connect()` waits until it
+joins or times out.  Each WiFi join attempt holds your loop for up to
+`connect_timeout_ms`, 15 seconds by default.  On ESP32 and Pico W,
+MicroPython joins in the background while your loop keeps running.
 
-Opening a connection to a server waits in pieces too.  Looking up the
-server's name is one call on both runtimes, and the TLS handshake (the
-setup behind `https://`) is another.  On CircuitPython the plain TCP
-connect is a single call as well.  Your loop runs between those
-pieces, and once the connection is open, sending, receiving,
-keepalives, and timeouts all run a step at a time on both runtimes.
+Opening a connection to a server also waits in pieces.  The server
+name lookup waits in one call on both runtimes.  The TLS handshake,
+the setup behind `https://`, waits in another.  On CircuitPython, the
+plain TCP connect also waits in one call.  Your loop runs between
+those pieces.  Once the connection is open, sending, receiving,
+keepalives, and timeouts run a step at a time on both runtimes.
 
 ## Can I run the same code on CircuitPython and MicroPython?
 
 The library code, yes.  Every ChuMicro library runs on CircuitPython,
-MicroPython, and the Python on your laptop.  Your pin setup is the
-part that changes, because each runtime names pins its own way:
-CircuitPython uses `board` and `digitalio`, MicroPython uses
-`machine.Pin`.  Those few lines differ and the rest of the program
-stays the same.
+MicroPython, and the Python on your laptop.  Your pin setup changes,
+because each runtime names pins its own way.  CircuitPython uses
+`board` and `digitalio`.  MicroPython uses `machine.Pin`.  The rest of
+the program stays the same.
 
-On your laptop there are no pins or radio, so each library takes its
-clock, its socket, its radio, or its button as an argument, and its
-`testing` module ships a stand-in for each one.
+[Coming from Arduino](coming-from-arduino.md#on-micropython) shows
+the MicroPython pin lines for an LED and a button.
 
 ## Why does my button miss presses while the board is doing other work?
 
-Because reading a pin tells you its level at that moment and nothing
-about what happened between reads.  A tap that starts and ends while
-your loop is busy elsewhere leaves no trace.
+Reading a pin returns its level at that moment.  A tap that starts and
+ends between two reads leaves no trace.
 
 [chumicro-buttons](https://chumicro.com/ChuMicro/buttons/stable/)
-watches the pin in the background, through the `keypad` module on
-CircuitPython and a pin interrupt on MicroPython.  The press waits for
-your next `check()`, stamped with the time it really happened, so a
-long hold reads as long even when the loop was slow to look.
-Debouncing, long presses, auto-repeat, and click counting come with it.
+watches the pin in the background.  On CircuitPython, the firmware's
+`keypad` module does the watching.  On MicroPython, a pin interrupt
+does.  Each press waits for your next `check()`, stamped with the time
+it happened.  A long hold reads as long even when the loop was slow to
+look.  Debouncing, long presses, auto-repeat, and click counting are
+built in.
 
-Rotary encoders work the same way in
-[chumicro-knobs](https://chumicro.com/ChuMicro/knobs/stable/): a fast
-spin is counted outside your loop and arrives whole.
+[chumicro-knobs](https://chumicro.com/ChuMicro/knobs/stable/) counts a
+rotary encoder's steps the same way, so a fast spin arrives whole.
 
 ## How do I store a value that survives a reboot?
 
-Use [chumicro-kvstore](https://chumicro.com/ChuMicro/kvstore/stable/),
-which reads and writes like a dictionary and picks the storage the
-board has: CircuitPython's non-volatile memory (`microcontroller.nvm`),
-ESP32's NVS key-value area on MicroPython, a file on other
-MicroPython boards, and plain memory on your laptop.
+Use [chumicro-kvstore](https://chumicro.com/ChuMicro/kvstore/stable/).
+A `KVStore` reads and writes like a dictionary.  It keeps values in
+the storage the board has: CircuitPython's non-volatile memory
+(`microcontroller.nvm`), ESP32's NVS key-value area on MicroPython, a
+file on other MicroPython boards, and plain memory on your laptop.
 
-`commit_if_changed()` writes only when a value actually changed, so
-you can call it on every pass of your loop and the flash is written
-only when there is something new to save.
+`commit_if_changed()` writes to flash only when a value changed, so it
+is safe to call on every pass of your loop.
 
 ## How much space do these take on a board?
 
-Between about 1 KB and 31 KB each, compiled to MicroPython bytecode.
-CI holds every library under a ceiling: at most 2,595 bytes for
-`chumicro-timing`, 7,339 for `chumicro-wifi`, and 30,892 for
-`chumicro-websockets`, the largest.  A board with 2 MB of flash has
-roughly 800 KB left for your files once the firmware is on it.
+Each library takes between about 1 KB and 31 KB of flash, compiled to
+MicroPython bytecode.  CI holds every library under a ceiling: at most
+2,595 bytes for `chumicro-timing`, 7,339 for `chumicro-wifi`, and
+30,892 for `chumicro-websockets`, the largest.  A board with 2 MB of
+flash has roughly 800 KB left for your files once the firmware is on
+it.
 
-Install only what you use.  A project that needs a timer installs a
-timer.
+A project that needs a timer installs only `chumicro-timing`.
 
 ## How do I install one library on a board?
 
 Use circup on CircuitPython, mip on MicroPython, and pip on your
-laptop, each with the library's name.  Circup needs the ChuMicro bundle
-added once before it can find ChuMicro libraries.
+laptop, each with the library's name.  circup needs the ChuMicro
+bundle registered once before it finds ChuMicro libraries.
 
-```bash
-circup bundle-add ChuMicro/ChuMicro-Bundle && circup install chumicro_mqtt
-mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_mqtt
-pip install chumicro-mqtt
-```
-
-Those three lines install `chumicro-mqtt` on each runtime.  The pip
-install on your laptop is how you run tests without a board plugged
-in.  [Installing libraries](install.md) covers pre-compiled `.mpy`
-packages and the experimental channel.
+[Installing libraries](install.md#quick-install-stable-channel) has the
+command for each runtime.
 
 ## Can I test my project without hardware?
 
-Yes.  The libraries run on the Python on your laptop, and each one
-ships stand-ins for the parts that would otherwise need a board: a
+Yes.  Every library runs on the Python on your laptop.  The libraries'
+`testing` modules ship stand-ins for the parts that need a board: a
 fake clock you move forward by hand, a fake socket, a fake WiFi radio,
-a fake button you press from the test.  Tests move the clock instead
-of sleeping, so a test that covers a 30-second timeout finishes in
-milliseconds.
+and a fake button the test presses.
+
+A test moves the fake clock forward instead of sleeping, so a test of
+a 30-second timeout finishes in milliseconds.
 
 ```python
 from chumicro_timing import Deadline
@@ -229,7 +224,8 @@ def test_light_turns_off_after_five_seconds():
     assert timer.expired(clock.ticks_ms())
 ```
 
-Run it with `pytest`.
+Install the library and pytest with
+`pip install chumicro-timing pytest`, then run the test with `pytest`.
 
 <!-- faq-schema: generated by scripts/faq_schema.py -->
 <script type="application/ld+json">
@@ -243,7 +239,7 @@ Run it with `pytest`.
       "name": "Why does my board freeze while it talks to the network?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Because most Python libraries for boards wait with the whole program stopped. A request to a slow server, or a WiFi retry against a router that is unplugged, holds the processor until it finishes, and every other job on the board waits with it: the status LED, the button, the sensor read. ChuMicro libraries work in small steps instead. Each pass through your loop, every library does a little and hands control back, so the LED keeps blinking and the button keeps answering while the network is slow, and you decide how long to wait and what happens when the waiting is over. A few connection steps still wait, and Does anything ever block? lists them."
+        "text": "Most Python libraries for boards stop the whole program while they wait. A request to a slow server holds the processor until the server answers. A WiFi retry against an unplugged router holds it until the retry gives up. Every other job on the board waits too: the status LED, the button, the sensor read. A ChuMicro library does a small piece of its job on each pass of your loop, then hands control straight back. The LED keeps blinking and the button keeps answering while the network is slow. Your code sets how long to wait and what happens when the time runs out."
       }
     },
     {
@@ -251,7 +247,7 @@ Run it with `pytest`.
       "name": "Where did time.sleep() go?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "ChuMicro programs check the clock instead of sleeping. A time.sleep(1) stops the whole board for a second, so a sleeping program reads no buttons and answers no network. A Rate from chumicro-timing answers True from due(now) once per period, and the loop runs everything else in between. The loop is still a while True: at the bottom of your program. Once it runs several jobs, a Runner from chumicro-runner keeps the schedule, and its wait() sleeps only until the next job is due. Coming from Arduino walks through blink, buttons, timers, and wifi side by side with the code you already know."
+        "text": "ChuMicro programs check the clock instead of sleeping. time.sleep(1) stops the whole board for a second. A sleeping program reads no buttons and answers no network. Rate.due(now) from chumicro-timing returns True once per period. The loop runs everything else in between. The loop is still a while True: at the bottom of your program. Once it runs several jobs, a Runner from chumicro-runner keeps their schedule. runner.wait() sleeps only until the next job is due."
       }
     },
     {
@@ -259,7 +255,7 @@ Run it with `pytest`.
       "name": "How do I use MQTT on CircuitPython without freezing everything else?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Add the client from chumicro-mqtt to a runner next to the rest of your program. MQTT is the small publish-and-subscribe protocol most home-automation setups speak, and the client sends, receives, and keeps the connection alive a little at a time on each pass, so an LED keeps blinking while the client waits for the broker."
+        "text": "MQTT is the publish-and-subscribe protocol most home-automation setups speak. Add an MQTTClient from chumicro-mqtt to a runner beside the rest of your program. The client sends, receives, and keeps the connection alive a little at a time on each pass. An LED keeps blinking while the client waits for the broker."
       }
     },
     {
@@ -267,7 +263,7 @@ Run it with `pytest`.
       "name": "Does this use async and await?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "No. The libraries are plain objects your while True: loop calls, and none of them uses async def, await, or the asyncio module. If your own program is built on asyncio, it can still drive them: call a library's check(now_ms) and handle(now_ms) from one of your tasks. The libraries avoid async to save memory. CircuitPython compiles every await into a method call that builds a new generator object each time it runs, which churns the heap on a 256 KB board, while MicroPython compiles the same await to a single bytecode. Where a task reads best as steps in order, the libraries use generators with yield from, which compile to one bytecode on both."
+        "text": "No. ChuMicro libraries are plain objects that your while True: loop calls. No library uses async def, await, or the asyncio module. A program built on asyncio can still drive them: one of its tasks calls a library's check(now_ms) and handle(now_ms). The libraries avoid async to save memory on CircuitPython. CircuitPython compiles every await into a method call that builds a new generator object each time it runs. On a 256 KB board, those objects churn the heap. MicroPython compiles the same await to a single bytecode. For a task that reads best as steps in order, the libraries use generators with yield from, which compiles to one bytecode on both runtimes."
       }
     },
     {
@@ -275,7 +271,7 @@ Run it with `pytest`.
       "name": "How do I keep WiFi connected on a Pico W or an ESP32?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Add a WifiService from chumicro-wifi to your runner. It joins, retries a failed join after a pause that doubles from 1 second up to a minute, rejoins on its own after a drop, and calls you back on every change of state (disconnected, connecting, connected, reconnecting, and failed if you set a retry limit). On CircuitPython, keep CIRCUITPY_WIFI_SSID and CIRCUITPY_WIFI_PASSWORD out of settings.toml. Those keys turn on the firmware's own auto-connect, which fights WifiService for the radio. Coming from Arduino has a complete program that blinks an LED through a router outage."
+        "text": "Add a WifiService from chumicro-wifi to your runner. The service joins your network and rejoins on its own after a drop. After a failed join, it waits 1 second before the next try. Each further failure doubles the wait, up to a minute. On every change of state, the service calls your callback with the old and the new state: disconnected, connecting, connected, reconnecting, or failed. It reaches failed only after a retry limit you set with reconnect_max."
       }
     },
     {
@@ -283,7 +279,7 @@ Run it with `pytest`.
       "name": "Does anything ever block?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Yes, a few network calls that the board's firmware offers only in a form that waits. On CircuitPython, wifi.radio.connect() has no non-blocking form, so each WiFi join attempt holds your loop for up to the connect timeout, 15 seconds by default. MicroPython joins in the background on ESP32 and Pi Pico W, and your loop keeps running there. Opening a connection to a server waits in pieces too. Looking up the server's name is one call on both runtimes, and the TLS handshake (the setup behind https://) is another. On CircuitPython the plain TCP connect is a single call as well. Your loop runs between those pieces, and once the connection is open, sending, receiving, keepalives, and timeouts all run a step at a time on both runtimes."
+        "text": "Yes. A few network calls in the board's firmware come only in a form that waits. On CircuitPython, wifi.radio.connect() waits until it joins or times out. Each WiFi join attempt holds your loop for up to connect_timeout_ms, 15 seconds by default. On ESP32 and Pico W, MicroPython joins in the background while your loop keeps running. Opening a connection to a server also waits in pieces. The server name lookup waits in one call on both runtimes. The TLS handshake, the setup behind https://, waits in another. On CircuitPython, the plain TCP connect also waits in one call. Your loop runs between those pieces. Once the connection is open, sending, receiving, keepalives, and timeouts run a step at a time on both runtimes."
       }
     },
     {
@@ -291,7 +287,7 @@ Run it with `pytest`.
       "name": "Can I run the same code on CircuitPython and MicroPython?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "The library code, yes. Every ChuMicro library runs on CircuitPython, MicroPython, and the Python on your laptop. Your pin setup is the part that changes, because each runtime names pins its own way: CircuitPython uses board and digitalio, MicroPython uses machine.Pin. Those few lines differ and the rest of the program stays the same. On your laptop there are no pins or radio, so each library takes its clock, its socket, its radio, or its button as an argument, and its testing module ships a stand-in for each one."
+        "text": "The library code, yes. Every ChuMicro library runs on CircuitPython, MicroPython, and the Python on your laptop. Your pin setup changes, because each runtime names pins its own way. CircuitPython uses board and digitalio. MicroPython uses machine.Pin. The rest of the program stays the same. Coming from Arduino shows the MicroPython pin lines for an LED and a button."
       }
     },
     {
@@ -299,7 +295,7 @@ Run it with `pytest`.
       "name": "Why does my button miss presses while the board is doing other work?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Because reading a pin tells you its level at that moment and nothing about what happened between reads. A tap that starts and ends while your loop is busy elsewhere leaves no trace. chumicro-buttons watches the pin in the background, through the keypad module on CircuitPython and a pin interrupt on MicroPython. The press waits for your next check(), stamped with the time it really happened, so a long hold reads as long even when the loop was slow to look. Debouncing, long presses, auto-repeat, and click counting come with it."
+        "text": "Reading a pin returns its level at that moment. A tap that starts and ends between two reads leaves no trace. chumicro-buttons watches the pin in the background. On CircuitPython, the firmware's keypad module does the watching. On MicroPython, a pin interrupt does. Each press waits for your next check(), stamped with the time it happened. A long hold reads as long even when the loop was slow to look. Debouncing, long presses, auto-repeat, and click counting are built in."
       }
     },
     {
@@ -307,7 +303,7 @@ Run it with `pytest`.
       "name": "How do I store a value that survives a reboot?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Use chumicro-kvstore, which reads and writes like a dictionary and picks the storage the board has: CircuitPython's non-volatile memory (microcontroller.nvm), ESP32's NVS key-value area on MicroPython, a file on other MicroPython boards, and plain memory on your laptop. commit_if_changed() writes only when a value actually changed, so you can call it on every pass of your loop and the flash is written only when there is something new to save."
+        "text": "Use chumicro-kvstore. A KVStore reads and writes like a dictionary. It keeps values in the storage the board has: CircuitPython's non-volatile memory (microcontroller.nvm), ESP32's NVS key-value area on MicroPython, a file on other MicroPython boards, and plain memory on your laptop. commit_if_changed() writes to flash only when a value changed, so it is safe to call on every pass of your loop."
       }
     },
     {
@@ -315,7 +311,7 @@ Run it with `pytest`.
       "name": "How much space do these take on a board?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Between about 1 KB and 31 KB each, compiled to MicroPython bytecode. CI holds every library under a ceiling: at most 2,595 bytes for chumicro-timing, 7,339 for chumicro-wifi, and 30,892 for chumicro-websockets, the largest. A board with 2 MB of flash has roughly 800 KB left for your files once the firmware is on it. Install only what you use. A project that needs a timer installs a timer."
+        "text": "Each library takes between about 1 KB and 31 KB of flash, compiled to MicroPython bytecode. CI holds every library under a ceiling: at most 2,595 bytes for chumicro-timing, 7,339 for chumicro-wifi, and 30,892 for chumicro-websockets, the largest. A board with 2 MB of flash has roughly 800 KB left for your files once the firmware is on it. A project that needs a timer installs only chumicro-timing."
       }
     },
     {
@@ -323,7 +319,7 @@ Run it with `pytest`.
       "name": "How do I install one library on a board?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Use circup on CircuitPython, mip on MicroPython, and pip on your laptop, each with the library's name. Circup needs the ChuMicro bundle added once before it can find ChuMicro libraries."
+        "text": "Use circup on CircuitPython, mip on MicroPython, and pip on your laptop, each with the library's name. circup needs the ChuMicro bundle registered once before it finds ChuMicro libraries. Installing libraries has the command for each runtime."
       }
     },
     {
@@ -331,7 +327,7 @@ Run it with `pytest`.
       "name": "Can I test my project without hardware?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Yes. The libraries run on the Python on your laptop, and each one ships stand-ins for the parts that would otherwise need a board: a fake clock you move forward by hand, a fake socket, a fake WiFi radio, a fake button you press from the test. Tests move the clock instead of sleeping, so a test that covers a 30-second timeout finishes in milliseconds."
+        "text": "Yes. Every library runs on the Python on your laptop. The libraries' testing modules ship stand-ins for the parts that need a board: a fake clock you move forward by hand, a fake socket, a fake WiFi radio, and a fake button the test presses. A test moves the fake clock forward instead of sleeping, so a test of a 30-second timeout finishes in milliseconds."
       }
     }
   ]

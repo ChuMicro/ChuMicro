@@ -1,6 +1,11 @@
-"""Streamed response bodies for chumicro-http-server (opt-in submodule).
+"""``chumicro_http_server.streaming`` sends a response body that a function produces piece by
+piece, for a body too large to build in memory.
 
-The entry points are :class:`StreamingResponse` and :func:`build_streaming_response`.
+A route handler returns ``build_streaming_response(source=...)``.  The server
+then calls ``source(buffer)`` from ``handle`` and sends what it writes, so the
+body passes through a ``stream_buffer_size`` window.  This module loads only
+when imported by name, as in
+``from chumicro_http_server.streaming import build_streaming_response``.
 """
 
 import errno
@@ -164,7 +169,18 @@ class _StreamState:
 
 
 class StreamingResponse:
-    """A response whose body a byte source produces incrementally."""
+    """``StreamingResponse`` is a response whose body ``source`` writes while the server sends it.
+
+    ``build_streaming_response`` creates one.
+
+    Attributes:
+        status_code: HTTP status as an ``int``.
+        reason: Reason phrase, such as ``"OK"``.
+        headers: ``CaseInsensitiveDict`` of extra headers to send.
+        source: Function ``source(buffer)`` that writes the body.
+        content_length: Body size in bytes, or ``None`` to send the body with
+            chunked encoding.
+    """
 
     def __init__(
         self,
@@ -196,16 +212,30 @@ def build_streaming_response(
     content_length: int | None = None,
     headers: object | None = None,
 ) -> StreamingResponse:
-    """Build a :class:`StreamingResponse` served from a byte *source*.
+    """Build a ``StreamingResponse`` whose body ``source`` writes piece by piece.
+
+    The server calls ``source(buffer)`` from ``handle`` whenever it has room
+    to send.  ``source`` writes up to ``len(buffer)`` bytes into ``buffer``
+    and returns the count.  It returns 0 when nothing is ready yet, and
+    ``SOURCE_EOF`` when the body has ended.  An exception from ``source``, or
+    a byte count that disagrees with ``content_length``, closes the
+    connection mid-body.
 
     Args:
-        status: HTTP status code (default ``200``).
-        source: Fill callable ``source(buffer) -> int``; bytes written, 0 if none ready, or SOURCE_EOF.
-        content_length: Total to frame as ``Content-Length``; ``None`` (default) frames chunked.
-        headers: Optional extra headers; do not set Content-Length / Transfer-Encoding / Connection.
+        status: HTTP status code.
+        source: Function ``source(buffer)`` that writes the body and returns
+            a count, 0, or ``SOURCE_EOF``.
+        content_length: Total body size in bytes, sent as
+            ``Content-Length``, or ``None`` to send the body with chunked
+            encoding.
+        headers: Extra headers as a dict, a ``CaseInsensitiveDict``, or
+            ``(name, value)`` pairs.  The server sets ``Content-Length``,
+            ``Transfer-Encoding``, and ``Connection`` itself, and an entry for
+            one of them here replaces the server's value and breaks the
+            framing.
 
     Returns:
-        A :class:`StreamingResponse` for the handler to return.
+        The ``StreamingResponse`` for the route handler to return.
     """
     merged_headers = CaseInsensitiveDict()
     _merge_headers(merged_headers, headers)
@@ -219,10 +249,14 @@ def build_streaming_response(
 
 
 def encode_streaming_headers(response: StreamingResponse) -> bytes:
-    """Serialize a :class:`StreamingResponse`'s header block to wire bytes.
+    """Return the status line and headers ``HttpServer`` sends for ``response``.
+
+    The headers gain ``Content-Length``, or ``Transfer-Encoding: chunked``
+    when ``content_length`` is ``None``, and ``Connection: close``.
 
     Raises:
-        ServerProtocolError: The reason phrase or a header carries a CR, LF, or NUL.
+        ServerProtocolError: The reason phrase or a header name or value holds
+            CR, LF, or NUL.
     """
     headers = CaseInsensitiveDict()
     if response.content_length is not None:
@@ -234,7 +268,11 @@ def encode_streaming_headers(response: StreamingResponse) -> bytes:
 
 
 def stage_streaming_response(conn, response):
-    """Encode *response*'s headers onto *conn* and arm the source drain."""
+    """Queue the headers of ``response`` on the server connection ``conn`` and arm its body source.
+
+    ``conn`` is the server's internal connection object.  A route handler
+    returns a ``StreamingResponse`` and leaves this call to the server.
+    """
     try:
         header_bytes = encode_streaming_headers(response)
     except Exception:  # noqa: BLE001 - unencodable headers, pre-body: a 500, not a crash
@@ -255,7 +293,12 @@ def stage_streaming_response(conn, response):
 
 
 def drive_stream_body(conn):
-    """Drain *conn*'s byte source to its socket, framed, up to ``send_budget`` bytes this tick."""
+    """Send framed body bytes from the source of ``conn``, the server's internal connection object.
+
+    Sending stops when the socket would block, the source has nothing ready,
+    or ``send_budget_per_tick`` bytes went out.  The connection finishes once the
+    source returns ``SOURCE_EOF`` and the last bytes are sent.
+    """
     stream = conn._stream
     budget = conn._send_budget
     consumed = 0

@@ -1346,7 +1346,7 @@ Two things this surfaces that a single number hides.  A module-level `import` is
 
 The per-construct view is also a design signal, not just an accounting one.  When the runner's deadline compare was measured this way, the biggest line item was an import the library should not have had at all (see *Injected clocks* below); removing it left the package 10 B smaller than before the feature, and the ceiling never moved.  Reach for this before writing the justification, because sometimes the measurement retires the raise.
 
-Docstrings are free here.  The gate strips them with the real deploy `strip_source` (Decision 0090) before compiling, so explaining a workaround in a docstring costs no flash.
+Docstrings are free in the `mpy` dimension.  The gate strips them with the real deploy `strip_source` (Decision 0090) before compiling.  The `stripped` dimension still pays one newline byte per docstring line, because `strip_source` blanks lines instead of deleting them so board tracebacks keep their line numbers.  A docstring-only rewrite that adds lines can trip `stripped` while `mpy` holds still; the AST-equality check against HEAD is the measurement that justifies that raise.
 
 ## Injected clocks: publish the deadline, never judge it
 

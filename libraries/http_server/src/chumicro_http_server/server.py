@@ -1,6 +1,8 @@
-"""HTTP/1.1 server built on chumicro-sockets and chumicro-timing.
+"""``chumicro_http_server.server`` defines ``HttpServer``, the ``Request`` a route handler
+receives, and the ``Response`` it returns.
 
-The entry point is :class:`HttpServer`.
+``build_response`` makes a ``Response``, and ``encode_response`` turns one
+into the bytes the server sends.
 """
 
 import errno
@@ -80,17 +82,22 @@ def _split_pattern_path(path):
 
 
 class Request:
-    """Immutable view of a parsed HTTP request as the handler sees it.
+    """``Request`` holds one parsed HTTP request, as a route handler receives it.
 
     Attributes:
-        method: HTTP verb (e.g. ``"GET"``).
-        target: Raw request-target, e.g. ``"/api/widgets?page=2"``.
-        path: Just the path component of the target.
-        query: :class:`CaseInsensitiveDict` of query params; percent-encoding is not decoded.
-        http_version: e.g. ``"HTTP/1.1"``.
-        headers: :class:`CaseInsensitiveDict` of request headers.
-        body: Raw request body as ``bytes``.
-        peer: ``(host, port)`` tuple of the connecting client.
+        method: HTTP method, such as ``"GET"``.
+        target: Raw request target, such as ``"/api/widgets?page=2"``.
+        path: Path part of the target, such as ``"/api/widgets"``.
+        query: ``CaseInsensitiveDict`` of the query parameters, so
+            ``query["page"]`` reads ``"2"``.  Percent-escapes stay as
+            received.
+        http_version: Version from the request line, such as ``"HTTP/1.1"``.
+        headers: ``CaseInsensitiveDict`` of the request headers.
+        body: Request body as ``bytes``, empty when the request has none.
+        peer: ``(host, port)`` of the client.
+        path_params: ``dict`` holding the segment a ``<name>`` route matched,
+            so ``"/items/<item_id>"`` gives ``{"item_id": "7"}`` for
+            ``/items/7``.
     """
 
     def __init__(
@@ -114,11 +121,18 @@ class Request:
         self.path_params = {}
 
     def text(self) -> str:
-        """Return :attr:`body` decoded with the request's Content-Type charset."""
+        """Return ``body`` decoded with the ``charset`` of the ``Content-Type`` header.
+
+        A request whose header names no charset decodes as UTF-8.
+        """
         return self.body.decode(parse_charset(self.headers.get("Content-Type")))
 
     def json(self) -> object:
-        """Parse :attr:`body` as JSON; raises ``ValueError`` on bad data."""
+        """Parse ``body`` as JSON and return the resulting object.
+
+        Raises:
+            ValueError: The body is not valid JSON.
+        """
         return json.loads(self.text())
 
     def __repr__(self) -> str:
@@ -126,13 +140,18 @@ class Request:
 
 
 class Response:
-    """Outbound HTTP response built by :func:`build_response`.
+    """``Response`` holds the status, headers, and body a route handler returns.
+
+    ``build_response`` creates one with the reason phrase and
+    ``Content-Type`` filled in.
 
     Attributes:
-        status_code: Integer HTTP status (e.g. ``200``).
-        reason: Reason phrase; falls back to ``"Unknown"`` for codes outside the table.
-        headers: :class:`CaseInsensitiveDict` to send; the writer adds Content-Length and Connection: close.
-        body: Bytes to send as the response body (may be ``b""``).
+        status_code: HTTP status as an ``int``, such as ``200``.
+        reason: Reason phrase, such as ``"OK"``.  ``build_response`` uses
+            ``"Unknown"`` for a status it has no phrase for.
+        headers: ``CaseInsensitiveDict`` of headers to send.  The server adds
+            ``Content-Length`` and ``Connection: close``.
+        body: Body as ``bytes``, possibly empty.
     """
 
     def __init__(
@@ -387,10 +406,14 @@ def _encode_head(status_code, reason, framing_headers, extra_headers):
 
 
 def encode_response(response: Response) -> bytes:
-    """Serialize a :class:`Response` into wire bytes.
+    """Return the bytes ``HttpServer`` sends for ``response``.
+
+    The bytes hold the status line, the headers with ``Content-Length`` and
+    ``Connection: close`` added, a blank line, and the body.
 
     Raises:
-        ServerProtocolError: The reason phrase or a header name or value carries a CR, LF, or NUL.
+        ServerProtocolError: The reason phrase or a header name or value holds
+            CR, LF, or NUL.
     """
     headers = CaseInsensitiveDict()
     headers["Content-Length"] = str(len(response.body))
@@ -426,7 +449,28 @@ def _build_method_not_allowed_response(allowed_methods) -> Response:
 
 
 class HttpServer:
-    """Non-blocking HTTP/1.1 server."""
+    """``HttpServer`` accepts HTTP connections and answers each request with the handler
+    registered for its path.
+
+    ``@server.route(path)`` registers a handler.  The main loop then calls
+    ``check(now_ms)`` and ``handle(now_ms)``, or a ``Runner`` does after
+    ``runner.add(server)``.  Each ``handle`` call accepts at most one new
+    client and moves every open connection one step: it reads up to
+    ``recv_budget_per_tick`` bytes, runs the handler once the request is
+    complete, and sends up to ``send_budget_per_tick`` bytes.  The server
+    answers one request per connection and then closes it.
+
+    A route handler runs inside ``handle`` and holds the main loop until it
+    returns.  An exception in a handler becomes a 500 response.  With TLS on
+    MicroPython and CPython, accepting a client holds the loop for the TLS
+    handshake.
+
+    Attributes:
+        io_socket: The listening socket, or ``None`` before the first
+            ``handle`` call.
+        accept_errors: Count of failed accepts, such as TLS handshakes a
+            client broke off.  The server keeps listening after each.
+    """
 
     @classmethod
     def from_config(
@@ -439,14 +483,42 @@ class HttpServer:
         transport_factory: object | None = None,
         **constructor_kwargs: object,
     ) -> "HttpServer":
-        """Build an :class:`HttpServer` from runtime config.
+        """Build an ``HttpServer`` from deployed settings, listening through ``chumicro_sockets``.
 
-        Config keys carry the deployment-varying values; any other
-        constructor knob passes through verbatim as a keyword, and an
-        explicit keyword wins over its config-derived value.
+        It reads ``http_server.bind_host``, default ``"0.0.0.0"``, and
+        ``http_server.bind_port``, default 8080.  Setting both
+        ``http_server.tls.cert_path`` and ``http_server.tls.key_path`` serves
+        HTTPS with those files.  ``http_server.max_connections``,
+        ``http_server.request_timeout_ms``,
+        ``http_server.max_request_body_bytes``,
+        ``http_server.max_request_line_bytes``,
+        ``http_server.max_headers_bytes``, and
+        ``http_server.stream_buffer_size`` set the constructor arguments of
+        the same name.  Each keyword in ``constructor_kwargs`` passes straight
+        to the constructor and wins over a value read here.
+
+        Args:
+            config: Flat settings dict or ``chumicro_config.RuntimeConfig``.
+            handler: Fallback handler for paths no route matches, or ``None``
+                to answer 404.
+            radio: The CircuitPython radio, ``wifi.radio``.  MicroPython and
+                CPython ignore it.
+            ssl_context: Server-side ``ssl.SSLContext`` for HTTPS, used in
+                place of the certificate files.
+            transport_factory: Function that opens the listening socket, used
+                in place of the ``chumicro_sockets`` listener.  The address,
+                TLS, ``radio``, and ``ssl_context`` settings then go unused.
+            **constructor_kwargs: Other constructor keywords, such as ``ticks=``.
+
+        Returns:
+            The new ``HttpServer``.
 
         Raises:
-            MissingConfigKey: Exactly one of the TLS ``cert_path`` / ``key_path`` pair is set.
+            chumicro_config.MissingConfigKey: Only one of
+                ``http_server.tls.cert_path`` and ``http_server.tls.key_path``
+                is set.
+            RuntimeError: ``transport_factory`` is ``None`` and
+                ``chumicro_sockets.sockets_factory`` is missing from the board.
         """
         if transport_factory is None:
             host = config.get("http_server.bind_host", "0.0.0.0")
@@ -527,20 +599,34 @@ class HttpServer:
         stream_buffer_size: int = DEFAULT_STREAM_BUFFER_SIZE,
         ticks: object | None = None,
     ) -> None:
-        """Wire up the server.
+        """Create a server.  The listening socket opens on the first ``handle`` call.
 
         Args:
-            transport_factory: Callable ``() -> ListeningSocket``; opens the listener on first handle().
-            handler: Optional fallback ``(Request) -> Response`` for unmatched paths; ``None`` returns 404.
-            max_connections: Cap on simultaneous in-flight connections.
-            request_timeout_ms: Per-connection deadline; a stalled connection is dropped and closed.
-            recv_budget_per_tick: Per-connection recv cap per :meth:`handle` call.
-            send_budget_per_tick: Per-connection send cap per :meth:`handle` call.
-            max_request_body_bytes: Buffered-body cap; bigger bodies are rejected with 413.
-            max_request_line_bytes: Request-line cap; a longer line without a CRLF is rejected with 414.
-            max_headers_bytes: Header-section cap; more is rejected with 431.
-            stream_buffer_size: Staging-window bytes for a StreamingResponse; minted lazily and reused.
-            ticks: Tick source (ticks_ms / ticks_diff / ticks_add); defaults to chumicro_timing.ticks.
+            transport_factory: Function with no arguments that opens the
+                listening socket, such as
+                ``lambda: chumicro_sockets.listener("0.0.0.0", 8080, radio=wifi.radio)``.
+            handler: Function ``handler(request)`` returning a ``Response``
+                for a path no route matches, or ``None`` to answer 404.
+            max_connections: Most connections open at once.  Further clients
+                wait in the listener's queue.  Default 4.
+            request_timeout_ms: Time a connection gets from accept to its last
+                byte sent, in ms.  A connection past it closes with no
+                response.  Default 10000.
+            recv_budget_per_tick: Most bytes one ``handle`` call reads from
+                each connection.  Default 1024.
+            send_budget_per_tick: Most bytes one ``handle`` call sends on each
+                connection.  Default 4096.
+            max_request_body_bytes: Largest request body, in bytes.  A larger
+                ``Content-Length`` gets 413.  Default 16384.
+            max_request_line_bytes: Longest request line, in bytes.  A longer
+                one gets 414.  Default 1024.
+            max_headers_bytes: Largest header section, in bytes.  A larger one
+                gets 431.  Default 4096.
+            stream_buffer_size: Size in bytes of the buffer a
+                ``StreamingResponse`` body passes through.  A connection
+                allocates it when it first streams.  Default 1024.
+            ticks: Clock with ``ticks_ms``, ``ticks_diff``, and ``ticks_add``,
+                or ``None`` for ``chumicro_timing.ticks``.
         """
         self._transport_factory = transport_factory
         self._fallback_handler = handler
@@ -572,14 +658,24 @@ class HttpServer:
         *,
         methods: object = ("GET",),
     ) -> object:
-        """Decorator that registers a handler for *path* and *methods*.
+        """Return a decorator that registers the decorated function as the handler for ``path``.
+
+        Write ``@server.route("/status")`` above ``def status(request):``.
+        The handler takes a ``Request`` and returns a ``Response`` or a
+        ``StreamingResponse``.  A last segment written ``<name>`` matches any
+        one segment and stores it in ``request.path_params[name]``, so
+        ``"/items/<item_id>"`` matches ``/items/7``.  A request for a
+        registered path with an unregistered method gets 405.  Registering a
+        method and path again replaces the handler.
 
         Args:
-            path: Route path, optionally ending in one ``<name>`` segment.
-            methods: Methods to register (default ("GET",)); an unknown method on a matched path returns 405.
+            path: Path to match exactly, such as ``"/status"``, optionally
+                ending in one ``<name>`` segment.
+            methods: HTTP methods to register, such as ``("GET", "POST")``,
+                in any letter case.
 
         Returns:
-            The decorator, which registers and returns the handler unchanged.
+            The decorator.  It returns the handler unchanged.
         """
         def decorator(handler_func):
             for method in methods:
@@ -649,16 +745,19 @@ class HttpServer:
 
     @property
     def listening(self) -> bool:
-        """``True`` once the listener has been opened."""
+        """``True`` while the listening socket is open.  It opens on the first ``handle`` call."""
         return self.io_socket is not None
 
     @property
     def in_flight(self) -> int:
-        """Number of connections currently mid-pipeline."""
+        """Number of connections open right now."""
         return len(self._connections)
 
     def close(self):
-        """Close the listener and every in-flight connection."""
+        """Close the listening socket and every open connection.
+
+        A later ``handle`` call opens a new listening socket.
+        """
         for connection in self._connections:
             connection.close()
         self._connections = []
@@ -670,21 +769,25 @@ class HttpServer:
             self.io_socket = None
 
     def check(self, now_ms):  # noqa: ARG002 - runner contract
-        """Always ``True``: the accept loop must run on every tick."""
+        """Return ``True`` on every call, because a client can connect at any moment."""
         return True
 
     def io_interest(self, now_ms):  # noqa: ARG002 (runner contract)
-        """Poll-interest bit for ``Runner.wait``.
+        """Return the poll bits ``Runner.wait`` watches on ``io_socket``.
 
-        Read while the listener is open and a connection slot is free,
-        else none.
+        The result is the read bit while the listening socket is open and a
+        connection slot is free, and 0 otherwise.
         """
         if self.io_socket is None:
             return 0
         return _IO_READ if len(self._connections) < self._max_connections else 0
 
     def next_deadline(self, now_ms):
-        """Earliest tick at which ``handle()`` must run."""
+        """Return the tick by which ``handle`` must run next, or ``None`` with no open connection.
+
+        With connections open it is the earlier of the nearest connection
+        timeout and ``now_ms`` plus 20 ms, so open connections keep moving.
+        """
         if not self._connections:
             return None
         ticks_diff = self._ticks.ticks_diff
@@ -699,7 +802,13 @@ class HttpServer:
         return nearest
 
     def handle(self, now_ms):
-        """One tick of progress: lazy-open listener, accept, advance conns."""
+        """Accept at most one waiting client and move every open connection one step.
+
+        ``now_ms`` is the current time from ``ticks_ms()``.  The first call
+        opens the listening socket through ``transport_factory``.  Route
+        handlers run inside this call.  Finished and timed-out connections
+        close here.
+        """
         if self.io_socket is None:
             self.io_socket = self._transport_factory()
             _force_non_blocking(self.io_socket)
@@ -754,7 +863,30 @@ def build_response(
     html: str | None = None,
     headers: object | None = None,
 ) -> Response:
-    """Build a :class:`Response` with sensible defaults."""
+    """Build a ``Response`` with the reason phrase and ``Content-Type`` filled in.
+
+    ``json`` takes an object and sends it as ``application/json``.  ``text``
+    sends ``text/plain; charset=utf-8``, and ``html`` sends
+    ``text/html; charset=utf-8``.  ``body`` sends bytes as given, with no
+    ``Content-Type``.  An entry in ``headers`` replaces the default of the
+    same name.
+
+    Args:
+        status: HTTP status code.
+        body: Raw body as ``bytes``, ``bytearray``, or ``str``.
+        text: String to send as plain text.
+        html: String to send as HTML.
+        headers: Extra headers as a dict, a ``CaseInsensitiveDict``, or
+            ``(name, value)`` pairs.
+
+    Returns:
+        The new ``Response``.
+
+    Raises:
+        ValueError: More than one of ``body``, ``json``, ``text``, and
+            ``html`` was given.
+        TypeError: ``body`` is not ``bytes``, ``bytearray``, or ``str``.
+    """
     body_count = sum(
         candidate is not None for candidate in (body, json, text, html)
     )

@@ -407,8 +407,8 @@ def interactive_line(
             :data:`chumicro_repl.line_mode.DEFAULT_HISTORY_ROOT`.
 
     Returns:
-        ``0`` on a clean exit (``:quit`` / Ctrl-D / Ctrl-C at the
-        empty prompt).
+        ``0`` on a clean exit: ``:quit``, Ctrl-X, or the end of input.
+        Ctrl-C and Ctrl-D go to the board.
     """
     from .line_mode import (  # noqa: PLC0415
         format_line_mode_banner,

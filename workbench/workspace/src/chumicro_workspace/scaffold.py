@@ -154,7 +154,7 @@ CHUMICRO_BRANDING = ScaffoldBranding(
         "https://raw.githubusercontent.com/ChuMicro/ChuMicro/main"
         "/support/docs/chumicro_tip.png"
     ),
-    install_guide_url="https://github.com/ChuMicro/ChuMicro/blob/main/INSTALL.md",
+    install_guide_url="https://chumicro.com/ChuMicro/guides/install/",
     distribution_prefix="chumicro-",
 )
 
@@ -373,9 +373,13 @@ def _branded_fragments(
             "# CPython\n"
             f"pip install {distribution}\n"
             "```\n\n"
-            "For bundle setup, pre-compiled `.mpy` bundles, the experimental "
-            "channel, and details on PyPI naming, see the [chumicro INSTALL "
-            f"guide]({branding.install_guide_url}).\n\n"
+            f"[Start here]({branding.docs_base_url}/guides/start-here/) takes "
+            "a new board from flashing CircuitPython or MicroPython to "
+            "running your own blink.  [Installing libraries]"
+            f"({branding.install_guide_url}) covers registering the bundle, "
+            "the pre-compiled `.mpy` packages, the experimental channel, and "
+            "why package names use a hyphen on PyPI and an underscore on the "
+            "board.\n\n"
         )
         find_section = (
             "## Find this library\n\n"

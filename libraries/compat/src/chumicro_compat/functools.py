@@ -1,7 +1,24 @@
-"""Cross-runtime ``functools.partial`` polyfill."""
+"""``partial`` behaves like CPython's ``functools.partial`` on CPython, MicroPython, and CircuitPython.
+
+``partial(func, *args, **keywords)`` returns a callable that calls ``func``
+with ``args`` ahead of the call's own positional arguments. A keyword given
+at the call replaces the same keyword in ``keywords`` for that call only.
+``partial(set_led, 13, label="status")(50)`` calls
+``set_led(13, 50, label="status")``.
+
+The returned callable keeps ``func``, ``args``, and ``keywords`` as
+attributes. A ``partial`` of a ``partial`` flattens into one. ``partial``
+raises ``TypeError`` when ``func`` is not callable.
+
+``partial`` is the runtime's own ``functools.partial`` when that has the
+``func``, ``args``, and ``keywords`` attributes, as on CPython. Elsewhere it
+is a small pure-Python class.
+"""
 
 
 class _PurePythonPartial:
+    """Pure-Python ``functools.partial`` with ``func``, ``args``, ``keywords``, and CPython's ``repr``."""
+
     def __init__(self, func: object, *args: object, **keywords: object) -> None:
         if not callable(func):
             raise TypeError(f"{func!r} is not callable")

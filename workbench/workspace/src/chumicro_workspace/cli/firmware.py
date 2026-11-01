@@ -158,42 +158,55 @@ def _add_firmware_args(parser: argparse.ArgumentParser) -> None:
         "--url",
         default=None,
         help=(
-            "Firmware download URL.  When omitted, the URL is "
-            "derived from the device entry's hardware fields (CP: "
-            "S3-bucket lookup; MP: curated machine→BOARD map; or "
-            "hardware.firmware_source override)."
+            "Firmware file to download and flash.  Without it, the "
+            "command uses hardware.firmware_source from the board's "
+            "devices.yml entry, or else the latest stable release for "
+            "the board's model and runtime."
         ),
     )
     parser.add_argument(
         "--allow-prerelease",
         action="store_true",
         help=(
-            "CP-only: include pre-release versions (-rc.0, -beta.1) "
-            "when deriving the latest URL.  Stable-only by default."
+            "Count pre-release builds, such as a CircuitPython -rc.0 or "
+            "a MicroPython preview, when picking the latest release."
         ),
     )
     parser.add_argument(
         "--method",
         choices=("uf2", "esptool"),
         required=True,
-        help="Flash backend: uf2 for RP2040/RP2350, esptool for ESP32 family.",
+        help=(
+            "Flashing tool: uf2 for RP2040 and RP2350 boards such as the "
+            "Pi Pico, esptool for ESP32 boards."
+        ),
     )
     parser.add_argument(
         "--bootloader-drive",
         dest="bootloader_drive_path",
         type=Path,
         default=None,
-        help="uf2 path only: explicit bootloader drive mount.",
+        help=(
+            "uf2 only: where the board's bootloader drive is mounted, "
+            "such as /Volumes/RPI-RP2, for when the command cannot find "
+            "it."
+        ),
     )
     parser.add_argument(
         "--erase",
         action="store_true",
-        help="esptool path only: erase-flash before write-flash.",
+        help=(
+            "esptool only: erase the board's whole flash before writing, "
+            "which deletes the files on the board too."
+        ),
     )
     parser.add_argument(
         "--offset",
         default="0x0",
-        help="esptool path only: write-flash offset (default 0x0).",
+        help=(
+            "esptool only: flash address to write the firmware at.  "
+            "Defaults to 0x0."
+        ),
     )
     _add_non_interactive_arg(parser)
 
@@ -202,7 +215,20 @@ def _add_firmware_parsers(subparsers: argparse._SubParsersAction) -> None:
     """Register ``install-firmware`` / ``upgrade-firmware`` / ``reset-board``."""
     install_firmware_parser = subparsers.add_parser(
         "install-firmware",
-        help="Download + flash firmware onto the selected board.",
+        help="Download and flash new firmware onto a registered board.",
+        description=(
+            "Download the latest stable release of the runtime the board "
+            "already runs, CircuitPython or MicroPython, and flash it.  "
+            "--method picks the flashing tool: uf2 for RP2040 and RP2350 "
+            "boards such as the Pi Pico, esptool for ESP32 boards.  The "
+            "command reads the board's model from devices.yml to find "
+            "the right file, so the board must be registered first.  It "
+            "puts the board into its bootloader where it can, and "
+            "otherwise prompts for the manual step, such as holding "
+            "BOOTSEL while plugging in a Pico.  A board with no "
+            "CircuitPython or MicroPython on it gets its first firmware "
+            "from circuitpython.org or micropython.org."
+        ),
     )
     _add_workspace_arg(install_firmware_parser)
     _add_device_selector(install_firmware_parser)
@@ -211,18 +237,16 @@ def _add_firmware_parsers(subparsers: argparse._SubParsersAction) -> None:
 
     reset_board_parser = subparsers.add_parser(
         "reset-board",
-        help=(
-            "Wipe the device's user filesystem (clean-slate, no redeploy)."
-        ),
+        help="Erase every file on a board's storage.",
         description=(
-            "Erase every user file the runtime can see on the selected "
-            "board, including out-of-scope files like settings.toml and "
-            "hand-edited boot.py, without redeploying any project.  "
-            "Standalone counterpart to `deploy --wipe`.  Used to recover "
-            "a board whose flash filled up with stage residue (the "
-            "MicroPython path runs `os.VfsLfs2.mkfs`, which `os.remove` "
-            "alone cannot match: LittleFS metadata + wear-leveling "
-            "artifacts survive a file-walk).  No-op in RAM / mount mode."
+            "Erase every file on the selected board's storage, "
+            "settings.toml and boot.py included, and copy nothing back.  "
+            "Use it when the board's storage is full or corrupted, then "
+            "deploy again.  Both runtimes reformat the storage.  On "
+            "MicroPython the reformat also frees space that deleting "
+            "files one by one leaves behind.  On a board whose "
+            "deploy_mode in devices.yml is ram, the command does "
+            "nothing.  The command needs --yes."
         ),
     )
     _add_workspace_arg(reset_board_parser)
@@ -231,9 +255,8 @@ def _add_firmware_parsers(subparsers: argparse._SubParsersAction) -> None:
         "--yes",
         action="store_true",
         help=(
-            "Confirm the destructive wipe.  Without this flag, the "
-            "command exits 2 without touching the board so a typoed "
-            "device id cannot accidentally erase production state."
+            "Confirm the erase.  Without it, the command exits 2 and "
+            "leaves the board as it was."
         ),
     )
     reset_board_parser.set_defaults(func=_cmd_reset_board)
@@ -243,7 +266,12 @@ def _add_upgrade_firmware_parser(subparsers: argparse._SubParsersAction) -> None
     """Register the ``upgrade-firmware`` alias of ``install-firmware``."""
     upgrade_firmware_parser = subparsers.add_parser(
         "upgrade-firmware",
-        help="Alias of install-firmware: same flash flow.",
+        help="Same command as install-firmware.",
+        description=(
+            "Same command as install-firmware, under a name that reads "
+            "better for a board that already has firmware.  Run "
+            "install-firmware --help for the details."
+        ),
     )
     _add_workspace_arg(upgrade_firmware_parser)
     _add_device_selector(upgrade_firmware_parser)

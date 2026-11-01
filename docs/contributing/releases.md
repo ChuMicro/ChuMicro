@@ -19,12 +19,10 @@ Bump once per PR when the PR changes what a user of the package gets:
 | Breaking change: a removed or renamed public function, class, or argument | minor while the package is below 1.0, major after | `0.8.4` to `0.9.0` |
 | Tests, docs, examples, or a code change limited to comments and docstrings | none | |
 
-The rules behind the table:
-
 - **One bump per PR.**  A PR with five commits to `timing` bumps `timing` once.  CI grades the whole PR against `main`, so a second bump in a later commit is never needed.
-- **`check-version` finds a missing bump.**  It fails when a package's `src/` or `pyproject.toml` changed and its `VERSION` did not.  It ignores a diff that only touches comments and docstrings.
+- **`check-version` finds a missing bump.**  It fails when a package's `src/` or `pyproject.toml` changed and its `VERSION` did not.  It ignores a diff that only touches comments and docstrings ([Decision 0113](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0113-docstring-only-not-release-relevant.md)).
 - **`check-api` names the minimum level.**  It compares the public API against the last release tag and fails when a removal or rename comes with too small a bump.
-- **No compatibility shims before 1.0.**  When you rename something, rename it everywhere in the same PR.  Leave no alias and no deprecation warning behind ([Decision 0092](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0092-no-backwards-compat-before-publication.md)).
+- **No compatibility shims before 1.0.**  A renamed name changes everywhere in the same PR.  Leave no alias and no deprecation warning behind ([Decision 0092](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0092-no-backwards-compat-before-publication.md)).
 - **`0.0.0` is exempt.**  A package whose `VERSION` reads `0.0.0` has never released, so `check-version` leaves it alone.
 
 ## What happens on merge
@@ -35,8 +33,6 @@ When your PR merges to `main` with a `VERSION` bump, an **experimental release**
 2. Files are pushed to the [experimental bundle repo](https://github.com/ChuMicro/ChuMicro-Bundle-Experimental)
 3. A git tag is created (for example `chumicro-timing-v0.8.5-experimental`)
 4. Experimental docs are deployed
-
-No one runs anything by hand for this.
 
 **Stable promotion** is separate.  A maintainer runs `promote.yml` to republish an experimental release on the stable channel.  Stable is built from the experimental release's source archive, so it contains exactly the code that was tested as experimental.
 
@@ -71,7 +67,7 @@ pip install chumicro-timing-experimental
 2. Fill in the library name, experimental tag, and verification checklist
 3. A maintainer reviews and runs `promote.yml`
 
-What maintainers look for: preflight passes, ideally tested on hardware, no known regressions, docs are complete, and the API is intentional (breaking changes after 1.0 require a major bump).
+A maintainer checks that preflight passes, that the release has run on hardware where that matters, that it carries no known regressions, that its docs are complete, and that its API is intentional.
 
 ## FAQ
 
@@ -88,11 +84,9 @@ The release fires on merge and publishes a new version with no code change.  It 
 A maintainer cuts a short-lived `release/<library>-vX.Y.x` branch from the stable tag, applies the fix, runs `release.yml` by hand, and deletes the branch once the patch ships.  This is rare: most fixes go through a normal PR to `main`.
 
 **Q: How do security fixes reach users?**
-Like any fix, with urgency: the patch merges to `main`, publishes to experimental automatically, and the maintainer promotes it to stable at once instead of waiting for the next routine promotion. If you are reporting a vulnerability, go through [SECURITY.md](https://github.com/ChuMicro/ChuMicro/blob/main/SECURITY.md) privately; do not open a public promotion request for it.
+Like any fix, with urgency: the patch merges to `main`, publishes to experimental automatically, and the maintainer promotes it to stable at once instead of waiting for the next routine promotion. Report a vulnerability privately, through [SECURITY.md](https://github.com/ChuMicro/ChuMicro/blob/main/SECURITY.md), instead of in a public promotion request.
 
 ## For maintainers
-
-The rest of this page covers running the release workflows.  Contributors can stop here.
 
 ### Promoting several packages at once
 
@@ -108,7 +102,7 @@ If a publish leg fails, the packages that succeeded keep their tags, and the bun
 
 ### Promotion flags
 
-`promote.yml` accepts two optional flags. Leave both off for a normal promotion.
+A normal promotion leaves these optional `promote.yml` inputs off.
 
 **`allow_downgrade`** skips the check that the promoted version must be newer than the newest stable release.  Without it, promoting an older experimental tag fails validation instead of quietly rolling the stable bundle and docs back to the older version.  Set it only when a hotfix deliberately republishes an older version as stable.
 
@@ -116,7 +110,7 @@ If a publish leg fails, the packages that succeeded keep their tags, and the bun
 
 ### First release of a new package
 
-The first release of a brand-new package fails at the PyPI publish step unless a maintainer prepares PyPI before the merge.  PyPI accepts a trusted-publisher upload only for a project that already exists or has a matching pending publisher, and the workflow cannot create projects on its own.  An account can also hold at most one pending publisher per (repository, workflow, environment) combination, so the slot is usually occupied.
+The first release of a brand-new package fails at the PyPI publish step unless a maintainer prepares PyPI before the merge.  PyPI accepts a trusted-publisher upload only for a project that already exists or has a matching pending publisher.  The workflow cannot create a project on its own.  An account also holds at most one pending publisher per combination of repository, workflow, and environment, so another package's pending publisher can occupy the slot.
 
 Before merging the first `VERSION` bump of a new package, register a pending publisher on pypi.org for `chumicro-<name>-experimental`: owner `ChuMicro`, repository `ChuMicro`, workflow `release.yml`, environment `pypi`.  The first successful publish turns it into a normal per-project publisher.  The stable name gets the same treatment, with `promote.yml` as the workflow, when the package is first promoted.
 
@@ -126,6 +120,6 @@ Reading the publish failure:
 
 - **400 Bad Request**: the project does not exist and no pending publisher matched. Follow the bootstrap steps above.
 - **403 Forbidden**: the project exists but its trusted publisher is missing or misconfigured. Fix it on the project's Publishing page.
-- **429 (too many new projects)**: PyPI creates at most 4 new projects per rolling 24 hours, per user and per IP.  Retrying does not help.  Wait for the window to roll; the `Ratelimit-Policy` response header carries the exact reset time.
+- **429 (too many new projects)**: PyPI creates at most 4 new projects per rolling 24 hours, per user and per IP.  Wait for the window to roll instead of retrying.  The `Ratelimit-Policy` response header carries the exact reset time.
 
 A failed publish leg also skips the bundle, libraries-channel, and manifest jobs for the whole run, including packages whose legs succeeded.  Their tags survive, so a `workflow_dispatch` re-run finishes their distribution without republishing anything.

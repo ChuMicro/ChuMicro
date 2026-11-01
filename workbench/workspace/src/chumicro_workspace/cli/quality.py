@@ -110,11 +110,8 @@ def _cmd_lint(args: argparse.Namespace) -> int:
         quality_flags: list[str] = []
         if quality.lint.select:
             quality_flags.extend(["--select", ",".join(quality.lint.select)])
-        # argparse.REMAINDER keeps the `--` the help tells users to type,
-        # and ruff reads everything after its OWN `--` as file paths — so
-        # forwarding the separator turned `lint -- --fix` into a hunt for a
-        # file named `--fix` (a bogus E902 on top of the real findings),
-        # which meant the documented passthrough worked for no flag at all.
+        # argparse.REMAINDER keeps the `--` users type before ruff flags.
+        # Ruff reads everything after its own `--` as file paths, so drop it.
         ruff_args = args.ruff_args
         if ruff_args and ruff_args[0] == "--":
             ruff_args = ruff_args[1:]
@@ -201,39 +198,49 @@ def _add_quality_parsers(subparsers: argparse._SubParsersAction) -> None:
     """Register ``test`` / ``lint`` / ``preflight``."""
     test_parser = subparsers.add_parser(
         "test",
-        help="Run pytest in the workspace root.  Extra args pass through.",
+        help="Run the workspace's tests with pytest.",
+        description=(
+            "Run pytest from the workspace folder.  Put pytest's own "
+            "flags after --, as in test -- -k blink -x.  "
+            "coverage_threshold in quality.toml, or in the quality: "
+            "block of workspace.yml, sets a minimum test coverage."
+        ),
     )
     _add_workspace_arg(test_parser)
     test_parser.add_argument(
         "pytest_args",
         nargs=argparse.REMAINDER,
-        help="Args forwarded verbatim to pytest (place after `--`).",
+        help="Flags passed to pytest unchanged.  Put them after --.",
     )
     test_parser.set_defaults(func=_cmd_test)
 
     lint_parser = subparsers.add_parser(
         "lint",
-        help=(
-            "Run `ruff check` and `chumicro-checks` across the "
-            "workspace.  Extra args pass through to ruff.  "
-            "workspace.yml's `quality.lint.tools` picks which of "
-            "the two run."
+        help="Check the workspace's code with ruff and chumicro-checks.",
+        description=(
+            "Run ruff check and chumicro-checks over the workspace.  Put "
+            "ruff's own flags after --, as in lint -- --fix.  The [lint] "
+            "settings in quality.toml, or the quality: block of "
+            "workspace.yml, pick which tools run and which ruff rules "
+            "apply."
         ),
     )
     _add_workspace_arg(lint_parser)
     lint_parser.add_argument(
         "ruff_args",
         nargs=argparse.REMAINDER,
-        help="Args forwarded verbatim to ruff (place after `--`).",
+        help="Flags passed to ruff unchanged.  Put them after --.",
     )
     lint_parser.set_defaults(func=_cmd_lint)
 
     preflight_parser = subparsers.add_parser(
         "preflight",
-        help=(
-            "Run lint + tests as a single sanity gate (the same shape "
-            "chumicro itself uses, scaled down for workspaces without "
-            "CI).  Respects workspace.yml's `quality:` knobs."
+        help="Run lint, then the tests, and stop at the first failure.",
+        description=(
+            "Run lint and then test, with no extra flags, as one check "
+            "to pass before you push.  preflight stops at the first "
+            "failure.  The settings in quality.toml and workspace.yml "
+            "apply to both steps."
         ),
     )
     _add_workspace_arg(preflight_parser)

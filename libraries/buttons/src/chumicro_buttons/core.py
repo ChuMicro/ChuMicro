@@ -1,17 +1,18 @@
-"""Buttons and switches: debounced level, edges, long press, repeat, and click counting."""
+"""``Button`` and ``Buttons``: debounced buttons and switches with long press, repeat, and click counting.
+
+Attributes:
+    DEFAULT_SETTLE_MS: The default debounce window, 10 ms: how long a pin must hold a new
+        level before the edge counts.  The window is also the shortest press that can
+        register.  A tactile switch settles inside a millisecond, a big toggle can bounce
+        for 20 ms, and a fast tap can be over in 10.
+    DEFAULT_LONG_PRESS_MS: The default hold, 500 ms, before ``just_long_pressed`` fires.
+    DEFAULT_REPEAT_DELAY_MS: The default hold, 500 ms, before auto-repeat starts.
+"""
 
 import sys
 
-#: Quiet period a raw signal must hold before an edge is believed.  Zero trusts the signal
-#: as-is, which is what a hardware-debounced button wants.  It is also the shortest press
-#: that can be reported, so this default is a balance: a tactile switch settles inside a
-#: millisecond, a big toggle can bounce for twenty, and a fast tap can be over in ten.
 DEFAULT_SETTLE_MS = 10
-
-#: How long a press must be held before ``just_long_pressed`` fires.  Zero disables it.
 DEFAULT_LONG_PRESS_MS = 500
-
-#: How long a press must be held before auto-repeat starts ticking.
 DEFAULT_REPEAT_DELAY_MS = 500
 
 
@@ -36,32 +37,65 @@ def _select_source(pins, *, active_low, settle_ms, ticks):
 
 
 class Button:
-    """One momentary button or switch, read as a debounced level plus what it meant.
+    """One button or switch, debounced, with long press, auto-repeat, and click counting.
 
-    Every reading is a plain attribute refreshed by ``check(now_ms)``, and the ``just_`` family
-    is true only for the tick the thing happened on, so a loop can read them without consuming
-    anything.  A switch that stays where you put it uses the same object, reading ``pressed``
-    and watching the edges for when it moved.  Constructing with ``pin`` builds the runtime's
-    own source, a firmware ``keypad`` scan on CircuitPython and a capture interrupt on
-    MicroPython, and both catch a tap that starts and ends between two passes of your loop.
+    Call ``check(now_ms)`` once per pass of the loop and read the attributes below.  Or set
+    the ``on_`` callbacks and register the button with ``runner.add(button, period_ms=20)``,
+    and the runner calls ``handle``, which calls them.  Each ``just_`` attribute is True only
+    on the tick its event happened, so several reads in one pass all see it.  A toggle or
+    slide switch is a ``Button`` too, and ``pressed`` is its position.
+
+    Built from ``pin``, the button catches edges between ticks, through the firmware
+    ``keypad`` scan on CircuitPython and a pin interrupt on MicroPython.  A tap that starts
+    and ends between two passes of the loop still registers.
 
     Args:
-        pin: Runtime pin object for the key, or None when a parent drives this button.
-        ticks: The clock every duration here is judged by, ``chumicro_timing.ticks`` or
-            anything shaped like it.  Required, and it is the only clock this library reads,
-            so the ticks you pass ``check(now_ms)`` and the settle window the source
-            debounces against share one time base.
-        source: Pre-built edge source; overrides ``pin``.  Tests inject a fake here.
-        active_low: True when a pressed key reads low.  True suits a button wired to ground
-            with the internal pull-up enabled, which is nearly always the wiring.
-        settle_ms: Debounce window in milliseconds, and the shortest press that can be
-            reported.  Raise it for a switch that bounces badly, lower it for fast tapping,
-            and use zero for a button with hardware debouncing behind it.
-        long_press_ms: Hold time that fires ``just_long_pressed``.  Zero disables it.
-        repeat_ms: Interval between ``just_repeated`` fires while held.  Zero disables it.
-        repeat_delay_ms: Hold time before repeat starts.
-        click_ms: Quiet time after a release that closes a click series and publishes
-            ``click_count``.  Zero disables click counting.
+        pin: The pin the button is wired to, such as ``board.GP14`` on CircuitPython or
+            ``machine.Pin(14)`` on MicroPython.  None for a key that a ``Buttons`` reads.
+        ticks: The clock every duration is measured on: ``chumicro_timing.ticks``, or an
+            object with the same ``ticks_ms``, ``ticks_add``, and ``ticks_diff``.  The
+            ``now_ms`` passed to ``check`` comes from this clock.
+        source: A ready-made edge source, used in place of ``pin``.  Tests pass
+            ``FakeButtonSource`` from ``chumicro_buttons.testing``.  ``active_low`` and
+            ``settle_ms`` then go unused.
+        active_low: True when a pressed button reads low, as one wired from the pin to GND
+            does.  The pin's internal pull-up is switched on to match.  False switches on
+            the pull-down instead, for a button wired to 3V3.
+        settle_ms: Debounce window in milliseconds, which is also the shortest press that
+            can register.  Raise it for a switch that bounces badly, lower it for fast
+            tapping, and use 0 for a button with hardware debouncing.
+        long_press_ms: Hold time in milliseconds before ``just_long_pressed`` fires.  0 turns
+            long press off.
+        repeat_ms: Milliseconds between ``just_repeated`` fires while the button is held.  0
+            turns auto-repeat off.
+        repeat_delay_ms: Hold time in milliseconds before auto-repeat starts.
+        click_ms: Quiet time in milliseconds after a release that ends a click series and
+            sets ``click_count``.  A press held longer than this is a hold, left out of the
+            count.  0 turns click counting off.
+
+    Attributes:
+        pressed: True while the button is down, after debouncing.
+        just_pressed: True only on the tick the press landed.
+        just_released: True only on the tick the release landed.
+        just_long_pressed: True only on the tick the hold reached ``long_press_ms``.
+        just_repeated: True on each tick auto-repeat fires.
+        just_clicked: True only on the tick a click series ended.
+        held_ms: Milliseconds the button has been down.  After a release it keeps the length
+            of that press, until the next press starts it again from 0.
+        click_count: How many presses the click series that just ended held.  Read it when
+            ``just_clicked`` is True.
+        overflowed: True when edge capture dropped an edge since the last tick.  A signal
+            that noisy needs hardware debouncing.
+        on_press: Called with no arguments when the button goes down.
+        on_release: Called with no arguments when the button comes up.
+        on_long_press: Called with no arguments once per press, when the hold reaches
+            ``long_press_ms``.
+        on_repeat: Called with no arguments on each auto-repeat.
+        on_click: Called with ``click_count`` when a click series ends.
+
+    Raises:
+        RuntimeError: ``pin`` was given on CPython, which has no pins to read, or on a
+            CircuitPython build without the ``keypad`` module.
     """
 
     def __init__(
@@ -93,36 +127,20 @@ class Button:
         self._repeat_delay_ms = repeat_delay_ms
         self._click_ms = click_ms
 
-        #: True while the key is down, after debouncing.
         self.pressed = False
-        #: True only on the tick the press edge landed.
         self.just_pressed = False
-        #: True only on the tick the release edge landed.
         self.just_released = False
-        #: True only on the tick the hold passed ``long_press_ms``.
         self.just_long_pressed = False
-        #: True on each tick auto-repeat fires.
         self.just_repeated = False
-        #: True only on the tick a click series closed.
         self.just_clicked = False
-        #: Milliseconds the key has been down.  After a release it holds how long that press
-        #: lasted, so an ``on_release`` handler can read it, and it resets on the next press.
         self.held_ms = 0
-        #: Presses in the click series that just closed; read it when ``just_clicked``.
         self.click_count = 0
-        #: True when capture dropped an edge since the last tick.  A signal this noisy wants
-        #: hardware debouncing.
         self.overflowed = False
 
-        #: Called with no arguments when the key goes down.
         self.on_press = None
-        #: Called with no arguments when the key comes up.
         self.on_release = None
-        #: Called with no arguments once per press, after ``long_press_ms``.
         self.on_long_press = None
-        #: Called with no arguments on each auto-repeat.
         self.on_repeat = None
-        #: Called with the press count when a click series closes.
         self.on_click = None
 
         self._press_ms = 0
@@ -134,13 +152,19 @@ class Button:
         self._press_is_click = False
 
     def check(self, now_ms: int) -> bool:
-        """Drain captured edges and advance the timers by one tick.
+        """Collect the edges captured since the last tick and update every reading.
+
+        Call it once per pass of the loop.  It never waits.
 
         Args:
-            now_ms: Tick this pass of the loop is measured from.
+            now_ms: The current tick, from the clock passed as ``ticks``.
 
         Returns:
-            True when anything happened, so a quiet tick can skip ``handle``.
+            True when anything happened this tick, which is when ``handle`` has callbacks to call.
+
+        Raises:
+            RuntimeError: The button was built with neither ``pin`` nor ``source``, as each
+                key inside a ``Buttons`` is.  Check the ``Buttons`` instead.
         """
         source = self._source
         if source is None:
@@ -160,7 +184,7 @@ class Button:
         return self._advance(now_ms)
 
     def handle(self, now_ms: int) -> None:
-        """Call whichever callbacks this tick's readings earned."""
+        """Call the ``on_`` callbacks for the events ``check`` reported this tick."""
         if self.just_pressed and self.on_press is not None:
             self.on_press()
         if self.just_released and self.on_release is not None:
@@ -173,12 +197,11 @@ class Button:
             self.on_click(self.click_count)
 
     def next_deadline(self, now_ms: int) -> int | None:
-        """Return the earliest tick a timer here fires at, or None while none is armed.
+        """Return the tick the next long press, repeat, or click window falls due, or None.
 
-        The runner reads this before it sleeps, so a long press, an auto-repeat, or a
-        click window fires on time instead of at the next unrelated wake.  A press is a
-        pin edge rather than a timer, so no deadline can name one; an edge that lands
-        mid-sleep is captured with its real timestamp and reported at the next tick.
+        ``Runner.wait`` reads it before sleeping, so those timed events fire on time.  A
+        press needs no deadline: an edge that lands while the loop sleeps is captured with
+        its own timestamp and reported on the next tick.
         """
         ticks = self._ticks
         nearest = None
@@ -200,7 +223,10 @@ class Button:
         return nearest
 
     def deinit(self) -> None:
-        """Release the pins and any interrupt the source installed."""
+        """Release the pin and stop the interrupt or ``keypad`` scan reading it.
+
+        Call it before using the pin for something else.
+        """
         if self._source is not None:
             self._source.deinit()
 
@@ -294,25 +320,41 @@ class Button:
 
 
 class Buttons:
-    """Several keys on one source, ticked together and read one key at a time.
+    """Several buttons read on one scan, each one a ``Button`` with its own readings and callbacks.
 
-    ``buttons[0]`` is a :class:`Button` carrying that key's readings and its own callbacks, and
-    the whole-panel callbacks take the key number instead.  On CircuitPython this is one
-    firmware ``keypad`` scan across all the pins rather than one per key, which is both cheaper
-    and what makes chords land on the same tick.
+    ``buttons[0]`` is the ``Button`` for the first pin, and ``len(buttons)`` is the number of
+    keys.  Call ``check(now_ms)`` on the ``Buttons``, which checks every key, and read each
+    key's attributes.  The ``Buttons`` has its own ``on_press`` and ``on_release``, which
+    take the key number, for one handler covering every key.  On CircuitPython one firmware
+    ``keypad`` scan reads every pin, which costs less than a scan per key and lands two keys
+    pressed together on the same tick.
 
     Args:
-        pins: Runtime pin objects, one per key.
-        ticks: The clock every duration here is judged by, ``chumicro_timing.ticks`` or
-            anything shaped like it.  Required, and it reaches the scan and every key below,
-            so the whole panel measures against one time base.
-        source: Pre-built edge source; overrides ``pins``.  Tests inject a fake here.
-        active_low: True when a pressed key reads low.
-        settle_ms: Debounce window in milliseconds; 0 trusts the signal.
-        long_press_ms: Hold time that fires ``just_long_pressed``.  Zero disables it.
-        repeat_ms: Interval between repeat fires while held.  Zero disables it.
-        repeat_delay_ms: Hold time before repeat starts.
-        click_ms: Quiet time that closes a click series.  Zero disables click counting.
+        pins: The pins the buttons are wired to, one per key, in the order to number them.
+        ticks: The clock every duration is measured on, shared by the scan and every key, as
+            for ``Button``.
+        source: A ready-made edge source, used in place of ``pins``.  Tests pass
+            ``FakeButtonSource`` from ``chumicro_buttons.testing``.
+        active_low: True when a pressed button reads low, as for ``Button``.
+        settle_ms: Debounce window in milliseconds, as for ``Button``.
+        long_press_ms: Hold time in milliseconds before a key's ``just_long_pressed`` fires.
+            0 turns long press off.
+        repeat_ms: Milliseconds between a held key's ``just_repeated`` fires.  0 turns
+            auto-repeat off.
+        repeat_delay_ms: Hold time in milliseconds before auto-repeat starts.
+        click_ms: Quiet time in milliseconds that ends a key's click series.  0 turns click
+            counting off.
+
+    Attributes:
+        keys: The ``Button`` for each key, in pin order.
+        overflowed: True when edge capture dropped an edge since the last tick.
+        on_press: Called with the key number when any key goes down.
+        on_release: Called with the key number when any key comes up.
+
+    Raises:
+        ValueError: ``pins`` is empty, or neither ``pins`` nor ``source`` was given.
+        RuntimeError: ``pins`` was given on CPython, which has no pins to read, or on a
+            CircuitPython build without the ``keypad`` module.
     """
 
     def __init__(
@@ -343,7 +385,6 @@ class Buttons:
         else:
             raise ValueError("Buttons needs either pins= or source=")
 
-        #: One :class:`Button` per key, in the order the pins were given.
         self.keys = []
         key_index = 0
         while key_index < self._source.key_count:
@@ -358,21 +399,21 @@ class Buttons:
             )
             key_index += 1
 
-        #: True when capture dropped an edge since the last tick.
         self.overflowed = False
-        #: Called with the key number when any key goes down.
         self.on_press = None
-        #: Called with the key number when any key comes up.
         self.on_release = None
 
     def check(self, now_ms: int) -> bool:
-        """Drain captured edges into every key and advance their timers.
+        """Collect the edges captured since the last tick and update every key's readings.
+
+        Call it once per pass of the loop.  It never waits.
 
         Args:
-            now_ms: Tick this pass of the loop is measured from.
+            now_ms: The current tick, from the clock passed as ``ticks``.
 
         Returns:
-            True when any key produced news this tick, so a quiet tick can skip ``handle``.
+            True when any key had an event this tick, which is when ``handle`` has callbacks
+                to call.
         """
         source = self._source
         source.poll(now_ms)
@@ -395,7 +436,10 @@ class Buttons:
         return fired
 
     def handle(self, now_ms: int) -> None:
-        """Call the per-key callbacks, then the whole-panel ones."""
+        """For each key in order, call its own callbacks, then this object's ``on_press`` or ``on_release``.
+
+        The ``Buttons`` callbacks receive the key number.
+        """
         keys = self.keys
         key_count = len(keys)
         index = 0
@@ -409,7 +453,7 @@ class Buttons:
             index += 1
 
     def next_deadline(self, now_ms: int) -> int | None:
-        """Return the earliest tick any key's timer fires at, or None while none is armed."""
+        """Return the tick any key's next long press, repeat, or click window falls due, or None."""
         ticks = self._ticks
         keys = self.keys
         key_count = len(keys)
@@ -425,13 +469,16 @@ class Buttons:
         return nearest
 
     def deinit(self) -> None:
-        """Release the pins and any interrupt the source installed."""
+        """Release the pins and stop the interrupts or ``keypad`` scan reading them.
+
+        Call it before using the pins for something else.
+        """
         self._source.deinit()
 
     def __len__(self) -> int:
-        """Return how many keys this panel reads."""
+        """Return the number of keys."""
         return len(self.keys)
 
     def __getitem__(self, key_index: int) -> Button:
-        """Return the :class:`Button` for ``key_index``."""
+        """Return the ``Button`` for key number ``key_index``, counted from 0."""
         return self.keys[key_index]

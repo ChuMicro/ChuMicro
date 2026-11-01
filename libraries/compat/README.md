@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **`functools.partial` for CircuitPython and MicroPython, which leave it out.**
 
-`partial(set_led, 13)` gives you a new function with some of its arguments already filled in.  It is the tidy way to hand a callback the pin, sensor, or name it should work on, without a global variable or a wrapper function for each one.  CPython has it in `functools`; CircuitPython and MicroPython do not.  Import it from `chumicro_compat.functools` instead and the same code runs on all three: CPython gets its own built-in version, and a board gets a small pure-Python one with the same `func`, `args`, and `keywords` attributes.
+`partial(set_led, 13)` returns a new function with some of its arguments already filled in.  It hands a callback the pin, sensor, or name it should work on, without a global variable or a wrapper function for each one.  With `from chumicro_compat.functools import partial`, the same code runs on CircuitPython, MicroPython, and CPython.
 
 <br clear="left">
 
@@ -24,7 +24,7 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_compat
 pip install chumicro-compat
 ```
 
-For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and details on PyPI naming, see the [ChuMicro install guide](https://chumicro.com/ChuMicro/guides/install/).
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
 
@@ -67,11 +67,11 @@ while True:
 | `partial(func, *args, **keywords)` | Return a new function that calls `func` with these arguments filled in, followed by whatever you pass when you call it |
 | `partial.func` | The original function |
 | `partial.args` | The filled-in positional arguments, as a tuple |
-| `partial.keywords` | The filled-in keyword arguments, as a dict; a keyword passed at call time replaces the one filled in |
+| `partial.keywords` | The filled-in keyword arguments, as a dict.  A keyword passed at call time replaces the one filled in |
 
 ## Where this fits
 
-Needs no other ChuMicro library, and no ChuMicro library needs it.  Use it in your own code wherever you want `functools.partial` on a board.
+Needs no other library.  Import it in your own code wherever a board needs `functools.partial`.
 
 ## Platform support
 

@@ -1,20 +1,16 @@
 # API Reference
 
-## `chumicro_buttons.core`
+`chumicro_buttons` exports `Button`, `Buttons`, and the defaults `DEFAULT_SETTLE_MS`, `DEFAULT_LONG_PRESS_MS`, and `DEFAULT_REPEAT_DELAY_MS`, all defined in `chumicro_buttons.core`.  Start with `Button` for one button or switch, and its attribute table for every reading a loop can check.  `Buttons` reads several buttons on one scan.  `KeyMatrix`, for a keypad wired as rows and columns, imports from `chumicro_buttons.matrix`.  `FakeButtonSource` in `chumicro_buttons.testing` takes the place of the pins in host tests.
 
-`Button` reads one momentary button or switch: a debounced level, the edges either side of it, and the durations built on top (long press, auto-repeat, click counting).  `Buttons` reads several keys on one scan and hands you each as a `Button`.
+## `chumicro_buttons.core`
 
 ::: chumicro_buttons.core
 
 ## `chumicro_buttons.matrix`
 
-`KeyMatrix` reads a keypad wired as rows by columns.  Keys are numbered row-major and carry the same readings and callbacks as any other button.
-
 ::: chumicro_buttons.matrix
 
 ## `chumicro_buttons.testing`
-
-`FakeButtonSource` stands in for the hardware so button logic can be tested on a host.  Queue the edges, tick the button, assert on what it made of them.
 
 ::: chumicro_buttons.testing
 

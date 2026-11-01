@@ -1,6 +1,16 @@
-"""Non-blocking WebSocket client and server for CircuitPython, MicroPython, and CPython.
+"""``chumicro_websockets`` runs WebSocket clients and servers one non-blocking step at a time.
 
-The public entry points are :class:`WebSocketClient` and :class:`WebSocketServer`.
+A WebSocket (RFC 6455) is a TCP connection that stays open, so either end can
+send a message at any time.  The connection opens with the opening handshake,
+an HTTP request that the server answers with ``101 Switching Protocols``.
+After that, each message travels as one or more frames.  A frame is a short
+header plus a payload.  The opcode in the header marks the frame as text,
+binary data, or a control frame: CLOSE, PING, or PONG.
+
+``WebSocketClient`` connects to a server.  ``WebSocketServer`` accepts
+clients and hands each one over as a ``Connection``.  The ``CLOSE_*``
+constants name the status codes that ``close()`` sends and ``on_close``
+receives.  The ``OPCODE_*`` constants name the frame opcodes.
 """
 
 import gc

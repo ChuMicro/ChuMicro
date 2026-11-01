@@ -1,4 +1,4 @@
-"""``WifiService``: wifi state machine and reconnect supervisor."""
+"""``WifiService`` joins a wifi network, watches the link, and rejoins after a drop."""
 
 import sys
 
@@ -14,7 +14,14 @@ _LINK_POLL_MS = 1_000
 
 
 class WifiState:
-    """State-name constants for :class:`WifiService`."""
+    """``WifiState`` names the values ``WifiService.state`` takes.
+
+    Each value is a plain string, such as ``"connected"``.  ``DISCONNECTED``
+    holds until the first ``handle`` call.  ``CONNECTING`` covers the first
+    join and its retries.  ``CONNECTED`` means the board has joined.
+    ``RECONNECTING`` covers rejoining after a lost link.  ``FAILED`` means
+    ``reconnect_max`` attempts failed in a row, and the service has stopped.
+    """
 
     # Plain strings, not an enum: some MicroPython boards lack the enum module.
     DISCONNECTED = "disconnected"
@@ -40,12 +47,34 @@ def _select_adapter(radio=None):
 
 
 class WifiService:
-    """Drives a wifi adapter through connect, monitor, and reconnect.
+    """``WifiService`` joins the network in ``config`` and rejoins it whenever the link drops.
+
+    Create one at startup.  The main loop then calls ``check(now_ms)`` and
+    ``handle(now_ms)``, or a ``Runner`` does after ``runner.add(service)``.
+    Creating the service touches no radio.  After a failed join the service
+    pauses ``reconnect_backoff_start_ms`` before the next attempt, and each
+    further failure doubles the pause up to ``reconnect_backoff_max_ms``.
+
+    On CircuitPython a join attempt holds ``handle`` until the board joins or
+    ``connect_timeout_ms`` passes.  On MicroPython ``handle`` starts the join
+    and returns, and later calls check whether it finished.  On CPython the
+    service reports connected on the first ``handle`` call, with the address
+    ``127.0.0.1``.
 
     Args:
-        config: A :class:`WifiConfig` with the credentials and tuning knobs.
-        adapter: Optional :class:`WifiAdapter`; ``None`` (default) selects the runtime-appropriate one.
-        ticks: Optional ``chumicro_timing.ticks``-shaped source; defaults to the real clock.
+        config: The network name, password, and retry timing.
+        adapter: Radio driver to use, or ``None`` to pick the one for the
+            running runtime.  Host tests pass
+            ``chumicro_wifi.testing.FakeWifiAdapter``.
+        ticks: Clock with ``ticks_ms``, ``ticks_diff``, and ``ticks_add``, or
+            ``None`` for ``chumicro_timing.ticks``.
+
+    Attributes:
+        state: Current state, one of the ``WifiState`` values.
+        last_error: Exception from the latest join attempt or state-change
+            callback that raised, or ``None``.  A successful join clears it.
+        adapter: The radio driver in use.  On CircuitPython ``adapter.radio``
+            is the ``wifi.radio`` object that socket calls take as ``radio=``.
     """
 
     @classmethod
@@ -57,26 +86,26 @@ class WifiService:
         ticks: object | None = None,
         **constructor_kwargs: object,
     ) -> "WifiService":
-        """Build a :class:`WifiService` from runtime config.
+        """Build a ``WifiService`` from the ``wifi.*`` keys of deployed settings.
 
-        The ``wifi.*`` config keys carry the deployment-varying values
-        (credentials, timeouts, backoff, power tuning) and load through
-        :meth:`WifiConfig.from_config`; any other constructor knob
-        passes through verbatim as a keyword, and an explicit keyword
-        wins over its config-derived value.
+        ``WifiConfig.from_config`` reads the keys.  Each keyword in
+        ``constructor_kwargs`` passes straight to the constructor.
 
         Args:
-            config: A :class:`chumicro_config.RuntimeConfig` or plain flat dict.
-            radio: CircuitPython radio handle for the runtime adapter;
-                ignored on MicroPython and CPython, and unused when an
-                explicit ``adapter=`` is passed.
-            ticks: Optional tick source, forwarded to the constructor.
-            **constructor_kwargs: Any other constructor knob (e.g.
-                ``adapter=``), passed through verbatim.
+            config: Flat settings dict or ``chumicro_config.RuntimeConfig``.
+            radio: CircuitPython radio to drive, such as ``wifi.radio``, or
+                ``None`` to let the service find it.  MicroPython and CPython
+                ignore it, and an ``adapter=`` keyword replaces it.
+            ticks: Clock passed to the constructor.
+            **constructor_kwargs: Other constructor keywords, such as ``adapter=``.
+
+        Returns:
+            The new ``WifiService``.
 
         Raises:
             chumicro_config.MissingConfigKey: ``wifi.ssid`` or ``wifi.password`` is absent.
-            chumicro_config.InvalidConfigType: *config* is ``None`` or not a mapping.
+            chumicro_config.InvalidConfigType: ``config`` is ``None``, or
+                neither a dict nor a ``RuntimeConfig``.
         """
         kwargs: dict = {"ticks": ticks}
         if radio is not None and "adapter" not in constructor_kwargs:
@@ -117,24 +146,42 @@ class WifiService:
 
     @property
     def connected(self):
-        """``True`` when the substrate is currently linked."""
+        """``True`` while ``state`` is ``WifiState.CONNECTED``.
+
+        The radio reports a lost link seconds late, so this stays ``True`` for
+        that long after the network drops.
+        """
         return self.state == WifiState.CONNECTED
 
     @property
     def ip(self):
-        """Assigned IPv4 string, or ``None`` when not connected."""
+        """The board's IPv4 address as a string, such as ``"192.168.1.42"``.
+
+        ``None`` while not connected, and on MicroPython until DHCP assigns an
+        address.
+        """
         return self.adapter.ip() if self.connected else None
 
     def on_state_change(self, callback: object) -> None:
-        """Register a callback invoked on every state transition.
+        """Register ``callback`` to run on every change of ``state``.
+
+        ``handle`` calls each callback as ``callback(old_state, new_state)``,
+        in registration order.  An exception from a callback lands in
+        ``last_error`` when that holds ``None``, and the remaining callbacks
+        still run.
 
         Args:
-            callback: Called as ``callback(old_state, new_state)`` in registration order.
+            callback: Function taking the old and new ``WifiState`` values.
         """
         self._state_callbacks.append(callback)
 
     def check(self, now_ms):
-        """Return ``True`` when the service has work to do this tick."""
+        """Return ``True`` when ``handle`` has work at ``now_ms``, the current time from ``ticks_ms()``.
+
+        Work means a join attempt is due, a join is in flight, or the radio
+        reports a lost link.  ``check`` returns ``False`` during a retry pause,
+        while connected with the link up, and in ``WifiState.FAILED``.
+        """
         if self.state == WifiState.FAILED:
             return False
         if self.state == WifiState.CONNECTED:
@@ -144,15 +191,14 @@ class WifiService:
         return self._ticks.ticks_diff(now_ms, self._next_attempt_due_ms) >= 0
 
     def next_deadline(self, now_ms):
-        """Return the tick by which ``handle()`` must run next, or ``None`` once FAILED.
+        """Return the tick by which ``handle`` must run next, or ``None`` in ``WifiState.FAILED``.
 
-        ``Runner.wait()`` sleeps until the earliest deadline its services
-        report.  A wifi service with no deadline would leave a wifi-only
-        runner spinning, and a runner with slower jobs would give wifi a
-        turn only at their pace.  This reports the next reconnect attempt
-        while backing off, a short poll while a join is in flight (the
-        poll that lands past the join's timeout settles it as failed), and
-        a link check while connected.
+        ``Runner.wait`` sleeps until the earliest deadline its services
+        report.  While connected the deadline is ``now_ms`` plus 1000 ms, so
+        the service checks the link once a second.  While a join is in flight
+        it is ``now_ms`` plus 100 ms, and the first check past the join's
+        timeout counts the attempt as failed.  During a retry pause it is the
+        tick of the next attempt.
         """
         if self.state == WifiState.FAILED:
             return None
@@ -163,7 +209,15 @@ class WifiService:
         return self._next_attempt_due_ms
 
     def handle(self, now_ms):
-        """Drive the state machine forward."""
+        """Take the next step of joining, watching the link, or waiting to retry.
+
+        Call it when ``check(now_ms)`` returns ``True``.  The first join
+        attempt applies ``hostname``, ``tx_power_dbm``, and ``power_save`` to
+        the radio, and on MicroPython switches the radio on.  On
+        CircuitPython a join attempt holds the call for up to
+        ``connect_timeout_ms``.  On MicroPython the call starts the join and
+        returns without waiting for it.
+        """
         if self.state == WifiState.CONNECTED:
             if not self.adapter.is_linked():
                 # Update scheduling before the transition so a reentrant callback sees fresh values.

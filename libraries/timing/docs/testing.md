@@ -1,63 +1,85 @@
 # Testing Helpers
 
-`chumicro_timing.testing` provides `FakeTicks`, a hand-driven clock that only moves when you tell it to, plus a `sleep_ms` shim for host code that really does want to block.  The module declares itself test support, so the deploy walker and the bundle builder drop it and it never lands on a microcontroller.
+`chumicro_timing.testing` holds `FakeTicks`, a stand-in for the board's millisecond clock.  `FakeTicks` moves only when the test moves it, so a test covering a 30-second timeout finishes in milliseconds.  `pip install chumicro-timing` puts the module on the laptop.  Project deploys and the board bundles leave it out.
 
-## Usage with Rate and Deadline
+## The smallest test
 
-The value objects take the current time as an explicit `now_ms` argument, so there is nothing to inject.  Hand them `FakeTicks.ticks_ms()` at construction and on each poll, then use `FakeTicks.advance()` to move time forward:
-
-```python
-from chumicro_timing import Rate
-from chumicro_timing.testing import FakeTicks
-
-def test_rate_fires_after_period() -> None:
-    """Rate fires exactly when the period elapses."""
-    fake = FakeTicks()
-    rate = Rate(100, fake.ticks_ms())
-
-    assert rate.due(fake.ticks_ms()) is False
-
-    fake.advance(99)
-    assert rate.due(fake.ticks_ms()) is False
-
-    fake.advance(1)
-    assert rate.due(fake.ticks_ms()) is True
-    # The schedule has advanced, so polling again at the same time returns False.
-    assert rate.due(fake.ticks_ms()) is False
-```
-
-A `Deadline` is driven the same way:
+Save this as `test_light_timer.py` and run `pytest test_light_timer.py`:
 
 ```python
 from chumicro_timing import Deadline
 from chumicro_timing.testing import FakeTicks
 
-def test_deadline_expires() -> None:
-    """Deadline expires once the timeout elapses."""
-    fake = FakeTicks()
-    deadline = Deadline(100, fake.ticks_ms())
 
-    assert deadline.expired(fake.ticks_ms()) is False
-    assert deadline.remaining(fake.ticks_ms()) == 100
+def test_light_turns_off_after_five_seconds():
+    clock = FakeTicks()
+    timer = Deadline(5000, clock.ticks_ms())
 
-    fake.advance(100)
-    assert deadline.expired(fake.ticks_ms()) is True
-    assert deadline.remaining(fake.ticks_ms()) == 0
+    clock.advance(4999)
+    assert not timer.expired(clock.ticks_ms())
+
+    clock.advance(1)
+    assert timer.expired(clock.ticks_ms())
 ```
 
-`FakeTicks` also answers `sleep_ms(duration_ms)` by advancing itself, so a `Runner` built with `ticks=FakeTicks()` idles instantly instead of stalling your test suite.
+`Deadline` and `Rate` take the current tick as an argument, so the test hands them `clock.ticks_ms()` and decides what time it is.
 
-## Using these fakes in your own tests
+## `FakeTicks`
 
-Your test suite imports the fake straight from the installed package, the same way this library's own tests do:
+`FakeTicks` answers the same `ticks_ms()`, `ticks_diff()`, and `ticks_add()` calls as the board clock.  Any class that takes a `ticks=` argument accepts it.
+
+| Call | What it does |
+|---|---|
+| `FakeTicks(start_ms=0)` | Starts the clock at `start_ms`. |
+| `advance(amount_ms)` | Moves the clock forward by `amount_ms`. |
+| `ticks_ms()` | Returns the current reading.  The reading wraps to 0 after `2**29 - 1`, the same point a board's counter wraps. |
+| `ticks_diff(end, start)` | Returns `end - start`, correct across the wrap. |
+| `ticks_add(ticks, delta)` | Returns `ticks + delta`, wrapped into range. |
+| `sleep_ms(duration_ms)` | Moves the clock forward by `duration_ms` and returns at once.  A `Runner` built with `ticks=FakeTicks()` therefore idles without stalling the test. |
+
+A `Rate` driven by `FakeTicks` shows each step of its schedule:
 
 ```python
+from chumicro_timing import Rate
 from chumicro_timing.testing import FakeTicks
+
+
+def test_rate_fires_once_per_period():
+    clock = FakeTicks()
+    rate = Rate(100, clock.ticks_ms())
+
+    clock.advance(99)
+    assert rate.due(clock.ticks_ms()) is False
+
+    clock.advance(1)
+    assert rate.due(clock.ticks_ms()) is True
+    assert rate.due(clock.ticks_ms()) is False
 ```
 
-Project convention: libraries that expose injectable services ship their own test fakes alongside the production code.
+`start_ms` sets the clock just short of the wrap, which is how a test checks that a timer survives it:
 
-## API Reference
+```python
+from chumicro_timing import Deadline
+from chumicro_timing.testing import FakeTicks
+
+
+def test_deadline_survives_the_counter_wrap():
+    clock = FakeTicks(start_ms=2**29 - 50)
+    timer = Deadline(100, clock.ticks_ms())
+
+    clock.advance(99)
+    assert clock.ticks_ms() < 100
+    assert not timer.expired(clock.ticks_ms())
+
+    clock.advance(1)
+    assert timer.expired(clock.ticks_ms())
+```
+
+## `sleep_ms`
+
+`chumicro_timing.testing.sleep_ms(duration_ms)` really sleeps.  It calls `time.sleep_ms` where the runtime has one and `time.sleep` otherwise, for a script on the laptop that needs a real pause.
+
+## API reference
 
 ::: chumicro_timing.testing
 

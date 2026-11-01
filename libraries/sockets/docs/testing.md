@@ -1,46 +1,94 @@
 # Testing Helpers
 
-`chumicro_sockets.testing` ships in-memory stand-ins for real sockets, so code that talks over a network runs under pytest with no network attached.  `FakeSocket` answers the same `send`, `recv_into`, `close`, `setblocking`, and `settimeout` calls as a connected TCP socket.  `FakeUDPSocket` does the same for `sendto` and `recvfrom_into`, and `FakeSocketConnector` plays a connector whose steps you script.  The module marks itself as test support, so deploys and the bundle builder leave it off the board.
+`chumicro_sockets.testing` holds in-memory stand-ins for network sockets, so code that talks over a network runs under pytest with no network attached.  `FakeSocket` replaces a connected TCP socket, `FakeUDPSocket` replaces a UDP socket, and `FakeSocketConnector` replaces the connector that opens a TCP or TLS connection one step per tick.  `pip install chumicro-sockets pytest` installs everything the tests on this page import.  Project deploys and the board bundles leave the module out.
 
-## Testing code that uses a TCP socket
+## The smallest test
 
-Pass a `FakeSocket` wherever your code expects a connected socket.  Queue what the server would send with `enqueue_recv`, then check what your code sent in `sent`:
+Save this as `test_status_command.py` and run `pytest test_status_command.py`:
 
 ```python
 from chumicro_sockets.testing import FakeSocket
 
 
 def ask_status(sock):
-    """Send STATUS and return the first line of the reply."""
     sock.send(b"STATUS\r\n")
     buffer = bytearray(64)
     count = sock.recv_into(buffer)
     return bytes(buffer[:count]).split(b"\r\n")[0]
 
 
-def test_ask_status_sends_the_command_and_returns_the_reply():
+def test_ask_status_sends_the_command_and_reads_the_reply():
     sock = FakeSocket()
-    sock.enqueue_recv(b"OK ready\r\n")  # what the server sends back
+    sock.enqueue_recv(b"OK ready\r\n")
 
     assert ask_status(sock) == b"OK ready"
     assert sock.sent == b"STATUS\r\n"
 ```
 
-`sent` is a `bytearray` holding every byte passed to `send()`.  Each `enqueue_recv(chunk)` call queues one chunk for a later `recv_into()`, in order.  With nothing queued, `recv_into()` raises `OSError(EAGAIN)`, the way a non-blocking socket says "nothing yet".  After `simulate_peer_close()`, it returns `0` once the queue is empty, the way a real socket reports that the server hung up.  `enqueue_eagain_for_send(count)` and `enqueue_eagain_for_recv(count)` make the next `count` calls raise `OSError(EAGAIN)`, so a test can walk your code through its retry path.
+`ask_status` takes its socket as an argument, so the test hands it a `FakeSocket`.  `enqueue_recv` queues what the server sends back.  `sent` collects what the code sent.
+
+## `FakeSocket`
+
+`FakeSocket` answers the same `send`, `recv_into`, `close`, `setblocking`, and `settimeout` calls as a connected TCP socket.
+
+| Call or attribute | What it does |
+|---|---|
+| `enqueue_recv(chunk)` | Queues one chunk of bytes for later `recv_into()` calls, in order. |
+| `simulate_peer_close()` | Plays the server hanging up: once the queue is empty, `recv_into()` returns `0`. |
+| `enqueue_eagain_for_recv(count=1)` | Makes the next `count` `recv_into()` calls raise `OSError(EAGAIN)`. |
+| `enqueue_eagain_for_send(count=1)` | Makes the next `count` `send()` calls raise `OSError(EAGAIN)`. |
+| `sent` | A `bytearray` of every byte passed to `send()`. |
+| `closed` | `True` after `close()`.  Any later `send()` or `recv_into()` raises `OSError(EBADF)`. |
+| `blocking` | The mode the last `setblocking()` or `settimeout()` set. |
 
 A read smaller than the queued chunk leaves the rest queued, the way a real socket splits a stream across reads:
 
 ```python
-sock = FakeSocket()
-sock.enqueue_recv(b"abcdef")
-buffer = bytearray(8)
-sock.recv_into(buffer, 3)   # reads b"abc"; b"def" stays queued
-sock.recv_into(buffer, 8)   # reads b"def"
+from chumicro_sockets.testing import FakeSocket
+
+
+def test_a_short_read_leaves_the_rest_queued():
+    sock = FakeSocket()
+    sock.enqueue_recv(b"abcdef")
+    buffer = bytearray(8)
+
+    assert sock.recv_into(buffer, 3) == 3
+    assert bytes(buffer[:3]) == b"abc"
+    assert sock.recv_into(buffer, 8) == 3
+    assert bytes(buffer[:3]) == b"def"
 ```
 
-## Testing UDP code
+With nothing queued, `recv_into()` raises `OSError(EAGAIN)`, the way a non-blocking socket says nothing has arrived yet.  After `simulate_peer_close()` it returns `0`:
 
-`FakeUDPSocket` records each `sendto` as a `(data, host, port)` tuple in `sent`, and `enqueue_recv` queues a datagram along with the address it came from:
+```python
+import errno
+
+from chumicro_sockets.testing import FakeSocket
+
+
+def test_an_empty_socket_waits_until_the_server_hangs_up():
+    sock = FakeSocket()
+    buffer = bytearray(8)
+    try:
+        sock.recv_into(buffer)
+        raise AssertionError("expected EAGAIN")
+    except OSError as error:
+        assert error.errno == errno.EAGAIN
+
+    sock.simulate_peer_close()
+    assert sock.recv_into(buffer) == 0
+```
+
+## `FakeUDPSocket`
+
+`FakeUDPSocket(bind_host="0.0.0.0", bind_port=54321)` answers `sendto`, `recvfrom_into`, `getsockname`, `close`, `setblocking`, and `settimeout`.
+
+| Call or attribute | What it does |
+|---|---|
+| `enqueue_recv(data, *, host="0.0.0.0", port=0)` | Queues one datagram and the address it came from. |
+| `enqueue_eagain_for_recv(count=1)`, `enqueue_eagain_for_send(count=1)` | Make the next `count` calls raise `OSError(EAGAIN)`. |
+| `sent` | A list of `(data, host, port)` tuples, one per `sendto()`. |
+| `getsockname()` | Returns `(bind_host, bind_port)`. |
 
 ```python
 from chumicro_sockets.testing import FakeUDPSocket
@@ -57,16 +105,26 @@ def test_ping_gets_a_pong():
     assert sock.sent == [(b"ping", "192.168.1.10", 12345)]
 ```
 
-## Scripting a connector
+## `FakeSocketConnector`
 
-`FakeSocketConnector` takes a list of actions, and each `tick()` plays the next one: `"dns_ok"`, `"tcp_pending"`, `"tcp_ok"`, `"tls_pending"`, `"tls_ok"`, or `"fail:<message>"`, which sets `last_error` to `OSError("<message>")`.  A `tick()` with no actions left changes nothing, so script every run to `"ready"` or `"failed"`.  Once ready, `socket` is the `FakeSocket` you passed in:
+`FakeSocketConnector(host="test.example", port=1883, *, tls=False, actions=None, socket=None)` plays a connector from a script.  Each `tick()` plays the next entry in `actions`:
+
+| Action | Effect |
+|---|---|
+| `"dns_ok"` | Finishes the name lookup.  `state` moves to `"awaiting_tcp"`. |
+| `"tcp_pending"` | Leaves the TCP connect in progress. |
+| `"tcp_ok"` | Finishes the TCP connect.  `state` moves to `"ready"`, or to `"awaiting_tls"` with `tls=True`. |
+| `"tls_pending"` | Leaves the TLS handshake in progress. |
+| `"tls_ok"` | Finishes the TLS handshake.  `state` moves to `"ready"`. |
+| `"fail:<message>"` | Fails the connect.  `state` moves to `"failed"` and `last_error` holds `OSError("<message>")`. |
+
+Once `state` is `"ready"`, `socket` holds the `FakeSocket` passed as `socket=`.  A `tick()` with no actions left changes nothing, so each script ends in `"ready"` or `"failed"`.  An action that does not fit the current state raises `AssertionError`.
 
 ```python
 from chumicro_sockets.testing import FakeSocket, FakeSocketConnector
 
 
 def open_socket(dial):
-    """Tick *dial* until it finishes; return its socket, or None on failure."""
     while dial.state not in ("ready", "failed"):
         dial.tick(0)
     return dial.socket if dial.state == "ready" else None
@@ -86,9 +144,9 @@ def test_open_socket_returns_none_when_the_connect_fails():
     assert str(dial.last_error) == "connection refused"
 ```
 
-With `tls=True`, `"tcp_ok"` moves the fake to `"awaiting_tls"`, and `"tls_ok"` finishes it.
+`HttpClient` from `chumicro-requests` and `WebSocketClient` from `chumicro-websockets` open connections through a `transport_factory`.  A test passes them a factory that returns a `FakeSocketConnector`.
 
-## API Reference
+## API reference
 
 ::: chumicro_sockets.testing
 

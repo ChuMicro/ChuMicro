@@ -1,12 +1,12 @@
 # API Reference
 
+`chumicro_runner` exports `Runner`, `TaskHandle`, `GeneratorHandle`, `ReentrantTickError`, and the `IO_READ` and `IO_WRITE` bits.  Start with `Runner`: `add_periodic`, `add`, and `add_generator` register jobs on it, and `tick` and `wait` run the loop.  `add_generator` describes the `GeneratorHandle` it returns.  `sleep_until`, the pause a generator task yields from, imports from `chumicro_runner.generators`.
+
 ## `chumicro_runner`
 
 ::: chumicro_runner
 
 ## `chumicro_runner.generators`
-
-Suspension helper for generators registered with `Runner.add_generator`.  `yield from sleep_until(until_ms)` parks the generator until the clock reaches that absolute tick, and the runner keeps serving every other service meanwhile.  Registration hands back a `GeneratorHandle` carrying `.done`, `.error`, and `.cancel()`.  Import this module explicitly; a program with no generators never loads it.
 
 ::: chumicro_runner.generators
 

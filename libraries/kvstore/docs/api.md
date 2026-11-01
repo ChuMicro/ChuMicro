@@ -2,6 +2,8 @@
 
 ## `chumicro_kvstore`
 
+`chumicro_kvstore` exports `KVStore` and the `KVStoreError` exceptions, and a program starts with [`KVStore`](#chumicro_kvstore.KVStore).  `FakeKVStore`, the in-memory store for tests, has its reference on [Testing Helpers](testing.md).
+
 ::: chumicro_kvstore
 
 ---

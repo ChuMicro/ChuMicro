@@ -191,6 +191,16 @@ class TestPublishQos1:
 
 
 class TestSubscribe:
+    def test_subscribe_qos2_raises_before_connecting(self) -> None:
+        """A disconnected client refuses QoS 2 at once and records nothing,
+        so the next connect sends no SUBSCRIBE the broker would fail."""
+        sock = FakeSocket()
+        ticks = FakeTicks()
+        client = new_client(sock, ticks)
+        with raises(UnsupportedQoSError):
+            client.subscribe("topic", qos=2)
+        assert "topic" not in client._subscriptions
+
     def test_subscribe_then_suback_fires_callback(self) -> None:
         sock = FakeSocket()
         sock.enqueue_recv(canned_connack_bytes(return_code=0))

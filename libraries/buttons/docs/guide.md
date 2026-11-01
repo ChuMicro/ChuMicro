@@ -2,15 +2,21 @@
 
 ## Overview
 
-A button is a pin that reads high or low.  Turning that into something a program can use takes more than one read: the contacts bounce, a quick tap can come and go between two passes of your loop, and "held for two seconds" is a different event from "pressed".
+A button is a pin that reads high or low.  Its contacts bounce when they meet, so one press reads as several.  A quick tap can come and go between two passes of the loop.  A program also wants "held for two seconds" as an event apart from "pressed".
 
-`chumicro_buttons` does that work.  `Button` reads one button or switch, `Buttons` reads several on one scan, and `KeyMatrix` reads a keypad wired as rows and columns.  All three give you the same readings, so code written for one button works unchanged for twelve.
+`chumicro_buttons` debounces the pin, catches the quick tap, and times the hold.
 
-If you have used `adafruit_debouncer`, `check()` is its `update()`, `just_pressed` is its `Button.pressed`, and `pressed` here is the held-down level, true for as long as the button is down.  If you have used Arduino's Debounce sketch, the `lastDebounceTime` bookkeeping happens inside `check()`.
+- `Button` reads one button or switch.
+- `Buttons` reads several buttons in one scan.
+- `KeyMatrix` reads a keypad wired as rows and columns.
+
+All three publish the same readings, so code written for one button works unchanged for twelve.
+
+`check()` does the job of `adafruit_debouncer`'s `update()`, and `just_pressed` matches its `Button.pressed`.  `pressed` here is the held-down level instead, true for as long as the button is down.  `check()` also keeps the `lastDebounceTime` bookkeeping of Arduino's Debounce sketch.
 
 ## Getting started
 
-Wire a momentary button from GP14 to GND on a Pi Pico W.  The pin's internal pull-up is switched on for you, so the button is the only part.
+Wire a momentary button from GP14 to GND on a Pi Pico W.  [Wiring a button](#wiring-a-button) shows why the button is the only part.
 
 ```python
 import board
@@ -27,9 +33,9 @@ while True:
         print("pressed")
 ```
 
-`check(now_ms)` collects whatever the button did since the last pass and updates the readings.  It never waits, so the rest of your loop keeps running.  `ticks=ticks` hands the button the clock module from `chumicro-timing`, which it uses to time debouncing and long presses; pass it as shown.
+`check(now_ms)` collects whatever the button did since the last pass and updates the readings.  It never waits, so the rest of the loop keeps running.  `ticks=ticks` hands the button the `chumicro_timing.ticks` clock module, which times long presses, repeats, and clicks.  The argument is required.
 
-On MicroPython there is no `board` module.  Pass a `machine.Pin` instead, and everything else on this page reads the same:
+MicroPython has no `board` module, so a `machine.Pin` names the pin instead:
 
 ```python
 from machine import Pin
@@ -37,19 +43,21 @@ from machine import Pin
 button = Button(pin=Pin(14), ticks=ticks)
 ```
 
-Any pin that can read with a pull-up works.  On a Pico W that is every `GP` pin.  On an ESP32-S2 board GPIO 14 works too (`board.IO14` on CircuitPython), and GPIO 0 is the BOOT button already on the board.  On a classic ESP32, skip GPIO 34 to 39, which are input-only with no pull-ups.
+Everything else on this page is the same on both runtimes.
+
+Any pin that can read with a pull-up works, which on a Pico W means every `GP` pin.  On an ESP32-S2 board, GPIO 14 works too (`board.IO14` on CircuitPython).  GPIO 0 there is the BOOT button already on the board.  A classic ESP32's GPIO 34 to 39 are input-only with no pull-ups, so a button needs another pin.
 
 ## Wiring a button
 
 <img src="schematics/wiring-active-low.svg" alt="A momentary switch from a GPIO pin to ground, with the microcontroller's internal pull-up enabled" width="420">
 
-Wire the button between the pin and GND.  `Button(pin=...)` switches the pin's internal pull-up on, which holds the pin high until the button pulls it low, so the button is the only part you need.  A pressed button reads low, which is why `active_low` defaults to `True`.
+`Button(pin=...)` switches on the pin's internal pull-up, which holds the pin high until the button pulls it to GND.  The button is the only part the circuit needs.  A pressed button reads low, which is why `active_low` defaults to `True`.
 
-To wire the button to 3V3 instead, add your own pull-down resistor and pass `active_low=False`:
+A button wired to 3V3 instead takes `active_low=False`, which switches on the pin's internal pull-down in place of the pull-up.  This circuit adds an external 10 kΩ pull-down as well:
 
 <img src="schematics/wiring-active-high.svg" alt="A switch from a GPIO pin to 3V3 with a 10k pull-down resistor to ground" width="420">
 
-A 10 kΩ pull-down draws 330 µA while the button is held, which matters on a battery only if the button is held often.
+The 10 kΩ pull-down draws 330 µA while the button is held.  That current matters on a battery only for a button held often.
 
 ## Reading the button
 
@@ -62,15 +70,15 @@ button.just_released    # True only on the pass the release landed
 button.held_ms          # how long it has been down, in milliseconds
 ```
 
-The `just_` readings are true on exactly one pass of the loop.  You can read them from several places in that pass without them firing twice, and you never clear them.
+The `just_` readings are true on exactly one pass of the loop.  Reading one leaves it set, so several places in the loop can read it on that pass.  The next `check()` clears it.
 
 `held_ms` keeps the length of the press that just ended, so code that runs on release can ask how long the button was held.  It starts again from zero on the next press.
 
-`pressed` is the reading for a switch that stays where you put it: a toggle switch, a reed switch on a door, a slide switch picking a mode.  It is the same object, and the `just_` readings tell you when the switch moved.
+`pressed` is the reading for a switch that stays where it is set, such as a toggle switch, a reed switch on a door, or a slide switch picking a mode.  A switch uses the same `Button` object.  Its `just_` readings report when the switch moved.
 
 ## Long press, repeat, and clicks
 
-Three timed events sit on top of the presses.  Long press is on by default at half a second; repeat and click counting stay off until you set them:
+Long press is on by default at half a second.  Repeat and click counting stay off until their settings are given:
 
 ```python
 button = Button(
@@ -90,14 +98,16 @@ if button.just_long_pressed:
     factory_reset()
 ```
 
-Auto-repeat is what a held arrow key does.  After `repeat_delay_ms`, `just_repeated` comes true every `repeat_ms` until the button is released.  The schedule counts from when each repeat was due, so a slow pass of the loop does not stretch it, and a long stall gives one catch-up repeat rather than a burst:
+Auto-repeat is what a held arrow key does.  After `repeat_delay_ms`, `just_repeated` comes true every `repeat_ms` until the button is released:
 
 ```python
 if button.just_pressed or button.just_repeated:
     volume += 1
 ```
 
-Click counting is how you tell a single click from a double click.  After each release it waits `click_ms` to see whether another press follows.  When none does, `just_clicked` comes true and `click_count` holds how many presses were in the run:
+Each repeat is scheduled from when the last one was due, so a slow pass leaves the rhythm intact.  A long stall gives one catch-up repeat instead of a burst.
+
+Click counting tells a single click from a double click.  After each release, the button waits `click_ms` for another press.  When none comes, `just_clicked` turns true and `click_count` holds the number of presses in the run:
 
 ```python
 if button.just_clicked:
@@ -107,15 +117,20 @@ if button.just_clicked:
         wake_screen()
 ```
 
-A press still reports `just_pressed` straight away; click counting adds a later event and delays nothing.  A press held longer than `click_ms` is a hold rather than a click and is left out of the count, which keeps a long press from also arriving as a single click.
+A press still reports `just_pressed` straight away.  Click counting adds a later event and delays nothing.  A press held longer than `click_ms` counts as a hold, and the click count leaves it out.  A long press therefore never also arrives as a single click.
 
 ## Callbacks
 
-If you would rather be called than ask, set callbacks and let `handle(now_ms)` call them:
+`handle(now_ms)` calls a callback for each event the last `check()` found:
 
 ```python
+import board
+from chumicro_buttons import Button
+from chumicro_timing import ticks, ticks_ms
+
+button = Button(pin=board.GP14, ticks=ticks, click_ms=250)
 button.on_press = lambda: print("down")
-button.on_long_press = factory_reset
+button.on_long_press = lambda: print("held for half a second")
 button.on_click = lambda count: print("clicked", count, "times")
 
 while True:
@@ -124,14 +139,16 @@ while True:
         button.handle(now)
 ```
 
-`check()` returns `True` when the pass produced anything, which is when `handle()` has something to do.  Your callbacks run in your own loop like any other code, so they can allocate, print, and raise.
+`check()` returns `True` when the pass produced an event for `handle()` to report.  `on_click` needs `click_ms` set, because click counting is off at the default of 0.  The callbacks run in the main loop, outside any interrupt, so they can allocate memory, print, and raise.
 
 ## Several buttons
 
-`Buttons` reads a group of buttons on one scan, which costs less than one scan per button and is what lets two buttons pressed together land on the same pass:
+`Buttons` reads a group of buttons in one scan.  One scan costs less than one per button, and two buttons pressed together land on the same pass:
 
 ```python
+import board
 from chumicro_buttons import Buttons
+from chumicro_timing import ticks, ticks_ms
 
 buttons = Buttons(pins=(board.GP14, board.GP15, board.GP16), ticks=ticks)
 
@@ -146,7 +163,7 @@ while True:
         print("both held together")
 ```
 
-Each `buttons[index]` is a `Button` with its own readings and callbacks, numbered in the order you gave the pins.  For one handler covering the whole group, `Buttons` has its own callbacks that receive the button's number:
+Each `buttons[index]` is a `Button` with its own readings and callbacks, numbered in pin order.  `Buttons` also has group callbacks that receive the button's number, for one handler covering the whole group:
 
 ```python
 buttons.on_press = lambda key_index: print("button", key_index, "down")
@@ -154,12 +171,12 @@ buttons.on_press = lambda key_index: print("button", key_index, "down")
 
 ## A keypad matrix
 
-A keypad wires its keys as a grid of rows and columns, so twelve keys need seven pins instead of twelve.  `KeyMatrix` reads that grid and hands you the same `Button` objects.
-
-Import it from its own module, which keeps it off boards that only have separate buttons:
+A keypad wires its keys as a grid of rows and columns, so twelve keys need seven pins instead of twelve.  `KeyMatrix` reads that grid and hands back the same `Button` objects.  It lives in its own module, `chumicro_buttons.matrix`, which stays off boards that only have separate buttons:
 
 ```python
+import board
 from chumicro_buttons.matrix import KeyMatrix
+from chumicro_timing import ticks, ticks_ms
 
 keypad = KeyMatrix(
     row_pins=(board.GP2, board.GP3, board.GP4, board.GP5),
@@ -177,28 +194,33 @@ while True:
 
 Keys are numbered across each row in turn, so the key at `row`, `column` is `row * len(column_pins) + column`.  With the three columns above, key 4 is row 1, column 1.
 
-CircuitPython scans the grid in the background, so a tap between two passes of your loop still lands.  MicroPython scans once per `check(now_ms)`, because a grid has to be driven a row at a time, so a loop that stalls for long stretches can miss a very short tap on a matrix key.  Separate buttons have no such limit on either runtime.
+CircuitPython scans the grid in the background, so a tap between two passes of the loop still lands.  MicroPython scans the grid once per `check(now_ms)`, because a grid has to be driven a row at a time.  A loop that stalls for long stretches can therefore miss a very short tap on a MicroPython matrix key.  Separate buttons catch every tap on both runtimes.
 
 ### Wiring the keypad
 
-A ready-made membrane keypad brings its grid out as one row of header pins, rows and columns mixed.  Wire them to pins that can both read with a pull-up and drive an output: every `GP` pin on a Pico W qualifies, and on a classic ESP32 skip GPIO 34 to 39, which can do neither.  On MicroPython pass `machine.Pin` objects, as for a single button.
+A ready-made membrane keypad brings its grid out as one row of header pins, rows and columns mixed.  Each header pin goes to a board pin that can both read with a pull-up and drive an output.  Every `GP` pin on a Pico W qualifies.  A classic ESP32's GPIO 34 to 39 can do neither.  On MicroPython, the pins are `machine.Pin` objects, as for a single button.
 
-A membrane keypad has no diodes inside, so its rows and columns are interchangeable.  Which pins you call rows decides only which way the numbering runs: a keypad that numbers its keys down the columns wants its two tuples swapped, not rewired.  If the header is unlabelled, press each key in reading order and note which two pins connect.  The pin shared by every key in the first row is your first row pin, and the pins it pairs with are your column pins, in order.
+A membrane keypad has no diodes inside, so its rows and columns are interchangeable.  The choice of which pins are rows decides only which way the numbering runs.  A keypad that numbers its keys down the columns wants its two tuples swapped instead of rewired.
 
-A grid without diodes cannot read three keys at once: three pressed keys at three corners of a rectangle make the fourth corner read as pressed too.  That comes from the wiring, not the library, and it is why keyboards built for chords carry a diode per key.  On a grid with diodes, `columns_to_anodes` tells the scan which way they face; leave it `True` when each diode's striped end points at a row pin.  A wrong guess damages nothing, and a diode keypad that reports no keys at all is the sign to flip it.
+To map an unlabelled header, press each key in reading order and note which two pins connect.  The pin shared by every key in the first row is the first row pin.  The pins it pairs with are the column pins, in order.
+
+On a grid without diodes, three pressed keys at three corners of a rectangle make the fourth corner read as pressed too.  The wiring causes this ghost key, which is why keyboards built for chords carry a diode per key.  On a grid with diodes, `columns_to_anodes` tells the scan which way they face.  It stays `True` when each diode's striped end points at a row pin.  A wrong setting damages nothing.  A diode keypad that reports no keys at all needs the setting flipped.
 
 ## Runner pattern
 
-`check(now_ms)` and `handle(now_ms)` are the two methods [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) calls on every service, so a button joins the rest of your program with one line:
+A `Button` has the `check(now_ms)` and `handle(now_ms)` methods a [`chumicro-runner` service](https://chumicro.com/ChuMicro/runner/stable/guide/#services) needs, so one line joins it to the rest of the program:
 
 ```python
+import board
+from chumicro_buttons import Button
 from chumicro_runner import Runner
+from chumicro_timing import ticks
 
+button = Button(pin=board.GP14, ticks=ticks)
 button.on_press = lambda: print("pressed")
-button.on_long_press = factory_reset
+button.on_long_press = lambda: print("held for half a second")
 
 runner = Runner()
-runner.add(wifi)
 runner.add(button, period_ms=20)    # look at the button every 20 ms
 
 while True:
@@ -206,17 +228,15 @@ while True:
     runner.wait(now)
 ```
 
-`runner.tick()` reads the clock once and calls `check` on each service that is due, then `handle` on the ones with news, so a program built on callbacks never reads the `just_` readings at all.  Every service sees the same time, so the button's idea of "now" matches the rest of the program.
+The runner calls `handle()` only on passes where `check()` found an event, so a program built on callbacks never reads the `just_` readings itself.
 
-`runner.wait(now)` rests the CPU until the next job is due.  A press is a change on a pin, not a timer, so it cannot wake the runner.  `period_ms=20` makes the button a job that comes due every 20 ms, which caps how long a press waits to be reported.  Leave it off and the button is checked only when something else wakes the runner: in a busy program that is constantly, and in a quiet one with a five-second job it is every five seconds.
+A press is a change on a pin, and `runner.wait()` wakes only for timers and sockets ([How `wait()` decides how long to sleep](https://chumicro.com/ChuMicro/runner/stable/guide/#how-wait-decides-how-long-to-sleep)).  `period_ms=20` makes the button a job that comes due every 20 ms, which caps how long a press waits to be reported.  Without a period, the button is checked only when something else wakes the runner.  In a busy program that happens constantly.  In a quiet program with one five-second job, it happens every five seconds.
 
-A press that lands while the runner rests is still captured with its real time, so the period decides only how soon you hear about it, not whether you do, and `held_ms` counts from the real press either way.  The same holds when another service is slow inside its own `handle`, a network handshake for example: the press is captured underneath and its callback runs on the pass that follows.  Long presses, repeats, and the end of a click run are checked on the same 20 ms schedule, so each fires within 20 ms of when it is due.
+A press that lands while the runner rests is still captured with its real time ([Presses land even when the loop is slow](#presses-land-even-when-the-loop-is-slow)).  The period decides how soon the program hears about a press, never whether it does.  A press during another service's slow `handle()`, such as a network handshake, is captured the same way, and its callback runs on the pass that follows.  Long presses, repeats, and the end of a click run are checked on the same 20 ms schedule, so each fires within 20 ms of when it is due.
 
 ## Tuning the debounce
 
-A button's contacts bounce for a moment when they meet.  A small tactile button settles in one to five milliseconds; a bigger toggle switch or microswitch can take twenty.  Left alone, one press arrives as several.
-
-`settle_ms` is the only debounce setting, and it defaults to 10:
+A small tactile button's contacts settle in one to five milliseconds.  A bigger toggle switch or microswitch can take twenty.  `settle_ms` sets the debounce window, 10 ms by default:
 
 ```python
 button = Button(pin=board.GP14, ticks=ticks, settle_ms=10)   # the default
@@ -224,40 +244,36 @@ button = Button(pin=board.GP14, ticks=ticks, settle_ms=20)   # a switch that bou
 button = Button(pin=board.GP14, ticks=ticks, settle_ms=0)    # the signal is already clean
 ```
 
-A change counts once the pin has held its new level for `settle_ms`, and it is timed from the moment the pin changed, not from the moment the change became certain.  Durations therefore measure the press the person made, however late your loop gets back to it.
+A change counts once the pin has held its new level for `settle_ms`.  `settle_ms` is also the shortest press the library can report.  A tap shorter than the window never holds its new level long enough to count.  The library throws it away with the bounce and reports nothing.
 
-`settle_ms` is also the shortest press the library can report.  A tap shorter than the window never holds its new level long enough to count, so it is thrown away with the bounce, and nothing tells you.
-
-Measured on a Pi Pico W with a button that has no debounce hardware, 30 seconds of tapping as fast as a finger goes closed the contacts 107 times.  Thirty of those taps were shorter than 20 ms and seven were shorter than 10 ms, so a 20 ms window would have dropped more than a quarter of them and the 10 ms default drops about six in a hundred.  That measurement is why the default is 10 rather than 20.
-
-Pick the window from what the button is for:
+On a Pi Pico W with a button that has no debounce hardware, 30 seconds of tapping as fast as a finger goes closed the contacts 107 times.  Thirty of those taps were shorter than 20 ms, and seven were shorter than 10 ms.  A 20 ms window would have dropped more than a quarter of them.  The 10 ms default drops about six in a hundred.  That measurement set the default at 10.
 
 | `settle_ms` | Good for | Drops taps shorter than |
 |---|---|---|
 | 20 | A toggle, a microswitch, or any big switch that bounces badly | 20 ms, about a quarter of fast tapping |
 | 10 (default) | A tactile button, which is most buttons | 10 ms, about six taps in a hundred |
-| 5 | Fast tapping or a game control, on a button you have measured | 5 ms, which a finger rarely reaches |
+| 5 | Fast tapping or a game control, on a measured button | 5 ms, which a finger rarely reaches |
 | 0 | Debouncing hardware behind the pin, or a signal already clean | nothing |
 
-On a big switch, a gap of more than 10 ms in the middle of the bouncing can count as a real change, which is the case for raising the window to 20.
+On a big switch, a gap of more than 10 ms in the middle of the bouncing can count as a real change.  A 20 ms window covers that gap.
 
 ### Adding a capacitor
 
-Software debouncing is enough for almost every project.  A capacitor at the pin earns its place when the wire to the button is long enough to pick up noise, or when the button feeds something you do not control.
+Software debouncing serves almost every project.  A capacitor at the pin earns its place when the wire to the button is long enough to pick up noise, or when the button also feeds another circuit.
 
 <img src="schematics/debounce-rc.svg" alt="A 10k pull-up, a 2.2k series resistor, and a 2.2uF capacitor forming an RC filter into a GPIO pin" width="480">
 
-The capacitor slows both edges so the bouncing never reaches the pin.  It slows them unequally: it refills through the pull-up but empties through the series resistor alone, which works out to 4.8 ms on press and 27 ms on release.
+The capacitor slows both edges, so the bouncing never reaches the pin.  It empties through the series resistor alone, which takes 4.8 ms on a press.  It refills through the pull-up, which takes 27 ms on a release.
 
-The series resistor does two jobs.  It limits the current through the contacts when the capacitor empties into them, and it has to stay well below the pull-up, because the pin's own pull-up is still switched on and forms a divider with it.  At 2.2 kΩ the pressed pin sits near 0.5 V, a solid low.  At 10 kΩ it would sit near 1.4 V, which is not a low at all.
+The series resistor limits the current through the contacts when the capacitor empties into them.  It also has to stay well below the pull-up, because the pin's internal pull-up is still switched on and forms a divider with it.  At 2.2 kΩ, the pressed pin sits near 0.5 V, a solid low.  At 10 kΩ it would sit near 1.4 V, too high to read as low.
 
-With the capacitor in place, turn `settle_ms` down to 5 but not to zero.  A plain input pin switches at one threshold with no margin you can rely on, so a slow edge passing through it can still flicker, and the settle window catches that.  A bigger capacitor makes it worse, because the edge spends longer near the threshold.
+With the capacitor in place, `settle_ms=5` suits the button.  Zero is too low.  A plain input pin switches at one threshold with no reliable margin, so a slow edge can still flicker as it passes through.  The settle window catches that flicker.  A bigger capacitor makes the flicker worse, because the edge spends longer near the threshold.
 
 ## Presses land even when the loop is slow
 
-If your program is busy with a network request or a flash write when a tap happens, a plain pin read looks too late and the press is gone.  This library captures the press when it happens, not when you get round to asking.  On CircuitPython that is the firmware's background scan; on MicroPython the library installs a small pin interrupt.  You set none of it up, and there is no capture mode to choose.
+A program busy with a network request or a flash write reads a plain pin too late, and a tap in between is gone.  This library captures the press when it happens.  On CircuitPython, the firmware's background scan captures it.  On MicroPython, a small pin interrupt the library installs captures it.  Capture needs no setup and has no mode to choose.
 
-What you can see is that durations count from the real press:
+Durations count from the real press:
 
 ```python
 button.check(now)
@@ -265,19 +281,19 @@ if button.just_pressed:
     print(button.held_ms)      # already above zero if your loop was busy
 ```
 
-A press at 100 ms that a busy loop notices at 180 ms reports 80 ms held, not 0.
+A press at 100 ms that a busy loop notices at 180 ms reports 80 ms held instead of 0.
 
-When a signal is so noisy that capture cannot keep up, `button.overflowed` comes true for that pass.  An ordinary button never does this.  If yours does, the capacitor above is the fix.
+When a signal is so noisy that capture cannot keep up, `button.overflowed` comes true for that pass.  An ordinary button never trips it.  A button that does trip it needs the capacitor from [Adding a capacitor](#adding-a-capacitor).
 
 ## Memory notes
 
-`check()` allocates no memory once the program is running.  Presses are collected through a buffer made when the button is built, the readings are attributes updated in place, and the loops count by hand rather than building iterators.  A program can check a button forever without the heap growing.
+`check()` allocates no memory once the program is running.  Presses arrive through a buffer made when the button is built.  The readings are attributes updated in place, and the loops count by hand instead of building iterators.  A program can check a button forever without the heap growing.
 
-On MicroPython the capture buffer is sized when the button is built to hold the burst of edges a bouncing contact produces.  If `overflowed` comes true on an ordinary press, the button bounces harder than that, and the capacitor in [Adding a capacitor](#adding-a-capacitor) fixes it at the source.
+On MicroPython, the button sizes its capture buffer at construction to hold the burst of edges a bouncing contact produces.  `overflowed` reports a burst bigger than that.
 
 ## Testing
 
-`chumicro_buttons.testing.FakeButtonSource` stands in for the hardware, so press logic is an ordinary unit test with no board and no waiting:
+`chumicro_buttons.testing.FakeButtonSource` stands in for the hardware, which makes press logic an ordinary unit test with no board and no waiting:
 
 ```python
 from chumicro_buttons import Button
@@ -296,17 +312,17 @@ def test_hold_arms_the_reset():
     assert button.just_long_pressed
 ```
 
-Each queued press or release carries its own `at_ms`, separate from the time you pass to `check()`, which is how a test covers a slow loop on your laptop.  The [testing page](testing.md) goes further, including pressing two buttons together and the overflow case.
+Each queued press or release carries its own `at_ms`, separate from the time passed to `check()`.  That gap is how a test covers a slow loop on a laptop.  The [testing page](testing.md) covers two buttons pressed together and the overflow case.
 
 ## Platform notes
 
 | Runtime | How presses are captured |
 |---|---|
 | CircuitPython | The firmware's `keypad` module, which scans in the background and stamps each press with the time it happened |
-| MicroPython | A pin interrupt the library installs and owns; your code never runs inside it |
-| CPython | No pins exist, so `pin=` raises and points you at `FakeButtonSource` |
+| MicroPython | A pin interrupt the library installs and owns.  Callbacks never run inside it |
+| CPython | No pins exist, so `pin=` raises a `RuntimeError` that names `FakeButtonSource` |
 
-The code you write is identical on all three.  On CircuitPython the `keypad` module is built into the firmware, so it takes no space on your board's drive.
+Program code is identical on all three runtimes.  CircuitPython builds the `keypad` module into the firmware, so it takes no space on the board's drive.
 
 ## Examples
 

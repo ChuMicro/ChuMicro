@@ -4,11 +4,11 @@ title: "Installing ChuMicro libraries on CircuitPython, MicroPython, and CPython
 
 # Installing ChuMicro libraries
 
-Every ChuMicro library installs the same way, by name, with the tool your runtime already uses.  Pick the method for your runtime and swap `timing` for whichever library you need.
+Every ChuMicro library installs by name, with the tool your runtime already uses.  Swap `timing` in each command for the library you need.
 
-Your board needs CircuitPython 10.1 or newer, or MicroPython 1.27 or newer.  A brand-new board may have neither; [Start here](start-here.md) installs a runtime before anything else.
+Your board needs CircuitPython 10.1 or newer, or MicroPython 1.27 or newer.  [Start here](start-here.md#1-put-circuitpython-or-micropython-on-the-board) installs one on a board that has neither.
 
-> **A note on naming:** pip names use hyphens (`chumicro-timing`), and everything on the board uses underscores (`chumicro_timing`), because a Python import name cannot contain a hyphen.  Copy the commands below as written.
+> pip names use hyphens, as in `chumicro-timing`.  Everything on the board uses underscores, as in `chumicro_timing`, because a Python import name cannot contain a hyphen.  Copy the commands below as written.
 
 ## Quick install (stable channel)
 
@@ -24,11 +24,11 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
 pip install chumicro-timing
 ```
 
-Each library's README carries its own install line, so once the bundle is registered, any library is one command away.
+Each library's README carries its own install line.
 
 ## Check it worked
 
-Save this as `code.py` on the CIRCUITPY drive.  The board's LED switches on or off every half second and keeps going until you unplug it:
+Save this as `code.py` on the CIRCUITPY drive:
 
 ```python
 import board, digitalio
@@ -44,9 +44,11 @@ while True:
         led.value = not led.value
 ```
 
-On MicroPython, swap `import board, digitalio` for `from machine import Pin`, set the LED up with `led = Pin("LED", Pin.OUT)` on a Pico W (or `Pin(2, Pin.OUT)` on most ESP32 boards), flip it with `led.value(not led.value())`, and copy the file over as `main.py` with `mpremote cp blink.py :main.py`.  Press reset to start it.
+The board's LED switches on or off every half second until you unplug it.
 
-The loop has no `time.sleep()` in it, so anything else you add gets a turn on every pass.  [Coming from Arduino](coming-from-arduino.md) explains why that matters once a board has more than one job.
+On MicroPython, change the LED lines as [On MicroPython](coming-from-arduino.md#on-micropython) shows.  Copy the file to the board as `main.py` with `mpremote cp blink.py :main.py`, then press reset to start it.
+
+[Coming from Arduino](coming-from-arduino.md) explains why the loop has no `time.sleep()` in it.
 
 ## CircuitPython: circup and the ChuMicro bundle
 
@@ -57,17 +59,17 @@ circup bundle-add ChuMicro/ChuMicro-Bundle
 circup install chumicro_timing
 ```
 
-Bundle registration is per-machine, not per-project.  Add it once on a laptop and every workspace on that laptop sees it.
+A bundle registered once serves every project on that computer.
 
 ## MicroPython: mip
 
-[mpremote](https://docs.micropython.org/en/latest/reference/mpremote.html) is MicroPython's command-line tool (`pip install mpremote`); mip is its package manager, which mpremote drives here:
+[mpremote](https://docs.micropython.org/en/latest/reference/mpremote.html) is MicroPython's command-line tool, installed with `pip install mpremote`.  It runs mip, MicroPython's package manager, against a board over USB:
 
 ```bash
 mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
 ```
 
-Or from the board's own prompt, on a board that is already on your WiFi:
+A board already on your WiFi can install from its own prompt:
 
 ```python
 import mip
@@ -84,17 +86,19 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/mpy6/chumicro_timing
 
 ## CPython: pip
 
+CPython is the Python your laptop runs.  A library installed there runs your board code's tests on the laptop:
+
 ```bash
 pip install chumicro-timing
 ```
 
-CPython is the Python your laptop runs.  No bundle, no `.mpy` step, just pip.  Install a library there to test board code on your laptop, and for the workbench tools (`chumicro-deploy`, `chumicro-repl`, `chumicro-workspace`, `chumicro-pytest-device`).
+pip also installs the laptop tools: `chumicro-workspace`, `chumicro-deploy`, `chumicro-repl`, and `chumicro-pytest-device`.
 
 ## Experimental (pre-release) channel
 
-Pre-release builds publish automatically whenever a library's `VERSION` bumps on `main`.  New work lands there first, and things can break between releases.
+A library's pre-release build publishes each time its `VERSION` changes on `main`.  New work reaches this channel first and can break between releases.
 
-> **Don't register both bundles at once.**  circup may pick either version for a given package.  Pick one channel per laptop.
+> **Register one bundle per computer.**  With both bundles registered, circup picks either version of a package.
 
 ```bash
 # CircuitPython: switch to experimental
@@ -116,26 +120,29 @@ pip install chumicro-timing-experimental
 
 ## Project workspaces
 
-Once a project grows past one file, the [workbench template](https://github.com/ChuMicro/ChuMicro-Workbench-Template) is the easier way to install.  Your code lives on your laptop, and `python3 run.py library add chumicro_timing` fetches a library once for every project in the folder.  `python3 run.py deploy <project>` then copies your project and the libraries it imports onto the board and checks each file arrived intact, so you stop editing files live on the CIRCUITPY drive.  [Start here](start-here.md) walks through it.
+A project that grows past one file fits the [workbench template](https://github.com/ChuMicro/ChuMicro-Workbench-Template).  `python3 run.py library add chumicro_timing` fetches a library once for every project in the workspace.  `python3 run.py deploy <project>` copies a project and the libraries it imports onto the board.  [Start here](start-here.md) walks through both commands.
 
-`library add` pulls from the stable channel unless you pass `--channel experimental`.
+`library add --channel experimental` pulls from the experimental channel.
+
+A workspace deploy makes the board's files match the project, so it removes libraries installed by hand with circup or mip.  [Deploys and file persistence](troubleshooting/deploys-and-file-persistence.md) lists what a deploy keeps.
 
 ## Board support
 
-ChuMicro libraries run on:
+ChuMicro runs on boards with at least 256 KB of RAM and 2 MB of flash, about 800 KB of which is free for your files.  These boards have run the libraries on a test bench:
 
-- **CircuitPython**: ESP32 (S2, S3, C3, C6), RP2040/RP2350 (Raspberry Pi Pico, Pico W), and most boards with at least 256 KB RAM and 2 MB physical / ~800 KB usable flash.
-- **MicroPython**: the same hardware classes, plus broader STM32 / ESP-IDF coverage.
-- **CPython**: your laptop, for testing.
+- Raspberry Pi Pico W (RP2040), under CircuitPython and under MicroPython.
+- ESP32 boards from the classic, S2, and S3 families.
 
-A few libraries have per-board restrictions.  Each library README's "Platform support" section flags them.
+ESP32-C3, ESP32-C6, and RP2350 are supported chip families that have had no bench time yet.  Every library also runs on CPython on your laptop, for testing.
+
+Each library README's "Platform support" section lists that library's per-board limits.
 
 ## Troubleshooting
 
-- **No CIRCUITPY drive appears, or circup finds no board.**  The board may not be running CircuitPython yet.  Install it from [circuitpython.org/downloads](https://circuitpython.org/downloads) by following the steps on your board's page; [Getting firmware onto a new board](troubleshooting/firmware-onto-a-new-board.md) covers boards that will not take a flash.
-- **`circup install` says a library is `not a known CircuitPython library`.**  Most often the name is hyphenated.  circup installs by the on-device package name, which uses underscores: run `circup install chumicro_timing`, not `chumicro-timing`.  If the name is already underscored, you may not have registered the bundle yet: run `circup bundle-add ChuMicro/ChuMicro-Bundle` once.
-- **`mip.install()` at the board's prompt hangs.**  That form downloads from GitHub over the board's own WiFi, so the board has to be online first.  `mpremote mip install` from your laptop downloads on the laptop and copies the files over USB instead.
-- **`pip install` says "no matching distribution found".**  Check the spelling against the library table in the [README](https://github.com/ChuMicro/ChuMicro#the-libraries).  Every library has a stable release, so a correctly spelled name resolves; the exception is a library merged since the last stable promotion, which is on the experimental channel only until it is promoted (`pip install chumicro-timing-experimental`).
-- **`ImportError` after install on a board.**  Check that the files landed: `mpremote ls :lib` on MicroPython, or look for `lib/chumicro_timing/` on the CIRCUITPY drive.  circup and mip don't always report a partial install.
+- **No CIRCUITPY drive appears, or circup finds no board.**  A board without CircuitPython shows no CIRCUITPY drive.  [Start here](start-here.md#1-put-circuitpython-or-micropython-on-the-board) installs it.  [Getting firmware onto a new board](troubleshooting/firmware-onto-a-new-board.md) covers boards that will not take a flash.
+- **`circup install` says a library is `not a known CircuitPython library`.**  A hyphenated name causes this most often.  circup installs by the on-device package name, which uses underscores: `circup install chumicro_timing`.  With an underscored name, the bundle is the next suspect.  Register it once with `circup bundle-add ChuMicro/ChuMicro-Bundle`.
+- **`mip.install()` at the board's prompt hangs.**  That form downloads from GitHub over the board's own WiFi, so the board has to be online first.  `mpremote mip install` downloads on your laptop and copies the files over USB.
+- **`pip install` says "no matching distribution found".**  Check the spelling against the [library table](https://github.com/ChuMicro/ChuMicro#the-libraries).  A library merged since the last stable release exists only on the experimental channel, as `chumicro-<name>-experimental`, until its first stable release.
+- **`ImportError` after install on a board.**  Check that the files landed: `mpremote ls :lib` on MicroPython, or `lib/chumicro_timing/` on the CIRCUITPY drive.  circup and mip can leave a partial install without reporting an error.
 
-For anything beyond install problems (board not found, firmware, WiFi, TLS, memory), [Troubleshooting](troubleshooting/README.md) starts from the symptom and walks to the fix.
+[Troubleshooting](troubleshooting/README.md) covers board, firmware, WiFi, TLS, and memory problems, starting from the symptom.

@@ -59,11 +59,17 @@ def _add_bootstrap_parser(subparsers: argparse._SubParsersAction) -> None:
     """``bootstrap``: onboarding entry-point alias of ``add-device`` + footer."""
     bootstrap_parser = subparsers.add_parser(
         "bootstrap",
-        help=(
-            "Onboarding entry point: same as `add-device` plus a "
-            "next-steps footer pointing at `new` / `deploy` / `repl`.  "
-            "Pass --demo to chain into the built-in demo deploy after "
-            "register."
+        help="Register a new board and print what to run next.  Start here.",
+        description=(
+            "Register the board plugged into USB.  bootstrap finds the "
+            "board's serial port, works out whether it runs CircuitPython "
+            "or MicroPython, and records it in devices.yml, the same "
+            "steps add-device runs.  It then prints the commands that "
+            "create a project, deploy it, and open the board's prompt.  "
+            "--demo also sends the board a counting program, so it "
+            "prints something straight away.  A board with no "
+            "CircuitPython or MicroPython on it needs firmware from "
+            "circuitpython.org or micropython.org first."
         ),
     )
     _add_workspace_arg(bootstrap_parser)
@@ -72,44 +78,52 @@ def _add_bootstrap_parser(subparsers: argparse._SubParsersAction) -> None:
         nargs="?",
         default=None,
         help=(
-            "User-friendly device id (e.g. 'back-porch-mp').  Optional: "
-            "when omitted, a default is derived from the probe's "
-            "machine string + runtime suffix."
+            "Name for the board in devices.yml, such as back-porch.  "
+            "Without it, the name comes from the board's model and "
+            "runtime, such as raspberry-pi-pico-w-cp."
         ),
     )
     bootstrap_parser.add_argument(
         "--address",
         default=None,
         help=(
-            "Serial port path of the connected board.  Optional: when "
-            "omitted in interactive mode, the wizard auto-picks the "
-            "only detected port or prompts with a numbered list when "
-            "multiple are present."
+            "Serial port the board is on, such as /dev/cu.usbmodem1101 "
+            "or COM3.  Without it, bootstrap uses the only port it sees, "
+            "or lists the ports and asks you to pick one.  Required "
+            "with --non-interactive."
         ),
     )
     bootstrap_parser.add_argument(
         "--runtime",
         choices=("circuitpython", "micropython"),
         default=None,
-        help="Runtime to probe.  Optional: auto-detected when omitted.",
+        help=(
+            "Runtime the board runs.  Without it, bootstrap tries "
+            "both."
+        ),
     )
     bootstrap_parser.add_argument(
         "--description",
         default=None,
-        help="Free-form note recorded under 'description:'.",
+        help=(
+            "Note stored with the entry, such as 'kitchen window "
+            "sensor'.  Later commands keep it as you wrote it."
+        ),
     )
     bootstrap_parser.add_argument(
         "--force",
         action="store_true",
-        help="Overwrite an existing entry with this id.",
+        help=(
+            "Replace the entry that already has this id, after you swap "
+            "in a different board under the same name."
+        ),
     )
     bootstrap_parser.add_argument(
         "--demo",
         action="store_true",
         help=(
-            "After registering, chain into the built-in demo deploy "
-            "so a freshly registered board ships *something* in one "
-            "command."
+            "After registering, send the board a counting program and "
+            "show its first output."
         ),
     )
     _add_non_interactive_arg(bootstrap_parser)

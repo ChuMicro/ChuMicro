@@ -1,6 +1,6 @@
 site_name: chumicro-workspace
 site_description: >-
-  Command-line workspace for CircuitPython and MicroPython projects: register boards, deploy projects, install firmware, and run tests.
+  The laptop command that registers CircuitPython and MicroPython boards, copies your project and the libraries it imports onto them, and shows what they print.
 site_url: https://chumicro.com/ChuMicro/workspace/
 repo_url: https://github.com/ChuMicro/ChuMicro/tree/main/workbench/workspace
 repo_name: Source

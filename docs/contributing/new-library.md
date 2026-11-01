@@ -2,31 +2,31 @@
 
 <img src="https://chumicro.com/assets/chumicro-head.png" alt="" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-This guide walks you through the full lifecycle of adding a new library to ChuMicro, from idea to published package.  If you're working with an AI agent, point it at the [`new-library` skill](https://github.com/ChuMicro/ChuMicro/tree/main/.github/skills/new-library/SKILL.md).
+An AI agent adding a library follows the [`new-library` skill](https://github.com/ChuMicro/ChuMicro/tree/main/.github/skills/new-library/SKILL.md).
 
 <br clear="left">
 
+> **A laptop-only tool**, such as a CLI that drives devices, a REPL client, or a firmware helper, belongs in `workbench/`, and [Adding a Workbench Package](workbench.md) covers it. A *device library*, code that runs on CircuitPython, MicroPython, and CPython, follows the steps here.
+
 ## Before you start
 
-Check [open issues](https://github.com/ChuMicro/ChuMicro/issues) and [discussions](https://github.com/ChuMicro/ChuMicro/discussions), and skim [`plans/next-up.md`](https://github.com/ChuMicro/ChuMicro/blob/main/plans/next-up.md) and [`plans/decisions/`](https://github.com/ChuMicro/ChuMicro/tree/main/plans/decisions/) to see if your idea overlaps with planned work or settled design choices. If you're unsure whether the library fits the project, open a discussion first.  It's much faster to align on scope before building.
-
-> **Is your package host-only?**  This guide is for *device libraries*: code that runs on CircuitPython, MicroPython, and CPython.  If you're adding a tool that runs only on the developer's laptop (a CLI that drives devices, a REPL client, a firmware helper), it belongs in `workbench/` instead.  See [`workbench.md`](workbench.md) for the layout and conventions.  The scaffolder supports workbench packages: from inside the mono-repo run `python scripts/run.py new-library --workbench <name>`; for a workspace project outside the mono-repo use `chumicro-workspace new --workbench <name>`.
+Check [open issues](https://github.com/ChuMicro/ChuMicro/issues) and [discussions](https://github.com/ChuMicro/ChuMicro/discussions), and skim [`plans/next-up.md`](https://github.com/ChuMicro/ChuMicro/blob/main/plans/next-up.md) and [`plans/decisions/`](https://github.com/ChuMicro/ChuMicro/tree/main/plans/decisions/), for planned work or settled design choices that overlap your idea. When the library's fit is unclear, open a discussion first: agreeing on scope before building saves rework.
 
 ## 1. Scaffold
 
 ```bash
-python scripts/run.py new-library my-sensor
+python scripts/run.py new-library my_sensor
 ```
 
-The mono-repo wrapper composes the `chumicro_workspace.scaffold.scaffold_library` primitive (owned by the workbench `chumicro-workspace` package) with the mono-repo-only follow-ups (editable install + IDE config sync).  External users developing their own chumicro-style libraries get the same scaffolder via `python run.py new --library <name>` from inside their workspace.
+`new-library` renders the library from `chumicro-workspace`'s scaffold templates, then installs it in editable mode and re-runs `sync-ide`. Outside this repository, a workspace runs the same scaffolder with `python3 run.py new --library <name>`.
 
-This creates `libraries/my-sensor/` with:
+The scaffold creates `libraries/my_sensor/`:
 
 ```
-libraries/my-sensor/
+libraries/my_sensor/
 ├── VERSION                          # starts at 0.1.0
 ├── pyproject.toml                   # package metadata
-├── README.md                        # package README (fill in TODOs)
+├── README.md                        # package README (rewrite the worked example)
 ├── mkdocs.yml                       # docs config
 ├── src/chumicro_my_sensor/
 │   ├── __init__.py                  # public exports (imports MySensor)
@@ -34,10 +34,10 @@ libraries/my-sensor/
 │   └── testing.py                   # test fakes (keep or delete)
 ├── tests/
 │   ├── conftest.py                  # collection anchor (see note below)
-│   └── test_my_sensor.py             # starter tests (100% coverage)
+│   └── test_my_sensor.py            # starter tests (100% coverage)
 ├── docs/
 │   ├── index.md                     # docs landing page
-│   ├── guide.md                     # user guide (fill in)
+│   ├── guide.md                     # user guide (rewrite the worked example)
 │   ├── api.md                       # API reference (mkdocstrings renders it)
 │   └── testing.md                   # testing helpers docs
 ├── examples/
@@ -47,24 +47,24 @@ libraries/my-sensor/
     └── .gitkeep                     # on-device tests live here
 ```
 
-In addition to creating the library directory, the scaffolder runs an editable install (`pip install -e libraries/my-sensor`) and re-runs `sync-ide`, which updates the local `.idea/chumicro.iml` plus the tracked `.idea/runConfigurations/`, `pyrightconfig.json`, `.vscode/tasks.json`, and `.vscode/settings.json` so your IDE picks up the new package immediately. The `.iml` is tracked in git (un-ignored via `!.idea/chumicro.iml` in `.gitignore`) and regenerated by `sync-ide`; it and the other config files are the ones you may see in `git status` after running `new-library`.
+`sync-ide` updates `.idea/chumicro.iml`, `.idea/runConfigurations/`, `pyrightconfig.json`, `.vscode/tasks.json`, and `.vscode/settings.json`, so the editor picks up the new package at once. Git tracks all five, so they show in `git status` beside the new library.
 
-The scaffold is immediately runnable: tests pass at 100% coverage, lint is clean, and the example runs until you press Ctrl-C. Start by replacing the starter `MySensor` class in `core.py` with your real implementation.
+The scaffold runs as created: tests pass at 100% coverage, lint is clean, and the example runs until you press Ctrl-C. Start by replacing the starter `MySensor` class in `core.py` with your real implementation.
 
-The `tests/conftest.py` looks empty but is load-bearing: the workspace runs one pytest rootdir over every library with `--import-mode=importlib`, and the file anchors each `tests/` directory as its own collection root so same-named test modules in sibling libraries don't collide. Don't delete it.
+Keep `tests/conftest.py`, empty as it looks. The workspace runs one pytest rootdir over every library with `--import-mode=importlib`, and the file makes each `tests/` folder its own collection root, so same-named test modules in sibling libraries stay apart.
 
 ## 2. Implement
 
-Put your code in `src/chumicro_my_sensor/`. Follow the [Style Guide](style-guide.md) for naming, annotations, docstrings, and formatting. Key rules for library code:
+Your code goes in `src/chumicro_my_sensor/` and follows the [Style Guide](style-guide.md). Library code also follows these rules:
 
-- **No `async`/`await`.**  Use the tick-based runner pattern. If your library has active components, implement `check(now_ms) -> bool` so they work with [`Runner`](https://chumicro.com/ChuMicro/runner/stable/).
-- **No third-party dependencies** that aren't available on all three runtimes.
-- **No `typing` imports.**  Use PEP 604/585 syntax: `int | None`, `list[int]`.
-- **Memory patterns are optional on day one:** `const()`, `memoryview`, pre-allocated buffers. Focus on correctness first. The [Style Guide](style-guide.md#memory-patterns-library-code-only) has the full list when you're ready.
+- **A service implements `check(now_ms)` and `handle(now_ms)`**, with no `async` or `await`, so [`Runner`](https://chumicro.com/ChuMicro/runner/stable/) can drive it ([Style Guide § Cooperative concurrency](style-guide.md#cooperative-concurrency)).
+- **Every dependency runs on all three runtimes.**
+- **Annotations use built-in syntax**, `int | None` and `list[int]`, with no `typing` import ([Style Guide § Type annotations](style-guide.md#type-annotations)).
+- **Memory patterns wait for a measurement** ([Style Guide § Memory patterns](style-guide.md#memory-patterns-library-code-only)).
 
 ### Constructor injection
 
-Accept dependencies (time sources, I/O objects, network sockets) as constructor parameters instead of importing hardware modules at the top level. This makes your code testable without real hardware:
+Pass time sources, I/O objects, and network sockets in as constructor parameters, and keep hardware modules out of the top-level imports:
 
 ```python
 # ✅ Good: testable, injectable
@@ -86,33 +86,33 @@ class MySensor:
         self._i2c = busio.I2C(board.SCL, board.SDA)
 ```
 
-See [Decision 0010](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0010-library-testability.md) for the reasoning.
+[Decision 0010](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0010-library-testability.md) records the reasoning.
 
 ### Public API
 
-Export your public API from `__init__.py`:
+Export the public API from `__init__.py`:
 
 ```python
-"""ChuMicro my-sensor: one-line description."""
+"""ChuMicro my_sensor: one-line description."""
 
-from chumicro_my_sensor.core import MyClass, helper_function
+from chumicro_my_sensor.core import MySensor
 
-__all__ = ["MyClass", "helper_function"]
+__all__ = ["MySensor"]
 ```
 
 ## 3. Write tests
 
-Tests go in `libraries/my-sensor/tests/`. Every library must independently meet the coverage threshold configured in `pyproject.toml`.
+Tests go in `libraries/my_sensor/tests/`, and the library meets the coverage gate in its own test run ([Style Guide § Coverage exclusions](style-guide.md#coverage-exclusions)).
 
 ```bash
-pytest libraries/my-sensor/tests/                          # everyday iteration
-pytest libraries/my-sensor/tests/test_core.py -x -v        # one file, stop on first failure
-python scripts/run.py test --libraries my-sensor           # gated run with coverage enforcement
+pytest libraries/my_sensor/tests/                           # everyday iteration
+pytest libraries/my_sensor/tests/test_my_sensor.py -x -v    # one file, stop on first failure
+python scripts/run.py test --libraries my_sensor            # gated run with coverage enforcement
 ```
 
 ### What a test looks like
 
-Since you accepted dependencies as constructor parameters, testing is straightforward.  Pass in a fake:
+A test passes a fake in through the constructor:
 
 ```python
 """Tests for MySensor reading behavior."""
@@ -142,93 +142,62 @@ def test_sensor_reads_from_bus() -> None:
     assert result == b"\x01\x02"
 ```
 
-Create lightweight fakes for your own interfaces. Use fakes from upstream ChuMicro libraries when available (`from chumicro_timing.testing import FakeTicks`). `unittest.mock` is fine when a purpose-built fake doesn't exist or doesn't make sense, but with dependency injection, you'll usually find that a simple fake gives better test control than patching.
+A test file runs on CPython and on both unix ports, so it uses plain `assert`, lightweight fakes for your own interfaces, and fakes from other ChuMicro libraries, such as `from chumicro_timing.testing import FakeTicks`. Exception checks take `raises` from `chumicro_test_harness`. `pytest` and `unittest.mock` stay out of these files.
 
 ### Testing submodule
 
-If downstream libraries or users would benefit from test fakes, keep `src/chumicro_my_sensor/testing.py` and implement real fakes. If there's nothing worth faking, delete it and its references:
+Keep `src/chumicro_my_sensor/testing.py` when downstream libraries or users would benefit from your fakes, and fill it with real ones. With nothing worth faking, delete it and its references:
 
 1. Delete `src/chumicro_my_sensor/testing.py`
 2. Delete `docs/testing.md`
 3. Remove `- Testing Helpers: testing.md` from `mkdocs.yml`
-4. Remove the Testing Helpers link from `docs/index.md`
-5. Remove the Testing Helpers link from `README.md`
+4. Remove the Testing Helpers bullet from `docs/index.md`
+5. Remove the `### Testing` group from the README's "What's included" section
 
 ### Functional tests on real boards
 
-Every new library scaffold also includes `functional_tests/` for behavior that needs a real board. You do **not** need to fill this directory immediately, but if the library has timing-, transport-, GPIO-, or storage-sensitive behavior, plan to add real-board tests here once the host/unit tests are stable.
+The scaffold also creates `functional_tests/` for behavior that needs a real board. It can stay empty at first. A library with timing-, transport-, GPIO-, or storage-sensitive behavior gains real-board tests there once the unit tests are stable.
 
 Run them with:
 
 ```bash
-python scripts/run.py setup
-python scripts/run.py test-libraries-functional --library my-sensor
+python scripts/run.py test-libraries-functional --library my_sensor
 ```
 
-See [Device Testing](device-testing.md) for `devices.yml`, deploy modes, and IDE play-button behavior.
+[Device Testing](device-testing.md) covers `devices.yml`, deploy modes, and IDE play-button behavior.
 
 ## 4. Write docs
 
 ### User guide (`docs/guide.md`)
 
-Replace the placeholder with a real guide covering:
-
-1. **Overview:** what the library does and when to use it
-2. **Installation:** circup, mip, and pip commands
-3. **Quick start:** minimal working example
-4. **API walkthrough:** main classes and functions with examples
-5. **Cross-runtime notes:** any behavior differences across runtimes
+The scaffolded guide is a worked example for a fictional countdown timer. Rewrite each section for your library in the same order, and drop the Runner pattern and Memory notes sections when they don't apply. An AI agent writes it through the [`guide-generation` skill](https://github.com/ChuMicro/ChuMicro/tree/main/.github/skills/guide-generation/SKILL.md).
 
 ```bash
-python scripts/run.py docs --libraries my-sensor
+python scripts/run.py docs --libraries my_sensor
 ```
 
 ### API reference (`docs/api.md`)
 
-mkdocstrings renders API docs from your docstrings. The scaffold starts with a single directive.  Add section headings and per-module directives as you add modules. See `libraries/timing/docs/api.md` for an example.
+mkdocstrings renders the API reference from your docstrings. The scaffold starts with a single directive. Add section headings and per-module directives as you add modules, as `libraries/timing/docs/api.md` does.
 
-Every public function, method, and class needs a docstring. Types go on the signature as annotations; docstrings carry descriptions only:
-
-```python
-def ticks_diff(end: int, start: int) -> int:
-    """Signed difference between two tick values.
-
-    Args:
-        end: Later tick value.
-        start: Earlier tick value.
-
-    Returns:
-        Signed difference in milliseconds.
-    """
-```
-
-See the [Style Guide](style-guide.md#docstrings) for the full format.
+Every public function, method, and class needs a docstring, in the format [Style Guide § Docstrings](style-guide.md#docstrings) sets.
 
 ## 5. Write examples
 
-Put examples in `libraries/my-sensor/examples/`. Rules:
-
-- **Top-level code:** no `if __name__ == "__main__":` guard
-- **Never exits:** imports, then setup, then a module-level `while True:` that repeats the work on a timer.  A failure prints what went wrong and retries on the next pass.  No `raise SystemExit` or `sys.exit()`.  Lint rule `CHU038` checks it; the [Style Guide](style-guide.md#examples-and-demos) shows the shape.
-- **Descriptive filenames:** `sensor_basic_reading.py`, not `example1.py`
-- **Module docstring** with an `Example output::` block showing a few passes of the loop
-- **Self-contained:** copy-paste and run
-- **Hardware examples:** prefix with `circuitpython_` or `micropython_`
+Examples go in `libraries/my_sensor/examples/` and follow [Style Guide § Examples and demos](style-guide.md#examples-and-demos). Check them with:
 
 ```bash
-python scripts/run.py verify-examples --libraries my-sensor
+python scripts/run.py verify-examples --libraries my_sensor
 ```
 
 ## 6. Fill in metadata
 
-Update `libraries/my-sensor/pyproject.toml`:
+In `libraries/my_sensor/pyproject.toml`, set:
 
-- `description`: one-line package description
-- `dependencies`: if your library depends on other ChuMicro libraries (e.g., `"chumicro-timing>=0.1"`)
+- `description`: one line, shown on the docs landing page
+- `dependencies`: the other ChuMicro libraries yours depends on, such as `"chumicro-timing>=0.1"`
 
-Update `libraries/my-sensor/README.md` and replace all TODO placeholders.
-
-The README template now includes a short development/testing section. Keep it accurate for the library you are adding so contributors can see the host-test and device-test entry points without hunting through the repository docs.
+Rewrite `libraries/my_sensor/README.md` from its worked example, the same fictional countdown timer, for your library. Keep its section names, and leave the Contributing section as it renders.
 
 ## 7. Preflight and PR
 
@@ -236,11 +205,11 @@ The README template now includes a short development/testing section. Keep it ac
 python scripts/run.py preflight
 ```
 
-Must print `Preflight passed`. Then push and open a PR on GitHub targeting `main`. See [Creating a Pull Request](pull-requests.md) for the full walkthrough.
+Open the pull request as [Creating a Pull Request](pull-requests.md) describes. A new package's first release needs a PyPI pending publisher registered before the merge, which a maintainer sets up as [First release of a new package](releases.md#first-release-of-a-new-package) describes.
 
 ## 8. After merge
 
-When your PR merges, the VERSION bump triggers an automatic experimental release: your package publishes to PyPI as `chumicro-my-sensor-experimental`, lands in the experimental bundle repo, and gets experimental docs and a git tag, so users can install it right away. When you're confident it's production-ready, open a [Stable Promotion Request](https://github.com/ChuMicro/ChuMicro/issues/new?template=stable_promotion.yml) and a maintainer promotes it. [Releases and Promotion](releases.md) covers the full flow, including the exact [install commands](releases.md#installing-from-experimental) and how promotion works.
+The merge publishes the library's first experimental release, as [What happens on merge](releases.md#what-happens-on-merge) describes, and users can [install it from experimental](releases.md#installing-from-experimental) at once. A [Stable Promotion Request](https://github.com/ChuMicro/ChuMicro/issues/new?template=stable_promotion.yml) asks a maintainer to promote it to stable.
 
 ## Checklist
 
@@ -250,8 +219,8 @@ When your PR merges, the VERSION bump triggers an automatic experimental release
 - [ ] Tests in `tests/`: coverage gate passing
 - [ ] Testing submodule: kept and implemented, or deleted with all references
 - [ ] Examples in `examples/`: `verify-examples` passes
-- [ ] `docs/guide.md`: real content, no placeholders
-- [ ] `README.md`: description and API summary filled in
+- [ ] `docs/guide.md`: rewritten for your library
+- [ ] `README.md`: rewritten for your library
 - [ ] `pyproject.toml`: description and dependencies set
 - [ ] Preflight passes
 - [ ] PR opened and CI green

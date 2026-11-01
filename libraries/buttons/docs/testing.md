@@ -1,12 +1,10 @@
 # Testing Helpers
 
-`chumicro_buttons.testing` provides `FakeButtonSource`, a hand-driven stand-in for the hardware that produces button edges.  Queue the edges you want, tick the button, and assert on what it made of them.  The module declares `__chumicro_test_support__ = True`, so the deploy filter keeps it on the host and it never lands on a device.
+`chumicro_buttons.testing` holds `FakeButtonSource`, a stand-in for the pin hardware that captures button edges.  A test queues presses and releases on it, ticks the button, and checks what the button made of them, with no board, no switch, and no waiting.  `pip install chumicro-buttons pytest` installs everything the tests on this page import.  Project deploys and the board bundles leave the module out.
 
-This is the piece that makes button behavior testable at a desk.  A long-press state machine or a double-click menu is ordinary logic, and with a fake source it can be tested without a board, without a switch to wear out, and without waiting in real time.
+## The smallest test
 
-## Usage
-
-Build the button with `source=` instead of `pin=`, then script the edges:
+Save this as `test_reset_button.py` and run `pytest test_reset_button.py`:
 
 ```python
 from chumicro_buttons import Button
@@ -14,38 +12,51 @@ from chumicro_buttons.testing import FakeButtonSource
 from chumicro_timing.testing import FakeTicks
 
 
-def test_long_press_arms_the_factory_reset():
+def test_holding_three_seconds_is_a_long_press():
     source = FakeButtonSource()
     button = Button(source=source, ticks=FakeTicks(), long_press_ms=3000)
-    settings = Settings()
 
     source.press(at_ms=100)
     button.check(100)
-    assert not settings.reset_armed
+    assert button.pressed
+    assert not button.just_long_pressed
 
-    button.check(3200)               # still held, 3100 ms in
+    button.check(3100)
     assert button.just_long_pressed
-    settings.arm_reset()
-    assert settings.reset_armed
 ```
 
-The button never reads a clock of its own.  It compares the timestamps you pass to `check()` using the arithmetic you hand it, so the test controls time completely and runs instantly.
+`Button` takes `source=` in place of a pin.  It reads no clock of its own: the `now_ms` passed to `check()` is the time, so the test decides when three seconds have passed.
 
-## Edges carry their own time
+## `FakeButtonSource`
 
-Each queued edge takes an `at_ms` separate from the tick you pass to `check()`.  That gap is the case worth testing: on a real board an edge is captured when it happens and noticed later, so a press at 100 ms seen by a loop that got back at 180 ms has already been held for 80 ms.
+| Call or attribute | What it does |
+|---|---|
+| `FakeButtonSource(key_count=1)` | Reports `key_count` keys: 1 for a `Button`, more for a `Buttons`. |
+| `press(key_index=0, at_ms=0)` | Queues a press of key `key_index`, stamped `at_ms`. |
+| `release(key_index=0, at_ms=0)` | Queues a release of key `key_index`, stamped `at_ms`. |
+| `overflowed` | Set to `True` to rehearse a signal too noisy to capture in full.  The next `check()` copies it to the button and clears it. |
+| `poll_calls` | Counts the times the button asked the source to capture. |
+| `deinit_calls` | Counts the times the button released the source. |
+
+Each edge carries its own `at_ms`, separate from the tick passed to `check()`.  A board stamps each edge when it happens.  The loop notices it later, so a press at 100 ms seen by a loop that got back at 180 ms has been held for 80 ms:
 
 ```python
-source.press(at_ms=100)
-button.check(180)
-assert button.held_ms == 80        # measured from the edge, not from the tick
+from chumicro_buttons import Button
+from chumicro_buttons.testing import FakeButtonSource
+from chumicro_timing.testing import FakeTicks
+
+
+def test_hold_time_counts_from_the_edge():
+    source = FakeButtonSource()
+    button = Button(source=source, ticks=FakeTicks())
+
+    source.press(at_ms=100)
+    button.check(180)
+
+    assert button.held_ms == 80
 ```
 
-Writing tests this way means slow-loop behavior is covered on the host, where it is easy to reason about, instead of only on hardware.
-
-## Several keys
-
-Pass `key_count` and address each key by number.  Edges for different keys can be queued for the same tick, which is how a chord is tested:
+`key_count` and `key_index` address the keys of a `Buttons`.  Edges for two keys queued before one tick arrive together, which is how a test covers a chord:
 
 ```python
 from chumicro_buttons import Buttons
@@ -53,7 +64,7 @@ from chumicro_buttons.testing import FakeButtonSource
 from chumicro_timing.testing import FakeTicks
 
 
-def test_both_shoulders_together_opens_the_menu():
+def test_both_shoulder_buttons_together():
     source = FakeButtonSource(key_count=2)
     buttons = Buttons(source=source, ticks=FakeTicks())
 
@@ -61,20 +72,32 @@ def test_both_shoulders_together_opens_the_menu():
     source.press(key_index=1, at_ms=105)
     buttons.check(120)
 
-    assert buttons[0].pressed and buttons[1].pressed
+    assert buttons.keys[0].pressed
+    assert buttons.keys[1].pressed
 ```
 
-## Testing the noisy case
-
-`FakeButtonSource` carries an `overflowed` flag you can set to rehearse what your program does when a signal is too noisy to capture in full:
+`overflowed` rehearses what a program does when a bouncing contact fills a board's capture buffer.  The [guide](guide.md) covers the wiring that prevents it.
 
 ```python
-source.overflowed = True
-button.check(200)
-assert button.overflowed
+from chumicro_buttons import Button
+from chumicro_buttons.testing import FakeButtonSource
+from chumicro_timing.testing import FakeTicks
+
+
+def test_the_button_reports_a_dropped_edge():
+    source = FakeButtonSource()
+    button = Button(source=source, ticks=FakeTicks())
+
+    source.overflowed = True
+    button.check(200)
+
+    assert button.overflowed
+    assert source.poll_calls == 1
 ```
 
-A real board raises that flag when a bouncing contact fills the capture buffer.  The [guide](guide.md) covers the wiring that stops it happening.
+## API reference
+
+The [API page](api.md#chumicro_buttonstesting) lists every method on `FakeButtonSource`.
 
 ---
 

@@ -1,7 +1,4 @@
-"""Runner-shaped WebSocket server built on chumicro-sockets and chumicro-timing.
-
-The public entry points are :class:`WebSocketServer` and :class:`Connection`.
-"""
+"""``WebSocketServer`` accepts WebSocket clients and runs each as a ``Connection``, one step at a time."""
 
 import errno
 
@@ -43,14 +40,63 @@ _CONNECTION_PROGRESS_INTERVAL_MS = const(20)
 
 
 class ServerHandshakePhase:
-    """Sub-states inside CONNECTING: read the request, then write the 101 response."""
+    """Steps a ``Connection`` takes while its ``state`` is ``CONNECTING``, in order.
+
+    Attributes:
+        READING_REQUEST: The connection reads the client's HTTP upgrade
+            request.
+        SENDING_RESPONSE: The connection writes the
+            ``101 Switching Protocols`` reply.
+    """
 
     READING_REQUEST = "reading_request"
     SENDING_RESPONSE = "sending_response"
 
 
 class Connection(_BaseSession):
-    """Server-side per-connection state machine and framing pipeline."""
+    """One client connected to a ``WebSocketServer``, handed to the server's ``on_connection`` callback.
+
+    The server builds a ``Connection`` for each accepted socket and runs the
+    opening handshake.  Once the connection is ``OPEN``, the server calls
+    ``on_connection(connection)``, the place to set the callbacks below.  The
+    server also calls ``handle()`` on every connection, so a program adds
+    only the server to its runner.  ``send_text()`` and ``send_binary()``
+    queue messages to this client.
+
+    Every ``on_*`` callback below starts as a function that does nothing.
+    The server calls them from inside its own ``handle()``.  A client the
+    server turns away during the handshake never reaches ``on_connection``.
+    No callback fires for that client.
+
+    Attributes:
+        state: The current ``WebSocketState`` value.
+        request_path: Path from the client's request, such as ``"/ws"``,
+            with any query string.  ``""`` until the handshake request
+            arrives.
+        request_headers: Headers of the client's upgrade request, or
+            ``None`` before the request arrives.
+            ``request_headers.get("Origin")`` looks one up by name in any
+            letter case.
+        last_error: The ``WebSocketError`` behind a failed, refused, or
+            timed-out connection, or ``None``.
+        last_close_code: Status code the connection closed with, or ``None``
+            while it runs and after a CLOSE frame that carried no code.  A
+            failed connection reports ``CLOSE_INTERNAL_ERROR`` (1011).
+        last_close_reason: Reason text that came with ``last_close_code``.
+        on_text: Called as ``on_text(text)`` for each complete text message
+            from the client, with ``text`` a ``str``.
+        on_binary: Called as ``on_binary(data)`` for each complete binary
+            message from the client, with ``data`` as ``bytes``.
+        on_ping: Called as ``on_ping(payload)`` when the client sends a
+            PING, after the PONG reply is queued.
+        on_pong: Called as ``on_pong(payload)`` when the client answers a
+            PING from ``send_ping()``.
+        on_close: Called as ``on_close(code, reason)`` once ``state`` reaches
+            ``CLOSED``.
+        on_oversized: Called as ``on_oversized(reported_length)`` when a
+            message bigger than ``max_message_bytes`` is dropped under
+            ``WhenOversized.DROP_WITH_EVENT``.
+    """
 
     _peer_label = "client"
     _inbound_mask_required = True  # clients MUST mask outbound (RFC 6455 §5.1)
@@ -102,7 +148,12 @@ class Connection(_BaseSession):
         self.request_headers = None
 
     def check(self, now_ms: int) -> bool:  # noqa: ARG002 - runner contract
-        """Return ``True`` if there's work to do for this connection."""
+        """Return ``True`` until the connection is ``CLOSED``.
+
+        Args:
+            now_ms: Current ``ticks_ms()`` reading.  The connection ignores
+                it.
+        """
         return self.state != WebSocketState.CLOSED
 
     def _connecting_wants_read(self, now_ms) -> bool:  # noqa: ARG002 - runner contract
@@ -112,7 +163,17 @@ class Connection(_BaseSession):
         return self._handshake_phase == ServerHandshakePhase.SENDING_RESPONSE
 
     def handle(self, now_ms: int) -> None:
-        """One tick of progress for this connection."""
+        """Do one bounded step of work for this connection.  ``WebSocketServer.handle()`` calls it.
+
+        During the handshake, one call reads part of the client's request or
+        writes part of the reply.  Once ``OPEN``, one call reads up to
+        ``recv_budget_per_tick`` bytes and delivers the messages they
+        complete, then writes up to ``send_budget_per_tick`` bytes of queued
+        frames.
+
+        Args:
+            now_ms: Current ``ticks_ms()`` reading.
+        """
         if self.state == WebSocketState.CLOSED:
             return
 
@@ -224,7 +285,23 @@ class Connection(_BaseSession):
 
 
 class WebSocketServer:
-    """Runner-shaped WebSocket server owning a TCP/TLS listening socket."""
+    """Listens for WebSocket clients and runs each as a ``Connection``, one non-blocking step per loop pass.
+
+    The main loop calls ``check(now_ms)`` and ``handle(now_ms)`` on every
+    pass, where ``now_ms`` comes from ``chumicro_timing.ticks_ms()``.  A
+    ``chumicro_runner.Runner`` makes both calls itself after
+    ``runner.add(server)``.  Each ``handle()`` call accepts waiting clients
+    and gives every ``Connection`` one turn.  ``on_connection(connection)``
+    runs once per client, when its opening handshake completes.
+
+    Attributes:
+        io_socket: The listening socket, or ``None`` before the first
+            ``handle()`` opens it from ``listener_factory`` and after
+            ``close()``.
+        closed: ``True`` after ``close()``.
+        last_error: The most recent ``OSError`` from accepting a client,
+            or ``None``.  The server keeps listening after one.
+    """
 
     @classmethod
     def from_config(
@@ -240,15 +317,40 @@ class WebSocketServer:
         ticks: object | None = None,
         **constructor_kwargs: object,
     ) -> "WebSocketServer":
-        """Build a :class:`WebSocketServer` from runtime config.
+        """Build a server from a flat config mapping, listening on the config's host and port.
 
-        Config keys carry the deployment-varying values; any other
-        constructor knob passes through verbatim as a keyword, and an
-        explicit keyword wins over its config-derived value.
+        With neither ``listener`` nor ``listener_factory`` given, the server
+        listens through ``chumicro_sockets.sockets_factory`` on
+        ``websockets.server.host`` (default ``"0.0.0.0"``, every interface)
+        and ``websockets.server.port`` (default 8765).  The listening socket
+        opens at the first ``handle()``, so building the server touches no
+        network.  The server also reads
+        ``websockets.server.max_message_bytes`` (default 16384).
 
-        Construction is side-effect-free: with neither *listener* nor
-        *listener_factory* given, a factory is built from the config's
-        host / port and the bind happens on the first ``handle()`` tick.
+        Args:
+            config: A ``dict`` or other mapping with ``get()``.
+            on_connection: Called as ``on_connection(connection)`` once per
+                client, when its opening handshake completes.
+            radio: The CircuitPython radio, such as ``wifi.radio``.
+                MicroPython and CPython ignore it.
+            listener: Open listening socket to use instead of the config's
+                address.
+            listener_factory: Zero-argument callable that returns a
+                listening socket, used instead of the config's address.
+            accept_path: Request path to accept, such as ``"/ws"``, or
+                ``None`` to accept every path.
+            max_connections: Most clients connected at once.
+            ticks: Clock object, passed to the constructor.
+            **constructor_kwargs: Any other constructor argument.  A keyword
+                given here wins over the config value.
+
+        Returns:
+            A new ``WebSocketServer``.
+
+        Raises:
+            RuntimeError: Neither ``listener`` nor ``listener_factory`` was
+                given, and ``chumicro_sockets.sockets_factory`` is missing
+                from the board.
         """
         if listener is None and listener_factory is None:
             # Lazy import so a client-only deploy never pulls chumicro_sockets onto the board.
@@ -302,30 +404,46 @@ class WebSocketServer:
         max_inbound_queue_size: int = DEFAULT_MAX_INBOUND_QUEUE_SIZE,
         ticks: object | None = None,
     ) -> None:
-        """Create a server; each per-connection knob defaults to its ``DEFAULT_*`` constant.
+        """Build a server.  Every argument after ``accept_path`` applies to each ``Connection`` separately.
 
         Args:
-            listener: Already-open listening socket, typically from
-                :func:`chumicro_sockets.listener`; mutually exclusive with *listener_factory*.
-            on_connection: ``callable(connection)`` fired once per connection at handshake completion.
-            listener_factory: Zero-arg callable returning the listening socket; the bind
-                is deferred to the first ``handle()`` tick.
-            max_connections: Concurrent-connection cap; at the cap the server stops calling ``accept()``.
-            accept_path: URI path to require, or ``None`` to accept any; a mismatch gets a 404.
-            max_message_bytes: Per-connection cap on assembled inbound message size.
-            recv_budget_per_tick: Per-tick recv cap.
-            send_budget_per_tick: Per-tick send cap.
-            max_tx_queue_size: Per-connection outbound queue bound.
-            when_oversized: :class:`WhenOversized` policy for oversized inbound payloads.
-            pong_timeout_ms: Deadline in ms for a PONG after a PING.
-            handshake_timeout_ms: Opening-handshake timeout in ms.
-            close_timeout_ms: Close-handshake timeout in ms.
-            max_inbound_queue_size: Bound on each connection's ``next_message`` queue.
-            ticks: Tick source; defaults to the :mod:`chumicro_timing` ``ticks`` submodule.
+            listener: Open listening socket with ``accept()`` and
+                ``close()``, such as one from ``chumicro_sockets.listener()``.
+                Pass ``listener`` or ``listener_factory``, never both.
+            on_connection: Called as ``on_connection(connection)`` once per
+                client, when its opening handshake completes.  Required.
+            listener_factory: Zero-argument callable that returns a listening
+                socket.  The server calls it at the first ``handle()``.
+            max_connections: Most clients connected at once.  At the limit
+                the server stops accepting until a connection closes.
+            accept_path: Request path to accept, such as ``"/ws"``, or
+                ``None`` to accept every path.  A client asking for another
+                path gets an HTTP 404 reply.
+            max_message_bytes: Largest incoming message, in bytes, a
+                connection keeps.  A bigger one is dropped under
+                ``when_oversized``.  Defaults to 16384.
+            recv_budget_per_tick: Most bytes one connection reads per
+                ``handle()``.  Defaults to 1024.
+            send_budget_per_tick: Most bytes one connection writes per
+                ``handle()``.  Defaults to 1024.
+            max_tx_queue_size: Most messages that can wait to be sent on one
+                connection.  Defaults to 8.
+            when_oversized: A ``WhenOversized`` value.
+            pong_timeout_ms: Milliseconds a PING from ``send_ping()`` may
+                wait for its PONG before the connection fails.  Defaults to
+                30000.
+            handshake_timeout_ms: Milliseconds from accept until the opening
+                handshake must finish.  Defaults to 10000.
+            close_timeout_ms: Milliseconds ``close()`` waits for the client's
+                CLOSE before dropping the connection.  Defaults to 5000.
+            max_inbound_queue_size: Most messages each connection's
+                ``next_message()`` queue holds.  Defaults to 16.
+            ticks: Clock object with ``ticks_ms()``, ``ticks_add()``, and
+                ``ticks_diff()``.  ``None`` selects ``chumicro_timing.ticks``.
 
         Raises:
-            ValueError: Neither or both of *listener* / *listener_factory* were
-                given, or *on_connection* is ``None``.
+            ValueError: The call passed both or neither of ``listener`` and
+                ``listener_factory``, or ``on_connection`` is ``None``.
         """
         if (listener is None) == (listener_factory is None):
             raise ValueError(
@@ -355,33 +473,48 @@ class WebSocketServer:
 
         self._connections: list[Connection] = []
         self.closed = False
-        #: Most recent non-EAGAIN ``listener.accept()`` failure, or ``None`` if healthy.
         self.last_error: BaseException | None = None
 
     @property
     def connections(self) -> tuple:
-        """Tuple of currently-active :class:`Connection` objects."""
+        """Every ``Connection`` the server holds right now, as a new tuple.
+
+        The tuple includes connections still in the opening handshake.
+        ``send_text()`` on one of those raises ``WebSocketStateError``.
+        """
         return tuple(self._connections)
 
     @property
     def connection_count(self) -> int:
-        """How many connections are currently active (any non-CLOSED state)."""
+        """Number of connections the server holds right now, without building the ``connections`` tuple."""
         return len(self._connections)
 
     def io_interest(self, now_ms: int) -> int:  # noqa: ARG002 - runner contract
-        """Poll-interest bit for ``Runner.wait``: read while the server
-        is open with its listener bound and a connection slot free,
-        else none."""
+        """Return the socket events ``Runner.wait()`` should wake for on the listening socket.
+
+        The server returns ``1``, asking to wake when the listening socket is
+        readable, while it is open, its listening socket exists, and it holds
+        fewer than ``max_connections`` connections.  A readable listening
+        socket has a client waiting to be accepted.  Otherwise the server
+        returns ``0``.
+
+        Args:
+            now_ms: Current ``ticks_ms()`` reading.  The server ignores it.
+        """
         if self.closed or self.io_socket is None:
             return 0
         return _IO_READ if len(self._connections) < self._max_connections else 0
 
     def next_deadline(self, now_ms: int) -> int | None:
-        """Earliest tick at which ``handle()`` must run.
+        """Return the ``ticks_ms()`` value by which ``handle()`` must run, or ``None`` with no connections.
 
-        The nearest connection deadline, capped at a short progress interval
-        while any connection is live; connection sockets are not registered
-        with the poller, so the cap keeps their I/O advancing.
+        ``Runner.wait()`` watches only the listening socket, never the
+        connection sockets.  While any connection exists, the server asks for
+        a turn within 20 ms so the connections keep moving, or sooner when a
+        connection deadline falls earlier.
+
+        Args:
+            now_ms: Current ``ticks_ms()`` reading.
         """
         if self.closed or not self._connections:
             return None
@@ -394,7 +527,14 @@ class WebSocketServer:
         return nearest
 
     def close(self) -> None:
-        """Stop accepting new connections and close every active session."""
+        """Close the listening socket and every connection, and mark the server ``closed``.
+
+        Each ``OPEN`` connection writes a CLOSE frame with ``CLOSE_NORMAL``
+        and the reason ``"server shutting down"``, as far as its socket
+        accepts it.  The server then drops every connection without waiting
+        for replies.  Each connection's ``on_close`` fires before ``close()``
+        returns.  A closed server stays closed.
+        """
         if self.closed:
             return
         if self.io_socket is not None:
@@ -420,11 +560,26 @@ class WebSocketServer:
         self.closed = True
 
     def check(self, now_ms: int) -> bool:  # noqa: ARG002 - runner contract
-        """Return ``True`` if there's work to do this tick."""
+        """Return ``True`` when ``handle()`` has work to do: from construction until ``close()``.
+
+        Args:
+            now_ms: Current ``ticks_ms()`` reading.  The server ignores it.
+        """
         return not self.closed
 
     def handle(self, now_ms: int) -> None:
-        """Lazy-open the listener, accept new connections, advance every active connection one tick."""
+        """Accept waiting clients and give every connection one bounded step of work.
+
+        The first call opens the listening socket from ``listener_factory``.
+        An error opening it raises from that call.  Each call accepts
+        clients until ``max_connections`` is reached or none are waiting,
+        then calls ``handle()`` on every connection and drops the ones that
+        reached ``CLOSED``.
+
+        Args:
+            now_ms: Current ``ticks_ms()`` reading, passed to every
+                connection.
+        """
         if self.closed:
             return
         if self.io_socket is None:

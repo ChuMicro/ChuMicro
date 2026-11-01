@@ -2,7 +2,7 @@
 
 ## `chumicro_msgpack`
 
-`packb` and `unpackb` work on `bytes` in memory; `pack` and `unpack` read and write a stream, which keeps a large value off the heap on a small board.
+`chumicro_msgpack` exports `packb`, `unpackb`, `pack`, and `unpack`, and a program starts with [`packb`](#chumicro_msgpack.packb) and [`unpackb`](#chumicro_msgpack.unpackb).
 
 ::: chumicro_msgpack
     options:

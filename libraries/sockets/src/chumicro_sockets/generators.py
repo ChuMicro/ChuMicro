@@ -1,6 +1,11 @@
-"""Generator helpers for socket I/O driven by a tick-based scheduler.
+"""``chumicro_sockets.generators`` runs socket I/O as ``yield from`` steps inside a generator
+that ``Runner.add_generator`` drives.
 
-The public helpers are ``connect``, ``send_all``, and ``recv_until``.
+``connect`` drives a connector until it hands back a connected socket,
+``send_all`` writes a whole buffer, and ``recv_until`` reads up to a
+separator.  Each helper yields whenever the socket would block.
+``Runner.wait`` then sleeps until the socket is ready, and the next
+``Runner.tick`` resumes the generator.
 """
 
 import errno
@@ -15,22 +20,35 @@ def connect(
     timeout_ms: int | None = None,
     ticks: object | None = None,
 ) -> object:
-    """Drive *connector* across runner ticks and return its connected socket.
+    """Drive ``connector`` until it connects, and return the connected socket.
+
+    Call it as ``sock = yield from connect(connector)``.  On success the
+    caller owns the socket and closes it.  On failure, on timeout, or when the
+    generator is closed, ``connect`` cancels the connector, which closes any
+    half-open socket.  The connector's blocking steps still hold the main
+    loop: the DNS lookup on every runtime, the TCP connect on CircuitPython,
+    and the TLS handshake on CircuitPython and MicroPython.
 
     Args:
-        connector: Any object exposing the ``SocketConnector`` surface.
-        timeout_ms: Deadline in ms for the whole connect; ``None`` waits indefinitely.
-        ticks: ``chumicro_timing``-shaped tick source; required when *timeout_ms* is set.
+        connector: Connector from ``chumicro_sockets.connector``.
+        timeout_ms: Time limit for the whole connect, in ms, or ``None`` to
+            wait as long as the connector takes.  The limit is checked between
+            steps, so it cannot cut a blocking step short.
+        ticks: Clock with ``ticks_ms``, ``ticks_diff``, and ``ticks_add``,
+            such as ``chumicro_timing.ticks``.  Required with ``timeout_ms``.
 
     Yields:
-        The connector itself, repeatedly, until terminal.
+        The connector, for the runner to poll, until it reaches ``"ready"``
+            or ``"failed"``.
 
     Returns:
-        The connected, non-blocking socket; the caller owns its lifecycle.
+        The connected socket.  CircuitPython hands it back in blocking mode.
 
     Raises:
-        OSError: The connector reached ``failed``, or ``ETIMEDOUT`` on timeout.
-        ValueError: *timeout_ms* was given without a *ticks* source.
+        OSError: ``timeout_ms`` passed, with ``errno.ETIMEDOUT``.
+        Exception: The connector failed.  ``connect`` raises its
+            ``last_error``, such as an ``OSError`` for a refused connection.
+        ValueError: ``timeout_ms`` was given without ``ticks``.
     """
     if timeout_ms is not None and ticks is None:
         raise ValueError("connect(timeout_ms=...) requires a ticks source")
@@ -62,17 +80,22 @@ def connect(
 
 
 def send_all(sock: object, data: object) -> object:
-    """Send every byte of *data*, yielding on ``EAGAIN``.
+    """Send every byte of ``data`` on ``sock``, yielding while the socket's send buffer is full.
+
+    Call it as ``yield from send_all(sock, data)``.  Each time ``send``
+    raises ``EAGAIN``, the helper yields a ``WriteWait``, which tells
+    ``Runner.wait`` to wake when the socket can take more bytes.
 
     Args:
-        sock: Non-blocking TCP socket.
-        data: Bytes-like object to transmit.
+        sock: Connected non-blocking TCP socket.
+        data: ``bytes``, ``bytearray``, or ``memoryview`` to send.
 
     Yields:
-        A ``WriteWait`` carrying *sock* on each ``EAGAIN``.
+        A ``WriteWait`` on ``sock`` each time the socket would block.
 
     Raises:
-        OSError: The peer closed mid-send, or the socket reported a non-EAGAIN error.
+        OSError: ``send`` returned 0 because the peer closed, or failed with
+            an error other than ``EAGAIN``.
     """
     view = memoryview(data)
     total = len(view)
@@ -94,22 +117,29 @@ def send_all(sock: object, data: object) -> object:
 
 
 def recv_until(sock: object, separator: object, *, max_bytes: int) -> bytes:
-    """Read until *separator* appears; return everything up to and including it.
+    """Read from ``sock`` until ``separator`` arrives, and return the bytes through the separator.
+
+    Call it as ``line = yield from recv_until(sock, b"\\r\\n", max_bytes=256)``.
+    The helper reads up to 256 bytes at a time.  Bytes that arrive after the
+    separator in the same read are dropped.
 
     Args:
-        sock: Non-blocking TCP socket.
-        separator: Bytes pattern that terminates the read (for example ``b"\\r\\n"``).
-        max_bytes: Hard cap on accumulated bytes, so a peer cannot force an unbounded read.
+        sock: Connected non-blocking TCP socket.
+        separator: Byte string that ends the read, such as ``b"\\r\\n"``.
+        max_bytes: Most bytes to collect, so a peer that never sends the
+            separator cannot fill memory.
 
     Yields:
-        A ``ReadWait`` on each ``EAGAIN``.
+        A ``ReadWait`` on ``sock`` each time no data is waiting.
 
     Returns:
-        ``bytes`` from the start through the first occurrence of *separator*, inclusive.
+        The bytes from the start of the read through the first ``separator``.
 
     Raises:
-        OSError: The peer closed before the separator, growth exceeded *max_bytes*, or a non-EAGAIN error.
-        ValueError: *max_bytes* is not positive.
+        OSError: The peer closed before the separator, ``max_bytes`` bytes
+            arrived without it, or ``recv_into`` failed with an error other
+            than ``EAGAIN``.
+        ValueError: ``max_bytes`` is 0 or negative.
     """
     if max_bytes <= 0:
         raise ValueError("max_bytes must be positive")

@@ -2,25 +2,9 @@
 
 <img src="https://chumicro.com/assets/chumicro-head.png" alt="" align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
-Setup, the everyday commands, and the rules on one page.  The [full contributing guide](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md) has the detail.
+[CONTRIBUTING § Setting up](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#setting-up) walks first-time setup, and [Your first change](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#your-first-change-a-worked-example) walks each step of the workflow below.
 
 <br clear="left">
-
-## Setup (once)
-
-Fork the repo on GitHub first, then:
-
-```bash
-git clone https://github.com/<your-username>/ChuMicro.git
-cd ChuMicro
-git remote add upstream https://github.com/ChuMicro/ChuMicro.git
-python scripts/prepare_workspace.py                 # first-time bootstrap
-source .venv/bin/activate                           # Windows: .venv\Scripts\activate
-```
-
-`prepare_workspace.py` runs on a fresh clone with no third-party packages installed.  It reuses an active venv or creates `.venv`, installs every library and tool into it, runs lint and the laptop unit tests, and ends with a `Workspace is ready` banner.
-
-After a `git pull` that adds a library or changes dependencies, run `python scripts/run.py setup`.  It does the same install and IDE refresh against the venv you already have, and it is safe to re-run any time.
 
 ## Workflow (every change)
 
@@ -30,29 +14,24 @@ git checkout -b fix/my-change
 # ... make changes ...
 pytest libraries/<name>/tests/        # fast check while you work
 python scripts/run.py preflight       # last line must start "Preflight passed."
-git add <changed files> && git commit # imperative subject, body says why
+git add <changed files> && git commit
 git push -u origin fix/my-change      # then open the PR on GitHub
 ```
 
-*Preflight* runs every check CI runs on a pull request: lint, unit tests on CPython, MicroPython, and CircuitPython, the docs build, example and demo checks, and the size and version checks.
-
 ## The rules
 
-1. **Run preflight before every commit**, docs-only commits included.  When it passes, the required CI checks should pass too.
-2. **Use descriptive names.** The linter names the exact replacement, so each hit is mechanical; expect a few in your first PR. Single-letter loop targets (`for i in range(10)`) are fine. ([Decision 0022](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0022-naming-conventions.md))
-3. **No `async`/`await`.** Library code takes turns in one shared loop: long-running services through `check()`/`handle()`, step-by-step flows as generators passed to `runner.add_generator`.  CircuitPython's asyncio has a broken stream layer, and every `await` there allocates.  Lint enforces it. ([Decision 0087](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0087-generators-for-sequential-io.md))
-4. **Accept dependencies as constructor parameters.** Don't import `board` or `busio` at the top level of library code.  That is what lets tests run on a laptop with no hardware.
-5. **Tests live next to the code.** `libraries/<name>/tests/`. Run them with `pytest libraries/<name>/tests/`.
-6. **Bump `VERSION` once per PR when users would see a change.** Edit `libraries/<name>/VERSION`: patch for a fix or a changed message, minor for a feature or a breaking change (every package is below 1.0).  Tests, docs, examples, and docstring-only edits need no bump.  Preflight's `check-version` catches a missing one.
-7. **Docstrings are required** on public functions. Types go on the signature, descriptions in the docstring.
-8. **f-strings everywhere.** No `%` formatting, no `.format()`.
-9. **Examples never exit.** An example does its one-shot part, then keeps working on a timer inside a top-level `while True:` loop.  See [Writing an example](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#writing-an-example).
-10. **`const()` and `memoryview` are optional on day one.** Write the clear version first; optimize when a measurement says so.
-11. **Update the docs your change made wrong, in the same PR.** A renamed function means its README, guide, and examples change too.
+1. **Run preflight before every commit**, docs-only commits included. ([The development loop](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#the-development-loop))
+2. **Spell names out.** ([Style Guide § Naming](style-guide.md#naming))
+3. **Share the one loop, with no `async` or `await`.** ([Style Guide § Cooperative concurrency](style-guide.md#cooperative-concurrency))
+4. **Take hardware through the constructor.** ([Why the code looks the way it does](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#why-the-code-looks-the-way-it-does))
+5. **Bump `VERSION` once per PR when users would see a change.** ([Releases § When to bump VERSION](releases.md#when-to-bump-version))
+6. **Give every public function a docstring**, with the types on the signature. ([Style Guide § Docstrings](style-guide.md#docstrings))
+7. **Build strings with f-strings.** ([Style Guide § String formatting](style-guide.md#string-formatting))
+8. **Keep every example running** in a top-level `while True:` loop. ([Style Guide § Examples and demos](style-guide.md#examples-and-demos))
+9. **Write the clear version first.** Memory tricks wait for a measurement. ([Style Guide § Memory patterns](style-guide.md#memory-patterns-library-code-only))
+10. **Update the docs your change made wrong, in the same PR.** A renamed function means its README, guide, and examples change too.
 
 ## Common commands
-
-Preflight is the one command you have to remember; everything else is reference.
 
 ### Every PR
 
@@ -60,6 +39,7 @@ Preflight is the one command you have to remember; everything else is reference.
 |---|---|
 | Run everything CI will run | `python scripts/run.py preflight` |
 | Lint only (ruff plus the project's own rules) | `python scripts/run.py lint` |
+| Refresh installs and IDE config after a `git pull` | `python scripts/run.py setup` |
 | Scaffold a new device library | `python scripts/run.py new-library my_sensor` |
 | Scaffold a laptop-only workbench tool | `python scripts/run.py new-library --workbench my_tool` |
 
@@ -75,14 +55,13 @@ Preflight is the one command you have to remember; everything else is reference.
 | Every package, with the coverage gate | `python scripts/run.py test --all` |
 | One library, with the coverage gate | `python scripts/run.py test --libraries timing` |
 | One test, through the gated runner | `python scripts/run.py test -k timing/test_deadline/rate_fires --no-cov` |
+| Browse coverage line by line ([details](style-guide.md#browsing-coverage)) | `python -m coverage html` |
 | Test the `scripts/` tooling itself | `python scripts/run.py test-scripts` |
 | Check examples parse and import | `python scripts/run.py verify-examples --libraries timing` |
 
-Bare `pytest` is the everyday command for iteration and what IDE play buttons run.  `python scripts/run.py test` runs each library's tests in its own pytest process and enforces the coverage gate ([Decision 0009](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0009-per-library-test-runs.md)); preflight runs it for you.
-
 ### Cross-runtime testing
 
-The MicroPython and CircuitPython *unix ports* are desktop builds of each runtime.  Running the unit suite under them catches code that works on CPython and breaks on a board.
+[CONTRIBUTING § Testing](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#testing) explains the *unix ports*.
 
 | What | Command |
 |---|---|
@@ -97,7 +76,7 @@ The MicroPython and CircuitPython *unix ports* are desktop builds of each runtim
 
 ### Device testing
 
-A *functional test* lives in `libraries/<name>/functional_tests/` and runs on a real board.  Without a registered board these tests skip.
+[Device Testing](device-testing.md) explains functional tests, deploy modes, and every flag.
 
 | What | Command |
 |---|---|
@@ -116,8 +95,6 @@ A *functional test* lives in `libraries/<name>/functional_tests/` and runs on a 
 | List every example | `chumicro-workspace deploy-example --list` |
 | Wipe a wedged board (last resort, erases its files) | `chumicro-workspace reset-board --device <id> --yes` |
 
-`pytest libraries/<name>/functional_tests/` and `python scripts/run.py test-libraries-functional` both run through the `chumicro-pytest-device` plugin.  IDE play buttons use the bare-pytest form.  See [device-testing.md](device-testing.md) for the `--runtime` and `--deploy-mode` flags.
-
 ### Docs and publishing
 
 | What | Command |
@@ -126,7 +103,9 @@ A *functional test* lives in `libraries/<name>/functional_tests/` and runs on a 
 | Preview one library's docs with live reload | `python scripts/run.py docs --libraries timing --serve` |
 | Validate a `mip` install against a bundle repo | `python scripts/run.py validate-mip --bundle-repo ChuMicro-Bundle-Experimental --libraries timing` |
 
-## Where things live
+## Where things live in a library
+
+[CONTRIBUTING § What you're contributing to](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#what-youre-contributing-to) maps the top-level folders.
 
 | What | Where |
 |---|---|
@@ -136,27 +115,16 @@ A *functional test* lives in `libraries/<name>/functional_tests/` and runs on a 
 | Library docs | `libraries/<name>/docs/` |
 | Library examples | `libraries/<name>/examples/` |
 | Version file | `libraries/<name>/VERSION` |
-| Multi-library demos | `demos/<name>/` |
-| Laptop-only tools (deploy, REPL, lint rules) | `workbench/<name>/` |
-| Shared helpers (test harness, docs artwork) | `support/<name>/` |
-| Task runner | `scripts/run.py` |
-| Design decisions (ADRs) | `plans/decisions/` |
 
 ## When something fails
 
-| What failed | What to do |
+| What failed | Where the fix is |
 |---|---|
-| Lint error | Run `python scripts/run.py lint` and fix the flagged lines; each message says what's wrong |
-| Test failure | Read the assertion error; the test name and line number point you to it |
-| Coverage too low | The root `pyproject.toml` sets the 85 % gate ([Decision 0025](https://github.com/ChuMicro/ChuMicro/blob/main/plans/decisions/0025-dual-coverage-thresholds.md)).  The `Missing` column lists uncovered line numbers. If it's code you didn't write, note it in the PR. For code that only runs on a board, see [coverage exclusions](style-guide.md#coverage-exclusions) |
-| `check-version` | Edit `libraries/<name>/VERSION` (a patch bump is usually right) |
-| `griffe warnings` | Add type annotations to function signatures |
-| `functional_tests/` say no device is configured | Register a board: `python scripts/run.py add-device <id> --address <port>`.  No board is fine too: these tests skip. See [device testing](device-testing.md) |
-| macOS CIRCUITPY drive won't mount, `diskutil list` hangs, flash-mode deploys fail | macOS's file-system service (FSKit) has wedged.  Run `chumicro-workspace doctor --fix-fskit-wedge`; [macOS CIRCUITPY troubleshooting](../troubleshooting/macos-circuitpy.md) has the detail |
-| `mpremote: cp: ...: No space left on device` mid-deploy | The board's filesystem is full of files from earlier test runs.  Wipe it with `chumicro-workspace reset-board --device <id> --yes`, which erases every file on the board.  Never `diskutil unmount` a CIRCUITPY drive to clean up; that wedges FSKit instead |
-| Stuck or confused | Ask in the PR; someone will help |
-
-**Browsing coverage in detail:** after `python scripts/run.py test`, run `python -m coverage html` and open `htmlcov/index.html`.  Covered lines show green and missed lines red, which beats reading line numbers in the terminal.  (`htmlcov/` is gitignored.)
+| A preflight phase: `lint`, `test` or its coverage gate, `docs`, `check-version`, `check-size`, a unix-port run | [CONTRIBUTING § Reading a failure](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#reading-a-failure) |
+| `functional_tests/` say no device is configured | [Device Testing § Troubleshooting](device-testing.md#troubleshooting) |
+| `mpremote: cp: ...: No space left on device` mid-deploy | [Device Testing § Wiping a board's filesystem](device-testing.md#wiping-a-boards-filesystem) |
+| macOS `CIRCUITPY` drive won't mount, `diskutil list` hangs, flash-mode deploys fail | [CIRCUITPY on macOS](../troubleshooting/macos-circuitpy.md) |
+| Anything else | [CONTRIBUTING § When you're stuck](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#when-youre-stuck) |
 
 ## Links
 

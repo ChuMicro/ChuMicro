@@ -1,23 +1,33 @@
-"""``WifiConfig``: typed connection settings and a flat-key factory."""
+"""``WifiConfig`` holds the network credentials and retry timing that ``WifiService`` uses."""
 
 
 class WifiConfig:
-    """Connection configuration for ``WifiService``.
+    """``WifiConfig`` holds the network name, password, and retry timing for ``WifiService``.
+
+    Build one directly, or load one from deployed settings with
+    ``from_config``.  Each argument stays readable as an attribute of the same
+    name.
 
     Args:
-        ssid: AP SSID to associate with.
-        password: WPA passphrase.
-        hostname: Hostname advertised on the AP, or ``None`` to skip it.
-        connect_timeout_ms: Max wait for a single connect attempt, in ms (default 15 s).
-        first_connect_timeout_ms: Longer allowance for the first connect attempt
-            after construction, in ms, or ``None`` (default) to use
-            ``connect_timeout_ms``.  A cold radio's first association after
-            power-up takes longer than steady-state reconnects.
-        reconnect_backoff_start_ms: Initial delay between reconnect attempts (default 1 s).
-        reconnect_backoff_max_ms: Cap on the exponential reconnect backoff (default 60 s).
-        reconnect_max: Failed attempts before terminal ``FAILED``; ``None`` (default) retries forever.
-        power_save: Whether to leave the radio's power-save mode enabled (default ``False``).
-        tx_power_dbm: Radio transmit power in dBm, or ``None`` (default) for the firmware default.
+        ssid: Name of the network to join.
+        password: WPA passphrase for that network.
+        hostname: Name the board announces to the network, or ``None`` to keep
+            the firmware's name.
+        connect_timeout_ms: Time one join attempt gets, in ms.  On
+            CircuitPython each attempt holds the main loop for up to this long.
+        first_connect_timeout_ms: Time the first join attempt gets, in ms, or
+            ``None`` to use ``connect_timeout_ms``.  A radio's first join after
+            power-up takes longer than later ones.
+        reconnect_backoff_start_ms: Pause after the first failed attempt, in
+            ms.  Each further failure doubles the pause.
+        reconnect_backoff_max_ms: Longest pause between attempts, in ms.
+        reconnect_max: Failed attempts in a row after which the service stops
+            in ``WifiState.FAILED``, or ``None`` to retry forever.
+        power_save: ``False`` turns the radio's power-save mode off on
+            MicroPython.  ``True`` leaves the firmware setting.  CircuitPython
+            ignores it.
+        tx_power_dbm: Transmit power in dBm, or ``None`` for the firmware
+            default.  A board without the setting ignores it.
     """
 
     # Flat keys read by the factory methods; keep in sync with the __init__ defaults.
@@ -58,14 +68,22 @@ class WifiConfig:
 
     @classmethod
     def from_config(cls, config: object) -> "WifiConfig":
-        """Build a ``WifiConfig`` from the flat runtime config.
+        """Build a ``WifiConfig`` from the ``wifi.*`` keys of deployed settings.
+
+        ``wifi.ssid`` and ``wifi.password`` are required.  Every other
+        argument reads the key of the same name, such as
+        ``wifi.connect_timeout_ms``, and falls back to the constructor default.
 
         Args:
-            config: A :class:`chumicro_config.RuntimeConfig` or plain flat dict.
+            config: Flat settings dict or ``chumicro_config.RuntimeConfig``.
+
+        Returns:
+            The loaded ``WifiConfig``.
 
         Raises:
             chumicro_config.MissingConfigKey: ``wifi.ssid`` or ``wifi.password`` is absent.
-            chumicro_config.InvalidConfigType: *config* is ``None`` or not a mapping.
+            chumicro_config.InvalidConfigType: ``config`` is ``None``, or
+                neither a dict nor a ``RuntimeConfig``.
         """
         from chumicro_config import (
             load_section,  # noqa: PLC0415 - lazy: keeps chumicro_config off deploys that construct WifiConfig directly
@@ -81,13 +99,15 @@ class WifiConfig:
 
     @classmethod
     def try_from_config(cls, config: object) -> "WifiConfig | None":
-        """Soft-load a ``WifiConfig``, returning ``None`` when not configured.
+        """Return the ``WifiConfig`` that ``from_config`` builds, or ``None`` when wifi is not configured.
 
         Args:
-            config: A :class:`chumicro_config.RuntimeConfig`, plain flat dict, or ``None``.
+            config: Flat settings dict, ``chumicro_config.RuntimeConfig``, or ``None``.
 
         Returns:
-            A ``WifiConfig`` instance, or ``None`` when the section is not configured.
+            The loaded ``WifiConfig``, or ``None`` when ``config`` lacks
+                ``wifi.ssid`` or ``wifi.password``, or is neither a dict nor a
+                ``RuntimeConfig``.
         """
         from chumicro_config import (
             try_load_section,  # noqa: PLC0415 - lazy: keeps chumicro_config off deploys that construct WifiConfig directly

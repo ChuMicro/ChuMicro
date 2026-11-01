@@ -63,50 +63,64 @@ def _add_device_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--transport",
         choices=_RUNTIME_CHOICES,
-        help="Runtime target identifier (required without --devices-file).",
+        help=(
+            "Firmware the board runs.  Required unless --devices-file "
+            "names the board."
+        ),
     )
     parser.add_argument(
         "--address",
-        help="Serial port path (required without --devices-file).",
+        help=(
+            "Serial port of the board, such as /dev/cu.usbmodem1101 on "
+            "macOS or /dev/ttyACM0 on Linux.  Required unless "
+            "--devices-file names the board."
+        ),
     )
     parser.add_argument(
         "--baudrate",
         type=int,
         default=115200,
-        help="Serial baudrate (CircuitPython only; default 115200).",
+        help="Serial speed in baud (default: 115200).",
     )
     parser.add_argument(
         "--deploy-mode",
         choices=_DEPLOY_MODE_CHOICES,
         default=DeployMode.RAM.value,
-        help="Deploy mode: ram (no-flash) or flash (persistent).",
+        help=(
+            "Where the deploy command puts the files.  ram (default) "
+            "runs them from the board's memory and leaves the files "
+            "stored on the board alone.  flash writes them to the "
+            "board, so the code runs again after a reset."
+        ),
     )
     parser.add_argument(
         "--devices-file",
         type=Path,
         default=None,
         help=(
-            "Path to a device-config file.  When set, --transport / "
-            "--address / --baudrate / --deploy-mode are filled from "
-            "the entry selected by --device (or the single runtime "
-            "default if --device is omitted)."
+            "Path to a devices.yml file.  The board's runtime, port, "
+            "baud rate, and deploy mode come from the entry --device "
+            "names, and --transport, --address, --baudrate, and "
+            "--deploy-mode are ignored."
         ),
     )
     parser.add_argument(
         "--device",
         dest="device_id",
         default=None,
-        help="Device id within --devices-file.",
+        help=(
+            "Id of a board entry in --devices-file.  When omitted, the "
+            "file's defaults: block picks the board, which works when "
+            "it names a default for one runtime only."
+        ),
     )
     parser.add_argument(
         "--devices-format",
         default="default",
         help=(
-            "Config-file format name.  Built-in: 'default' (reads "
-            "the devices.yml schema defined by "
-            "chumicro_deploy.config.default).  Third parties "
-            "register custom loaders via the "
-            "'chumicro_deploy.config_loaders' entry-point group."
+            "Format of --devices-file.  The built-in format, default, "
+            "reads devices.yml.  Other packages add formats through "
+            "the chumicro_deploy.config_loaders entry-point group."
         ),
     )
 
@@ -284,40 +298,65 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="chumicro-deploy",
         description=(
-            "Host-side device transports and deploy tooling for "
-            "CircuitPython and MicroPython boards."
+            "Copy Python files to a CircuitPython or MicroPython board "
+            "and run them, install new firmware, or ask a board which "
+            "firmware it runs.  Inside a ChuMicro workspace, "
+            "chumicro-workspace runs the same steps and finds each "
+            "board by its name in devices.yml."
+        ),
+        epilog=(
+            "Run chumicro-deploy COMMAND --help to list the options "
+            "of one command."
         ),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     probe_parser = subparsers.add_parser(
-        "probe", help="Probe a connected board's runtime identity.",
+        "probe",
+        help="Print which firmware and version a connected board runs.",
+        description=(
+            "Connect to a board and print the runtime, version, and "
+            "machine name it reports, plus its unique id when the "
+            "board has one."
+        ),
     )
     _add_device_args(probe_parser)
     probe_parser.add_argument(
         "--json",
         dest="json_output",
         action="store_true",
-        help="Emit probe result as JSON instead of key: value lines.",
+        help="Print the result as one JSON object.",
     )
     probe_parser.set_defaults(func=_cmd_probe)
 
     flash_parser = subparsers.add_parser(
         "flash-firmware",
-        help="Download a firmware URL and flash it onto the board.",
+        help="Download firmware and install it on a board.",
+        description=(
+            "Download a firmware file and install it on a connected "
+            "board, replacing the firmware it runs now.  The command "
+            "puts the board into its bootloader itself and asks for a "
+            "button press only when that fails."
+        ),
     )
     _add_device_args(flash_parser)
     flash_parser.add_argument(
-        "--url", required=True, help="Firmware download URL.",
+        "--url", required=True,
+        help=(
+            "Download link for the firmware file, ending in .uf2 or "
+            ".bin.  For CircuitPython, resolve-firmware-url prints one."
+        ),
     )
     flash_parser.add_argument(
         "--method",
         choices=_REFLASH_METHOD_CHOICES,
         default=None,
         help=(
-            "Reflash method: uf2 for RP2040 / RP2350 / TinyUF2-flashed "
-            "boards; esptool for ESP32 family.  When omitted, inferred "
-            "from the --url extension (.uf2 → uf2, .bin → esptool)."
+            "How to install the firmware.  uf2 copies it to the "
+            "board's bootloader drive, for the Raspberry Pi Pico "
+            "family and other UF2 boards.  esptool writes it over "
+            "serial, for the ESP32 family.  Default: uf2 for a .uf2 "
+            "link, esptool for a .bin link."
         ),
     )
     flash_parser.add_argument(
@@ -326,21 +365,21 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_false",
         default=True,
         help=(
-            "esptool path only: skip the erase-flash step before "
-            "write-flash.  Default erases first, wiping every user "
-            "partition (CIRCUITPY drive, NVS, wifi credentials) so a "
-            "fresh reflash doesn't inherit leftover sectors from a "
-            "previous build.  Pass --no-erase to preserve user data "
-            "on an in-place upgrade."
+            "esptool only.  Keep the board's files and stored data, "
+            "saved wifi credentials included, during an in-place "
+            "upgrade.  By default esptool erases the whole flash "
+            "first, which empties the CIRCUITPY drive."
         ),
     )
     flash_parser.add_argument(
         "--offset",
         default="0x0",
         help=(
-            "esptool path only: write-flash offset.  0x0 for "
-            "CircuitPython combined .bin (default); 0x1000 for "
-            "MicroPython ESP32 / S2 / S3 .bin."
+            "esptool only.  Flash address where the firmware image "
+            "starts (default: 0x0, right for CircuitPython .bin "
+            "files).  MicroPython on ESP32 and ESP32-S2 needs 0x1000.  "
+            "The micropython.org download page for each board lists "
+            "its offset."
         ),
     )
     flash_parser.add_argument(
@@ -349,72 +388,100 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help=(
-            "uf2 path only: explicit bootloader drive mount.  "
-            "Skips auto-detection."
+            "uf2 only.  Folder where the board's bootloader drive is "
+            "mounted, such as /Volumes/RPI-RP2.  Skips the automatic "
+            "search."
         ),
     )
     flash_parser.add_argument(
         "--non-interactive",
         action="store_true",
         help=(
-            "Fail instead of prompting when programmatic bootloader "
-            "entry does not produce a bootloader port or UF2 drive.  "
-            "Use in automated flows that don't have stdin."
+            "Exit with an error instead of asking for a button press "
+            "when the command cannot put the board into its "
+            "bootloader.  Use it in scripts and CI."
         ),
     )
     flash_parser.set_defaults(func=_cmd_flash_firmware)
 
     firmware_url_parser = subparsers.add_parser(
         "resolve-firmware-url",
-        help="Print the firmware URL for a board + version.",
+        help="Print the CircuitPython download link for a board.",
+        description=(
+            "Print the CircuitPython firmware download link for a "
+            "board and version.  The command needs no board plugged "
+            "in and makes no network request."
+        ),
     )
     firmware_url_parser.add_argument(
         "--board-id", required=True,
-        help="Board identifier (e.g. raspberry_pi_pico_w).",
+        help=(
+            "Board id as circuitpython.org spells it, such as "
+            "raspberry_pi_pico_w."
+        ),
     )
     firmware_url_parser.add_argument(
         "--runtime",
         choices=_RUNTIME_CHOICES,
         required=True,
+        help=(
+            "Pass circuitpython.  A MicroPython download link carries "
+            "a build date the command cannot know, so micropython "
+            "exits with an error."
+        ),
     )
     firmware_url_parser.add_argument(
         "--version", required=True,
-        help="Firmware version (e.g. 10.1.4, 10.2.0-rc.0).",
+        help="CircuitPython release, such as 10.1.4 or 10.2.0-rc.0.",
     )
     firmware_url_parser.add_argument(
         "--language",
         default="en_US",
-        help="Adafruit language code for CircuitPython (default en_US).",
+        help="CircuitPython language code (default: en_US).",
     )
     firmware_url_parser.set_defaults(func=_cmd_resolve_firmware_url)
 
     deploy_parser = subparsers.add_parser(
         "deploy",
-        help="Push files onto the board and run the entrypoint.",
+        help="Copy files to a board and run the entry file.",
+        description=(
+            "Copy a folder or a JSON file map to a board, run the "
+            "entry file, and print its output.  When a step fails, "
+            "the command names the cause, lists the steps that fix "
+            "it, and offers a retry."
+        ),
     )
     _add_device_args(deploy_parser)
     source_group = deploy_parser.add_mutually_exclusive_group(required=True)
     source_group.add_argument(
         "--directory",
         type=Path,
-        help="Directory tree to deploy (DirectorySource).",
+        help="Folder on this computer to copy, subfolders included.",
     )
     source_group.add_argument(
         "--file-map",
         type=Path,
         help=(
-            "Path to a JSON file mapping on-device paths to file "
-            "contents (FileMapSource)."
+            "JSON file that maps board paths to file contents, such "
+            "as {\"/code.py\": \"print('hi')\"}."
         ),
     )
     deploy_parser.add_argument(
         "--entrypoint", required=True,
-        help="On-device path of the entrypoint file (e.g. /code.py).",
+        help=(
+            "Board path of the file to run after the copy, such as "
+            "/code.py on CircuitPython or /main.py on MicroPython.  It "
+            "must be one of the copied files."
+        ),
     )
     deploy_parser.add_argument(
         "--resource-prefix",
         default="/",
-        help="On-device prefix for non-entrypoint files (default /).",
+        help=(
+            "--directory only.  Board folder the copied files land in "
+            "(default: /, the top of the board's filesystem).  "
+            "--entrypoint must start with this folder."
+        ),
     )
     deploy_parser.add_argument(
         "--no-wipe",
@@ -422,23 +489,23 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_false",
         default=True,
         help=(
-            "Additive deploy: reconcile only the entrypoint / "
-            "state files + /lib, leaving every other board file in "
-            "place.  The default is clean-slate: the deploy removes "
-            "anything that isn't the new payload or a device-required "
-            "keep-set file (boot.py, boot_out.txt, _chu_kv.msgpack); a "
-            "board-resident settings.toml is evicted.  Use --no-wipe "
-            "only when you deliberately hand-manage board files."
+            "flash mode only.  Keep board files the deploy did not "
+            "send.  By default a flash deploy deletes every board "
+            "file outside the new payload, settings.toml included, "
+            "and keeps only boot.py, boot_out.txt, and "
+            "_chu_kv.msgpack.  With --no-wipe, it deletes old files "
+            "only from /lib and from code.py, main.py, active.py, and "
+            "runtime_config.msgpack."
         ),
     )
     deploy_parser.add_argument(
         "--wipe",
         action="store_true",
         help=(
-            "Erase the *entire* device filesystem before deploying, "
-            "the keep set (boot.py, boot_out.txt, _chu_kv.msgpack) "
-            "included.  Stricter than the clean-slate default; for "
-            "corruption recovery.  No-op in RAM mode."
+            "Erase every file on the board before copying, boot.py, "
+            "boot_out.txt, and _chu_kv.msgpack included.  Use it to "
+            "recover a board whose filesystem is corrupt.  Has no "
+            "effect in ram mode."
         ),
     )
     deploy_parser.add_argument(
@@ -446,22 +513,19 @@ def build_parser() -> argparse.ArgumentParser:
         choices=_RUNTIME_CHOICES,
         default=None,
         help=(
-            "Override which runtime's files are deployed.  Defaults to "
-            "the device's configured runtime (--transport / "
-            "--devices-file).  Files marked for a different runtime "
-            "via __chumicro_runtimes__ are filtered out.  Set "
-            "explicitly to override the auto-derived value."
+            "--directory only.  Skip .py files whose "
+            "__chumicro_runtimes__ marker leaves out this runtime "
+            "(default: the board's runtime)."
         ),
     )
     deploy_parser.add_argument(
         "--non-interactive",
         action="store_true",
         help=(
-            "Run once, print the classified failure + ordered fix "
-            "steps (and lsof PID/command for port-busy errors), then "
-            "re-raise.  No retry loop, no user prompt.  Use in CI / "
-            "scripted flows that don't have stdin.  Interactive "
-            "coaching with a retry loop is on by default."
+            "Make one attempt with no prompts, for scripts and CI.  A "
+            "failure prints its cause and fix steps, then exits 1.  "
+            "By default a fixable failure waits for Enter and "
+            "retries, up to three attempts."
         ),
     )
     deploy_parser.add_argument(
@@ -469,13 +533,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help=(
-            "How long to capture serial output after the entrypoint's "
-            "soft-reboot (CircuitPython flash mode only).  Default uses "
-            "the transport's built-in timeout (10 s).  Set higher when "
-            "the entrypoint's first print lands beyond that window "
-            "(MQTT connect, blocking recv, etc.).  Set to 0 to skip the "
-            "capture entirely and return as soon as the soft-reboot "
-            "has been triggered, leaving the board running."
+            "CircuitPython flash mode only.  Seconds to keep printing "
+            "the board's output after it restarts into the new code "
+            "(default: 10).  Raise it when the code prints its first "
+            "line late, such as after a wifi connect.  0 returns as "
+            "soon as the board restarts and leaves the code running."
         ),
     )
     deploy_parser.set_defaults(func=_cmd_deploy)

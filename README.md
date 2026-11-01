@@ -18,33 +18,35 @@
 
 ---
 
-ChuMicro is for people who program microcontroller boards in Python: a Raspberry Pi Pico W, an ESP32, an Adafruit Feather.  It gives those boards libraries for timers, buttons, knobs, WiFi, MQTT, HTTP, WebSockets, and storage that survives a reboot, all written to share one `while True:` loop, each taking a small step per pass.  The same code runs on CircuitPython, on MicroPython, and on the Python on your laptop.
+ChuMicro is a set of Python libraries for microcontroller boards such as a Raspberry Pi Pico W, an ESP32, or an Adafruit Feather.  The libraries cover timers, buttons, knobs, WiFi, MQTT, HTTP, WebSockets, and storage that survives a reboot.  A library that waits on something, such as WiFi, a server, or a button, does its waiting inside your `while True:` loop.  It takes a small step on each pass and hands control straight back.  Every library runs on CircuitPython, on MicroPython, and on the Python on your laptop.
 
 ## What's here
 
-- **Libraries** ([`libraries/`](libraries/)) are small Python packages that run on your board.  Each one installs by itself with `circup`, `mip`, or `pip`, so a project that needs a timer gets a timer and nothing else.  This is what most people come for.
-- **Laptop tools** ([`workbench/`](workbench/)) are command-line programs you run on your computer.  They install firmware, copy your code and the libraries it needs onto a board, and show you what the board prints.  They work with any CircuitPython or MicroPython board, whether or not your code uses the libraries.
-- **The workbench template** ([its own repo](https://github.com/ChuMicro/ChuMicro-Workbench-Template)) is a ready-made folder for your own projects, already set up to use the tools.  Copy it when you start building something of your own.
+- **Libraries** ([`libraries/`](libraries/)) are small Python packages that run on your board.  Each one installs by itself with `circup`, `mip`, or `pip`.  A project that needs a timer installs `chumicro_timing` and nothing else.
+- **Laptop tools** ([`workbench/`](workbench/)) are command-line programs for your computer.  They install firmware, copy your code and the libraries it imports onto a board, and show what the board prints.  They work with any CircuitPython or MicroPython board, whether or not your code uses the libraries.
+- **The workbench template** ([ChuMicro-Workbench-Template](https://github.com/ChuMicro/ChuMicro-Workbench-Template)) is a folder for your own projects with the laptop tools already set up.  Copy it to start a project of your own.
 
-This repository is where the libraries and tools are built.  It also holds a runnable example for every library and a set of end-to-end [demos](#demos).
+This repository builds the libraries and the laptop tools.  It also holds a runnable example for every library and end-to-end [demos](#demos).
 
 ## Pick your path
 
 | I want to | Start at |
 |---|---|
-| Understand how the libraries work | [Three steps, one idea each](#three-steps-one-idea-each), right below |
+| Understand how the libraries work | [Three steps, one idea each](#three-steps-one-idea-each), right below, then [How it works](docs/how-it-works.md) |
 | Make a board blink with a ready-made example | [Try an example on a board](#try-an-example-on-a-board) |
+| Build a WiFi temperature sensor, one step at a time | [Build a WiFi temperature sensor](docs/tutorial-wifi-sensor.md) |
 | Add one library to code I already have | [Install a library](#install-a-library) |
 | Start a project of my own | [Start your own project](#start-your-own-project) |
 | Carry my Arduino or Adafruit Learn habits over | [Coming from Arduino](docs/coming-from-arduino.md) |
+| Look up a word these pages use | [Glossary](docs/glossary.md) |
 | Fix a board that misbehaves | [Troubleshooting](docs/troubleshooting/) |
 | Work on ChuMicro itself | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
 ## Three steps, one idea each
 
-Most board code waits.  `time.sleep(1)` stops the whole board for a second, and a network request stops it until the server answers.  While the board waits, the LED stops blinking and the button stops answering.  ChuMicro libraries work in small steps instead: each one does a little of its job every time your loop comes round, then hands control straight back.
+Most board code waits.  `time.sleep(1)` stops the whole board for a second.  A network request stops it until the server answers.  While the board waits, the LED stops blinking and the button stops answering.  A ChuMicro library does a small piece of its job each time your loop comes round, then hands control straight back.
 
-The examples below are CircuitPython.  On MicroPython only the LED and pin lines change, and the [timing](libraries/timing/examples/) and [buttons](libraries/buttons/examples/) examples show both versions.
+The examples below are CircuitPython.  On MicroPython, only the LED and pin lines change.  The [timing](libraries/timing/examples/) and [buttons](libraries/buttons/examples/) examples show both versions.
 
 ### 1. Blink without time.sleep()
 
@@ -62,11 +64,11 @@ while True:
         led.value = not led.value
 ```
 
-`Rate` answers "is it time yet?"  The loop never pauses, so anything else you put in it gets a turn on every pass.  To run it, [install `chumicro_timing`](#install-a-library) and save the file as `code.py` on your CIRCUITPY drive.
+`blink.due(now)` answers "is it time yet?" and returns straight away.  The loop never pauses, so anything else you add to it gets a turn on every pass.  To run it, [install `chumicro_timing`](#install-a-library) and save the file as `code.py` on your CIRCUITPY drive.
 
 ### 2. Two things in one loop
 
-Add a button wired between pin `GP14` and `GND` (a Pico W pin name; use any free pin on your board).  Pressing it pauses the blink:
+Wire a button between pin `GP14` and `GND`.  `GP14` is a pin name on a Pico W.  Any free pin on your board works in its place.  Pressing the button pauses the blink:
 
 ```python
 import board, digitalio
@@ -81,7 +83,7 @@ blinking = True
 
 while True:
     now = ticks_ms()
-    button.check(now)               # read the button; this never waits
+    button.check(now)               # read the button without waiting
 
     if button.just_pressed:         # true on the one pass where the press landed
         blinking = not blinking
@@ -90,11 +92,11 @@ while True:
         led.value = not led.value
 ```
 
-The second job is one more `if` in the same loop.  With a `time.sleep(0.5)` in there, every press would wait up to half a second to be noticed.  Here the blink stops the moment you press.
+The second job is one more `if` in the same loop.  With a `time.sleep(0.5)` in the loop, a press would wait up to half a second before the code saw it.  Here the blink stops the moment you press.
 
 ### 3. Add WiFi and keep blinking
 
-WiFi takes seconds to join and can drop at any moment, so it needs a turn on every pass, forever.  ChuMicro packages a job like that as a *service*: an object with a `check(now)` method that answers "do you have work to do?" and a `handle(now)` method that does one small piece of it.  A `Runner` holds your services and timers.  Each `runner.tick()` gives every one of them its turn, and `runner.wait(now)` lets the CPU rest until the next one is due.
+WiFi takes seconds to join and can drop at any moment.  The code that keeps it up needs a turn on every pass, forever.  ChuMicro packages a job like that as a [*service*](docs/glossary.md#service): an object with a `check(now)` method that answers "do you have work to do?" and a `handle(now)` method that does one small piece of it.  A `Runner` holds your services and timers.  Each `runner.tick()` gives every one of them its turn.  `runner.wait(now)` lets the CPU rest until the next one is due.
 
 ```python
 import board, digitalio
@@ -124,13 +126,13 @@ while True:
     runner.wait(now)                            # rest until the next one is due
 ```
 
-Unplug your router while this runs.  The report says it is waiting, the WiFi service keeps retrying, and when the router comes back the board rejoins without you doing anything.  On MicroPython the LED blinks straight through all of it.  CircuitPython's firmware makes each connect attempt wait (up to 15 seconds, set by `connect_timeout_ms` in `WifiConfig`), so there the blink pauses during an attempt and resumes between them.  Opening a connection to a server has similar waits on both runtimes; [Does anything ever block?](docs/faq.md#does-anything-ever-block) lists them.
+Unplug your router while this runs.  The report prints `waiting for wifi` while the WiFi service keeps retrying.  When the router comes back, the board rejoins on its own.  On MicroPython, the LED blinks straight through the outage.  On CircuitPython, the blink pauses while each connect attempt runs.  [Does anything ever block?](docs/faq.md#does-anything-ever-block) lists that wait and the others.
 
-From here the same loop takes more services.  [`generator_fetch.py`](libraries/requests/examples/generator_fetch.py) fetches a web page every 30 seconds, written as one top-to-bottom function, and the [`mqtt_sensor_motor`](demos/mqtt_sensor_motor/) demo is a whole sensor-and-fan project talking MQTT.
+The same loop takes more services.  [`generator_fetch.py`](libraries/requests/examples/generator_fetch.py) fetches a web page every 30 seconds from one top-to-bottom function.  [Build a WiFi temperature sensor](docs/tutorial-wifi-sensor.md) grows this loop, one step at a time, into a board that publishes its temperature over MQTT.
 
 ## Install a library
 
-Your board needs CircuitPython 10.1 or newer, or MicroPython 1.27 or newer.  If it has neither, install one from [circuitpython.org/downloads](https://circuitpython.org/downloads) or [micropython.org/download](https://micropython.org/download/) by following the steps on your board's page.
+Your board needs CircuitPython 10.1 or newer, or MicroPython 1.27 or newer.  [Start here](docs/start-here.md#1-put-circuitpython-or-micropython-on-the-board) installs one on a board that has neither.
 
 Every library installs by name.  Swap `timing` for any library in [the table below](#the-libraries):
 
@@ -146,7 +148,7 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
 pip install chumicro-timing
 ```
 
-Then put your program on the board the way you already do: save it as `code.py` on the CIRCUITPY drive, or copy it to a MicroPython board with `mpremote cp blink.py :main.py` and press reset.  [The install guide](docs/install.md) covers the experimental channel, pre-compiled packages that use less RAM, and fixes for install errors.
+Save your program as `code.py` on the CIRCUITPY drive.  On MicroPython, copy it over with `mpremote cp blink.py :main.py` and press reset.  [Installing libraries](docs/install.md) covers the experimental channel, pre-compiled packages that use less RAM, and fixes for install errors.
 
 ## Try an example on a board
 
@@ -160,13 +162,13 @@ source .venv/bin/activate                 # puts the chumicro commands on your P
 chumicro-workspace deploy-example timing circuitpython_blink
 ```
 
-`deploy-example` copies the example and the libraries it imports onto your board, restarts it, and shows you what it prints.  The first run asks which serial port the board is on, works out whether it runs CircuitPython or MicroPython, and remembers it.  On a MicroPython board, deploy `micropython_blink` and check the LED pin at the top of that file.
+`deploy-example` copies the example and the libraries it imports onto your board, restarts the board, and shows what it prints.  On the first run, it finds the board's serial port, works out whether the board runs CircuitPython or MicroPython, and records both in `devices.yml`.  A MicroPython board takes `micropython_blink`.  Check the LED pin at the top of that file before you deploy it.
 
-`chumicro-workspace deploy-example --list` prints every example.  The networked ones read your WiFi name and password from `secrets.toml` at the repository root, which git ignores; [Wiring WiFi credentials](docs/wiring-wifi-credentials.md) shows the format.
+`chumicro-workspace deploy-example --list` prints every example.  The networked examples read your WiFi name and password from `secrets.toml` at the repository root, a file git ignores.  [Wiring WiFi credentials](docs/wiring-wifi-credentials.md#running-an-example-from-a-clone-of-the-chumicro-repository) shows its format.
 
 ## Start your own project
 
-Copy the [workbench template](https://github.com/ChuMicro/ChuMicro-Workbench-Template) and build in that.  Your code lives on your laptop under version control, and one command (a *deploy*) copies it and the libraries it needs onto the board, so nothing is lost when a USB cable wiggles mid-save.  Your WiFi password stays in a `secrets.toml` that git ignores and reaches the board only at deploy time.
+Copy the [workbench template](https://github.com/ChuMicro/ChuMicro-Workbench-Template) and build there.  Your code stays on your laptop under version control.  A *deploy* copies it, the libraries it imports, and your settings onto the board.
 
 ```bash
 git clone --depth 1 https://github.com/ChuMicro/ChuMicro-Workbench-Template my-workspace
@@ -179,60 +181,60 @@ python3 run.py bootstrap --demo                 # registers your board and sends
 
 ## The libraries
 
-Each library installs independently and pulls in as little as possible.  Install one for a sensor sketch, or combine a dozen for a connected device.
+Each library installs on its own and brings along only the ChuMicro libraries it depends on.
 
 | Library | What it's for |
 |---|---|
 | **[timing](libraries/timing/)** | Timers and deadlines that never block.  "Every 5 seconds, read the sensor."  "No reply in 2 seconds, give up."  No `time.sleep()`. |
-| **[runner](libraries/runner/)** | The scheduler.  Register your services, call `runner.tick()` in your loop, everyone gets a turn.  `runner.wait()` idles the CPU between events. |
-| **[buttons](libraries/buttons/)** | Buttons, switches, and key matrices.  A press lands even when your loop is busy, and debouncing, long presses, auto-repeat, and click counting come with it. |
-| **[knobs](libraries/knobs/)** | Rotary encoders and analog knobs, read as a number that holds still.  A fast spin arrives whole; a parked wiper stops jittering. |
-| **[wifi](libraries/wifi/)** | One WiFi service for both device runtimes.  Connects, retries with backoff, reconnects on drop, and tells your app what changed. |
+| **[runner](libraries/runner/)** | The scheduler.  `runner.tick()` gives every registered service and timer its turn.  `runner.wait()` idles the CPU until the next one is due. |
+| **[buttons](libraries/buttons/)** | Buttons, switches, and key matrices.  A press lands even while your loop is busy.  Debouncing, long presses, auto-repeat, and click counting are built in. |
+| **[knobs](libraries/knobs/)** | Rotary encoders and analog knobs, read as a number that holds still.  A fast spin arrives whole.  A potentiometer left alone reads steady. |
+| **[wifi](libraries/wifi/)** | One WiFi service for both board runtimes.  Connects, retries with backoff, reconnects after a drop, and tells your app what changed. |
 | **[requests](libraries/requests/)** | HTTP/1.1 client.  Once the connection is open, a slow server never freezes your loop. |
-| **[http_server](libraries/http_server/)** | HTTP/1.1 server with a `@server.route` decorator.  TLS where the runtime supports it; the guide has the current map. |
+| **[http_server](libraries/http_server/)** | HTTP/1.1 server with a `@server.route` decorator.  The guide lists which runtimes serve TLS. |
 | **[mqtt](libraries/mqtt/)** | MQTT 3.1.1 client with QoS 0 and 1, last will, retain, and TLS.  Stays connected while your loop does everything else. |
-| **[websockets](libraries/websockets/)** | WebSocket client and server, plain and TLS.  Pairs with `http_server` on one device. |
+| **[websockets](libraries/websockets/)** | WebSocket client and server, plain and TLS.  Shares a board with `http_server`. |
 | **[sockets](libraries/sockets/)** | TCP, TLS, and UDP that behave the same on all three runtimes.  Used underneath `requests`, `http_server`, `mqtt`, and `websockets`, and usable directly. |
 | **[ntp](libraries/ntp/)** | Gets the current time from a network time server.  Close enough to UTC for TLS certificate checks and honest log timestamps. |
-| **[config](libraries/config/)** | Typed runtime settings with one dotted-key convention (`wifi.ssid`, `mqtt.broker.host`) shared by every library. |
-| **[kvstore](libraries/kvstore/)** | Small persistent storage for what must survive a reboot: boot counters, tokens, timestamps.  Picks the right backend for your board. |
-| **[msgpack](libraries/msgpack/)** | Binary serialization, smaller than JSON for typical sensor payloads.  Compatible with the wider `msgpack` ecosystem. |
-| **[compat](libraries/compat/)** | The few standard-library pieces the device runtimes don't ship, so one file of code can run everywhere. |
+| **[config](libraries/config/)** | Typed runtime settings with one dotted-key naming scheme (`wifi.ssid`, `mqtt.broker.host`) shared by every library. |
+| **[kvstore](libraries/kvstore/)** | Small persistent storage for what must survive a reboot: boot counters, tokens, timestamps.  Picks the storage your board has. |
+| **[msgpack](libraries/msgpack/)** | Binary serialization, smaller than JSON for typical sensor payloads.  Reads and writes the same bytes as PyPI's `msgpack`. |
+| **[compat](libraries/compat/)** | Standard-library pieces the board runtimes lack, such as `functools.partial`, so one file of code runs on all three runtimes. |
 
-[`libraries/README.md`](libraries/) says when to reach for each one and draws how they depend on each other.
+[`libraries/README.md`](libraries/) says when to reach for each library and draws how they depend on each other.
 
 ## Demos
 
-Each demo is a small project where your board and your laptop play both sides of a real exchange, run with one command from a clone of this repo.
+Each demo is a small project in which your board and your laptop talk to each other.  One command from a clone of this repository runs it.
 
-- **[`mqtt_sensor_motor`](demos/mqtt_sensor_motor/)**: the board publishes its temperature over MQTT and takes fan-speed commands back, lighting its LED while the fan runs.  Your laptop runs the broker and the controller.
-- **[`press_through_fetch`](demos/press_through_fetch/)**: the board fetches a page from your laptop every three seconds while you press a button whenever you like.  Every press is reported, mid-fetch included.
-- **[`http_server_roundtrip`](demos/http_server_roundtrip/)**: the board serves web pages, and your laptop finds it on the network and calls them.
-- **[`laptop_roundtrip`](demos/laptop_roundtrip/)**: no board needed.  A web request, the server it talks to, and a blinking LED share one loop on your laptop, so you can watch the request finish without the blink ever pausing.
+- **[`mqtt_sensor_motor`](demos/mqtt_sensor_motor/)**: the board publishes its temperature over MQTT and takes fan-speed commands back.  Its LED lights while the fan runs.  Your laptop runs the broker and the controller.
+- **[`press_through_fetch`](demos/press_through_fetch/)**: the board fetches a page from your laptop every three seconds while you press a button at any moment.  Every press is reported, mid-fetch included.
+- **[`http_server_roundtrip`](demos/http_server_roundtrip/)**: the board serves web pages.  Your laptop finds it on the network and requests them.
+- **[`laptop_roundtrip`](demos/laptop_roundtrip/)**: no board needed.  A web request, the server it talks to, and a blinking LED share one loop on your laptop.  The blink keeps going while the request runs.
 
-After the one-time setup in [Try an example on a board](#try-an-example-on-a-board), run a demo's driver, for example `python demos/mqtt_sensor_motor/driver.py`.  Each demo's README says what to wire, what you will see, and what it needs (the MQTT demos need the `mosquitto` broker installed).  [`demos/`](demos/) lists them all.
+After the one-time setup in [Try an example on a board](#try-an-example-on-a-board), run a demo's driver, such as `python demos/mqtt_sensor_motor/driver.py`.  [`demos/README.md`](demos/) lists every demo, simplest first, with what each one needs.
 
 ## Laptop tools
 
 | Tool | What it does |
 |---|---|
-| **[chumicro-workspace](workbench/workspace/)** | The one you reach for first: register boards, install firmware, deploy code, open a REPL, scaffold projects, run checks. |
-| **[chumicro-deploy](workbench/deploy/)** | Lower-level board operations: probe what's running, push files, flash firmware, and fail with messages that say what to do next. |
+| **[chumicro-workspace](workbench/workspace/)** | Registers boards, installs firmware, deploys code, opens a REPL, scaffolds projects, and runs checks.  Most work goes through this command. |
+| **[chumicro-deploy](workbench/deploy/)** | Lower-level board operations: probe what's running, push files, flash firmware.  Each failure message says what to do next. |
 | **[chumicro-repl](workbench/repl/)** | Serial REPL and output tailing with readable tracebacks.  Scriptable from Python when a tool or test needs to drive a board. |
-| **[chumicro-pytest-device](workbench/pytest-device/)** | The pytest plugin that runs tests on a connected board and reports the results like any other test run. |
+| **[chumicro-pytest-device](workbench/pytest-device/)** | A pytest plugin that runs tests on a connected board and reports each result as a normal test line. |
 
 ## Going deeper
 
-- **Why generators and not `async`/`await`?**  [Does this use async and await?](docs/faq.md#does-this-use-async-and-await) answers it in a paragraph; [Decision 0087](plans/decisions/0087-generators-for-sequential-io.md) makes the full case, compiler sources included.
-- **Using one library inside a project that isn't built on ChuMicro.**  Every library takes its socket and its clock as arguments, so it runs from a loop you already have.  [Standalone integration](docs/contributing/standalone-integration.md) is the recipe.
-- **How the libraries are kept honest.**  Each one runs its tests on your laptop's Python and on desktop builds of MicroPython and CircuitPython, carries a flash-size ceiling that CI enforces, and runs on real boards before release.  [CONTRIBUTING.md](CONTRIBUTING.md#testing) shows how to run the same tests.
-- **Why things are the way they are.**  Every non-obvious choice has a [decision record](plans/decisions/) with the alternatives and the evidence.
-- **Working with an AI coding agent.**  The tools give an agent a command for every step (probe a board, flash firmware, deploy, read the output), and [`AGENTS.md`](AGENTS.md) is its manual for this repo.
+- **Why generators and not `async`/`await`?**  [Does this use async and await?](docs/faq.md#does-this-use-async-and-await) gives the short answer.  [Decision 0087](plans/decisions/0087-generators-for-sequential-io.md) makes the full case, compiler sources included.
+- **One library inside a project built without ChuMicro.**  Every library takes its socket and its clock as arguments, so it runs from any existing loop.  [Standalone integration](docs/contributing/standalone-integration.md) is the recipe.
+- **How the libraries are tested.**  Each library runs its tests on your laptop's Python and on desktop builds of MicroPython and CircuitPython.  CI holds each one under a flash-size ceiling.  Each one runs on real boards before release.  [CONTRIBUTING.md](CONTRIBUTING.md#testing) shows how to run the same tests.
+- **Why ChuMicro is built this way.**  The [decision records](plans/decisions/) give each design choice with its alternatives and its evidence.
+- **Working with an AI coding agent.**  The laptop tools give an agent a command for every step: probe a board, flash firmware, deploy, read the output.  [`AGENTS.md`](AGENTS.md) is the agent's manual for this repository.
 - **Hosted documentation.**  [chumicro.com/ChuMicro](https://chumicro.com/ChuMicro/) has a guide and API reference for every library, plus the [Questions people ask](docs/faq.md) page.
 
 ## Contributing
 
-Issues, bug reports, and pull requests are welcome.  So is "I ran it on this board and here's what happened," which is some of the most useful feedback a hardware project gets.  Start with [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Issues, bug reports, and pull requests are welcome.  So is a note that says "I ran it on this board, and here's what happened."  Start with [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ```text
 libraries/    the libraries that run on boards (and your laptop)

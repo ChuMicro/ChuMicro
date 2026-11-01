@@ -1,271 +1,257 @@
 # Guide
 
-`chumicro-workspace` is the host-side CLI for running ChuMicro projects on real boards from your laptop.  It builds on [`chumicro-deploy`](https://chumicro.com/ChuMicro/deploy/stable/) for the transports, firmware flashing, and the `devices.yml` schema, and picks up [`chumicro-repl`](https://chumicro.com/ChuMicro/repl/stable/) when you ask for an interactive session or a tail.  On top of those it adds the workspace-shaped pieces: a deploy-time config merge, a CLI that reads `workspace.yml`, board-state onboarding, firmware URL derivation, and the boot shim that lets a project ship an `app.py` with a `run()` instead of hand-writing a `code.py`.
+`chumicro-workspace` runs on your laptop and puts your Python projects on CircuitPython and MicroPython boards.  It registers a board, creates a project, copies the project and the libraries it imports onto the board, and shows what the board prints.
 
-This guide walks through the typical workflows end to end.  See the [API reference](api.md) for the module-level docs.
+The commands below are written the way a workspace made from the [workbench template](https://github.com/ChuMicro/ChuMicro-Workbench-Template) runs them: `python3 run.py <command>`.  The template's `run.py` starts `chumicro-workspace` from the workspace's own virtual environment.  Where `chumicro-workspace` is on your `PATH`, after `pip install chumicro-workspace` or in a clone of the ChuMicro repository, `chumicro-workspace <command>` is the same command.
+
+## Before you start
+
+You need a board with CircuitPython or MicroPython on it, a USB cable that carries data, and a workspace made from the workbench template.  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) sets up all three.
+
+## 1. Register the board
+
+Plug the board in and run:
+
+```bash
+python3 run.py bootstrap
+```
+
+`bootstrap` picks the board's serial port, works out whether the board runs CircuitPython or MicroPython, and records it in `devices.yml`.  With one serial port in sight it uses that port.  With several, it lists them and asks for a number.  It names the board after its model and runtime, such as `raspberry-pi-pico-w-cp`.  A name of your own goes first: `python3 run.py bootstrap back-porch`.  When it finishes, it prints the commands to run next.
+
+The first board registered for each runtime becomes that runtime's default board.  Every command that talks to a board uses the default board.  `--device <id>` picks another, and `python3 run.py devices` lists the registered boards.
+
+`--demo` also sends the board a counting program, so it prints something straight away:
+
+```bash
+python3 run.py bootstrap --demo
+```
+
+A script or CI job names the board and the port, so nothing waits for an answer:
+
+```bash
+python3 run.py bootstrap back-porch --address /dev/cu.usbmodem1101 --non-interactive
+```
+
+When the board does not answer, `bootstrap` prints what it found and what to do.  A drive such as `RPI-RP2` in place of a Python prompt means the board sits in its bootloader with no CircuitPython or MicroPython running.  A port that opens with no Python prompt behind it usually needs fresh firmware.  A port that will not open points at the cable or a driver.  [Board not found](https://chumicro.com/ChuMicro/guides/troubleshooting/board-not-found/) and [Getting firmware onto a new board](https://chumicro.com/ChuMicro/guides/troubleshooting/firmware-onto-a-new-board/) walk the fixes.
+
+## 2. Create a project and deploy it
+
+```bash
+python3 run.py new blinker
+python3 run.py deploy blinker
+```
+
+`new` copies `projects/_template/` to `projects/blinker/`.  The copy holds `app.py`, where your code goes inside a function named `run()`, and `project_config.toml` for settings that belong to this project.
+
+`deploy` copies the project onto the board and restarts the board.  The board starts from a `code.py` (`main.py` on MicroPython) that `deploy` generates.  That file imports `app.py` and calls `run()`.  The terminal then shows what the board prints right after the restart.
+
+A project name can be a path.  `new garage/door_open` creates `projects/garage/door_open/`.  `deploy door_open` finds that project by its last part.  With one project in the workspace, `deploy` needs no name at all.  A board runs one project at a time, and the next deploy replaces it.
+
+## 3. Watch the board's output
+
+```bash
+python3 run.py deploy blinker --tail 30   # deploy, then show 30 seconds of output
+python3 run.py repl --tail 30             # show 30 seconds of output, no deploy
+python3 run.py repl                       # type at the board's Python prompt
+```
+
+`--tail` streams what the board prints and highlights tracebacks as they scroll past.  It stops after the number of seconds you give, or 30 with no number.  The exit code is non-zero when a traceback shows up, so a script can tell a crash from a clean run.  `--no-fail-on-traceback` turns that check off.  `deploy --tail` follows one board, so it needs one project and one board.
+
+`repl` opens the board's interactive Python prompt, the REPL.  On a terminal it edits each line on your laptop before sending it, keeps your history between sessions, and completes names from the board with Tab.  `:help` lists the prompt's own commands.  Ctrl-X leaves without restarting the board.  `--mode passthrough` sends each key straight to the board, for paste mode.
+
+## 4. Add a library
+
+```bash
+python3 run.py library add chumicro_timing
+```
+
+`library add` fetches the library's published release into `libraries/chumicro_timing/`, along with every ChuMicro library it depends on, and records each one in the `libraries:` table of `workspace.yml`.
+
+Replace `projects/blinker/app.py` with a loop that uses it:
+
+```python
+from chumicro_timing import Rate, ticks_ms
+
+
+def run():
+    tick = Rate(1000, ticks_ms())       # due once a second
+    count = 0
+    while True:                         # set up once, then loop until the power goes
+        now = ticks_ms()
+        if tick.due(now):               # is it time yet?
+            count += 1
+            print("tick", count)
+```
+
+Then deploy it and watch:
+
+```bash
+python3 run.py deploy blinker --tail 10
+```
+
+`deploy` reads the `import` lines in `app.py`, follows them into `libraries/`, and copies every library the project reaches to `/lib/` on the board.  An import it cannot find stops the deploy before anything is copied.  The message names the module, and [Deploy refused for an import](https://chumicro.com/ChuMicro/guides/troubleshooting/deploy-refused-importerror/) covers each case.
+
+The library stays at the version `library add` fetched.  `python3 run.py library list` shows each library's channel and version.  [Libraries in depth](#libraries-in-depth) covers updates, the experimental channel, and removal.
+
+## 5. Keep your WiFi password in secrets.toml
+
+`secrets.toml` sits at the top of the workspace and holds the values every project shares, such as WiFi credentials and the MQTT broker address.  Git ignores it.  `setup` creates it with placeholder values.  Replace them with your own:
+
+```toml
+[wifi]
+ssid = "your-network"
+password = "your-password"
+```
+
+Each project's `project_config.toml` holds the settings for that project alone.  A key set in both files takes the project's value:
+
+```toml
+# projects/blinker/project_config.toml
+[blink]
+period_ms = 250
+```
+
+Each deploy merges the two files and copies the result onto the board as `/runtime_config.msgpack`.  On the board, `load_runtime_config()` from the `chumicro_config` library reads it.  Every key arrives under a flat dotted name, so `ssid` in the `[wifi]` table becomes `wifi.ssid`.  Fetch the library, then read the period from the settings:
+
+```bash
+python3 run.py library add chumicro_config
+```
+
+```python
+from chumicro_config import load_runtime_config
+from chumicro_timing import Rate, ticks_ms
+
+
+def run():
+    config = load_runtime_config()
+    period_ms = config.get("blink.period_ms", 500)   # 500 when no file sets it
+    tick = Rate(period_ms, ticks_ms())
+    count = 0
+    while True:
+        now = ticks_ms()
+        if tick.due(now):
+            count += 1
+            print("tick", count)
+```
+
+`python3 run.py dump-config blinker` prints the merged settings, as the board receives them, without deploying.  [Wiring WiFi credentials](https://chumicro.com/ChuMicro/guides/wiring-wifi-credentials/) lists every key the libraries read.  [Settings in depth](#settings-in-depth) covers the merge rules.
 
 ## Workspace layout
 
-A workspace has this shape:
-
 ```
 my-workspace/
-├── workspace.yml          # workspace machinery: library_sources, deploy_targets, quality
-├── secrets.toml           # workspace-wide credentials and device defaults
-├── devices.yml            # board registry
-├── pyproject.toml
+├── run.py                 # runs chumicro-workspace from the workspace's virtual environment
+├── workspace.yml          # workspace machinery: libraries, deploy_targets, quality, library_sources
+├── secrets.toml           # credentials and defaults every project shares
+├── devices.yml            # the registered boards
+├── quality.toml           # lint and coverage settings for test, lint, and preflight
 ├── projects/
-│   ├── _template/         # `chumicro-workspace new` copies from here
-│   ├── back-porch/        # one project
-│   │   ├── project_config.toml
-│   │   └── app.py         # def run(): ...
-│   └── kitchen/
-│       └── ...
-├── shared/                # flat shared modules, imported by bare name
-├── libraries/             # full chumicro-style library packages (`new <name> --library`)
-│   └── buttons/
-│       ├── src/chumicro_buttons/
-│       ├── tests/
-│       ├── docs/
-│       └── pyproject.toml
-└── packages/              # third-party modules you vendor in yourself
+│   ├── _template/         # new copies this folder
+│   ├── blinker/           # one project
+│   │   ├── app.py         # def run(): ...
+│   │   └── project_config.toml
+│   └── garage/
+│       └── door_open/     # a nested project
+├── shared/                # your own helper modules, imported by bare name
+├── libraries/
+│   ├── chumicro_timing/   # fetched with library add
+│   │   └── src/chumicro_timing/
+│   └── gpio/              # created with new gpio --library
+│       └── src/gpio/
+└── packages/              # third-party modules you copy in yourself
 ```
 
-The two requirements are `workspace.yml` (`WorkspaceLayout` walks up from cwd to find it, git-style) and `projects/`.
+`chumicro-workspace` finds the workspace by walking up from the current folder to the first one that holds `workspace.yml`, so every command works from any folder inside it.
 
-`secrets.toml` holds real wifi passwords and broker credentials, so never commit it.  `workspace.yml` and `devices.yml` carry machine-specific paths and board ids, so most workspaces keep those out of git as well.  Check what your `.gitignore` covers before the first commit.
+The template's `.gitignore` keeps `secrets.toml`, `workspace.yml`, and `devices.yml` out of git.  `secrets.toml` holds real passwords.  The other two hold paths and board ids that differ from one computer to the next.
 
-### `shared/` vs `libraries/`: when to use each
+### Where shared code goes
 
-Both hold code your projects can `import`.  Pick by weight:
+Every project can import from `shared/`, `libraries/`, and `packages/`.  Pick the folder by the size of the code:
 
-| Want to ship… | Drop it under | Imports look like | Notes |
+| Code | Folder | Import | Notes |
 |---|---|---|---|
-| A 50-line helper your projects share | `shared/foo.py` | `from foo import bar` | No tests, no version, no scaffolding.  The search path roots at `shared/` itself, so there is no `shared.` prefix to qualify against. |
-| A full chumicro-style library you might publish someday | `libraries/<name>/` (via `new <name> --library`) | `import <name>` | Gets `src/`, `tests/`, `docs/`, `examples/`, `pyproject.toml`, and `VERSION`: the standard publishable-library layout. |
-| A published chumicro library | `libraries/<name>/` (via `library add <name>`) | `import chumicro_<name>` | Fetched from the release channel along with the chumicro libraries it imports.  A re-fetch backs up a tree you have edited instead of clobbering it. |
-| A third-party module you vendor yourself | `packages/` | `import <name>` | Nothing populates this for you.  Drop files in and the search path finds them last. |
+| A short helper several projects share | `shared/foo.py` | `from foo import bar` | No tests, no version.  The import uses the bare module name, never `shared.foo`. |
+| A library of your own, with tests | `libraries/<name>/`, from `new <name> --library` | `import <name>` | Gets `src/`, `tests/`, `docs/`, `examples/`, `pyproject.toml`, and `VERSION`. |
+| A published ChuMicro library | `libraries/chumicro_<name>/`, from `library add chumicro_<name>` | `import chumicro_<name>` | Arrives with the ChuMicro libraries it depends on. |
+| A third-party module | `packages/` | `import <name>` | Copy the files in by hand. |
 
-The import-graph search path resolves in this order: explicit `library_sources:` overrides, then `shared/`, then every `libraries/<name>/src/` (auto-discovered), then `packages/`.  So a library scaffolded with `new buttons --library` is importable as `import buttons` from any project without further wiring.
+`deploy` looks for an imported module in this order: the project's own folder, any `library_sources:` paths in `workspace.yml`, `shared/`, each `libraries/<name>/src/`, then `packages/`.  A library from `new buttons --library` is importable as `import buttons` from any project with no further setup.
 
-Getting the `shared/` spelling wrong is the common first stumble.  A module at `shared/foo.py` is `from foo import bar`, never `from shared.foo import bar`, and a deploy that hits the wrong spelling says so before it ships anything.
+A module at `shared/foo.py` is `from foo import bar`.  The spelling `from shared.foo import bar` stops the deploy with a message that shows the bare-name form.
 
-## Day-zero: bring up a board
+## Boards and devices.yml
 
-The fastest path is `bootstrap`: it picks a port, probes the runtime, registers the board in `devices.yml`, and prints what to run next.
-
-```bash
-chumicro-workspace bootstrap
-```
-
-Run interactively it fills in the blanks for you, auto-picking the only serial port it sees or prompting with a numbered list when there are several.  Add `--demo` to chain into the built-in demo deploy so a freshly registered board ships something in the same command.  For CI or scripted setup, name the id and the port outright:
+`bootstrap` is `add-device` plus the list of next steps.  The two commands take the same options.  `add-device` suits a second or third board:
 
 ```bash
-chumicro-workspace bootstrap back-porch --address /dev/cu.usbmodem1101 --non-interactive
+python3 run.py discover                       # list serial ports; run it before and after plugging in
+python3 run.py add-device kitchen --address /dev/cu.usbmodem1102 --runtime micropython
+python3 run.py probe --device kitchen         # print the runtime, version, model, and unique id
+python3 run.py rename --device kitchen kitchen-window
+python3 run.py remove-device kitchen-window --yes
 ```
 
-`bootstrap` installs no firmware and opens no REPL.  It is `add-device` plus a next-steps footer, so if a board needs firmware first, see [Firmware](#firmware) below.
+Without `--runtime`, `add-device` tries CircuitPython and then MicroPython.  `--force` updates an entry that already has the id and keeps your description.  It suits a different board swapped in under the same name.  `reset-device <id> --yes` rebuilds an entry from the connected board and drops the fields you set by hand.
 
-The slower and more explicit path is what `bootstrap` composes:
+With a default board for each runtime, a command needs `--device <id>`, or `--runtime circuitpython` or `--runtime micropython` to pick that runtime's default.
 
-```bash
-# Plug a board in, see what serial ports the host exposes.
-chumicro-workspace discover
+### Who owns each field
 
-# Probe the board over serial.  Fails with a structured diagnosis if
-# the board is in UF2 bootloader mode, the serial port is busy, or
-# the runtime doesn't respond.  Runtime is auto-detected when
-# --runtime is omitted (it tries both transports).
-chumicro-workspace add-device back-porch --address /dev/cu.usbmodem1101 --runtime micropython
-```
+`devices.yml` keeps your comments and field order through every rewrite.  A field's group decides which commands change it:
 
-### The three `devices.yml` zones
-
-`add-device` writes an entry under `devices.yml`'s `devices:` block, and every later command rewrites the file in place with your comments and field order intact.  Which fields a rewrite may touch depends on the zone:
-
-| Zone | Fields | Rewrite rule |
+| Group | Fields | Changed by |
 |---|---|---|
-| User-owned | `id`, `description`, `deploy_mode`, `serial_baudrate` | Yours.  Nothing overwrites them. |
-| Probed-always | `address`, `firmware_version` | Refreshed silently on every probe, because a board moves between ports. |
-| Hardware-once | `runtime`, and the `hardware:` block (`uid`, `machine`, `board_id`, `firmware_source`) | Written once.  Changing one needs an explicit `--force`, because a changed uid usually means you swapped boards. |
+| Yours | `id`, `description`, `deploy_mode`, `serial_baudrate` | Your edits.  `rename --device` changes `id`, and `reset-device` clears the other three. |
+| Read from the board | `address`, `firmware_version` | `add-device --force`, because a board moves between ports and gets new firmware. |
+| Read once | `runtime`, and the `hardware:` block (`uid`, `machine`, `board_id`, `firmware_source`) | `add-device --force` rewrites the `hardware:` block, and `reset-device` rewrites both, because a new unique id usually means a different board. |
 
-[`detect_board_state`](api.md) drives onboarding when the probe fails.  The four states are `REPL_REACHABLE` (fine), `UF2_BOOTLOADER` (a visible mount with `INFO_UF2.TXT`, which suggests `install-firmware --method uf2`), `NO_PROBE_RESPONSE` (board on serial but no Python prompt, which suggests an esptool reflash), and `SERIAL_UNREACHABLE` (the port doesn't open, so check the cable and the driver).
+When a probe fails, [`detect_board_state`](api.md) sorts the board into one of these states and prints the next step:
 
-## Workspace health
+- The Python prompt answered, and the board is fine.
+- The board shows a UF2 bootloader drive holding `INFO_UF2.TXT`, so it needs firmware.
+- The port opened with no Python prompt behind it, so the board needs an `esptool` reflash.
+- The port would not open, which points at the cable or a driver.
 
-`status` is the one-screen "is anything obviously broken" check.  Every `deploy` runs the same fast checks as a pre-flight gate: ERROR-level findings (a malformed `workspace.yml` or `devices.yml`) abort before any bytes reach the device, while WARN-level findings (no devices registered yet, for instance) print and let the deploy proceed.  Pass `deploy --skip-health-check` to skip the gate in CI or power-user flows.
-
-Run it directly to see the snapshot:
-
-```bash
-chumicro-workspace status
-# WORKSPACE              /Users/you/projects/my-house
-# WORKSPACE.YML          ✓ valid
-# DEVICES.YML            ✓ 2 devices registered
-# PROJECTS               ✓ 4 projects: garage/sensors/door_open, …
-```
-
-`doctor` is the strict sibling.  It runs every `status` check plus a Python-version probe and an AST scan for `def run` in each project's `app.py`:
+## Check the workspace: status and doctor
 
 ```bash
-chumicro-workspace doctor
-# Adds rows for PYTHON and PROJECT run() defs.
-# Exit code is 1 only on ERROR-level findings; warnings stay 0 so
-# the command composes cleanly with shell-pipe checks.
+python3 run.py status
+# WORKSPACE      /Users/you/my-workspace
+# WORKSPACE.YML  ✓ valid
+# SECRETS.TOML   ✓ valid
+# DEVICES.YML    ✓ 2 devices registered
+# PROJECTS       ✓ 4 projects: blinker, garage/door_open, …
 ```
 
-## Building a project
+`status` prints one line per check on `workspace.yml`, `secrets.toml`, `devices.yml`, and `projects/`.  Every `deploy` runs the same checks before it copies anything.  An error, such as a `devices.yml` that will not parse, stops the deploy.  A warning, such as no registered boards, prints and lets the deploy go on.  `deploy --skip-health-check` skips the checks.
 
-```bash
-# Copy projects/_template/ into projects/back-porch/.
-chumicro-workspace new back-porch
+`doctor` runs every `status` check, then checks the Python version, that each project's `app.py` defines `run()`, that no other program holds a registered board's serial port, and on macOS that the system still mounts drives such as `CIRCUITPY`.  Both commands exit 1 on an error and 0 on warnings alone, so a shell script can test them.
 
-# Nested layouts work too.  Intermediate namespace directories are
-# created for you with empty __init__.py markers, so host-side imports
-# (`from projects.garage.sensors.door_open.app import run`) resolve.
-chumicro-workspace new garage/sensors/door_open
-chumicro-workspace new garage.sensors.door_open      # dotted form, same effect
+`doctor --fix-fskit-wedge` clears the macOS hang that stops `CIRCUITPY` from mounting.  [CIRCUITPY on macOS](https://chumicro.com/ChuMicro/guides/troubleshooting/macos-circuitpy/) explains the hang and the fix.
 
-# Copy an existing tree instead of the blank template.  --from takes any
-# directory under the workspace root that contains an app.py, code.py,
-# or main.py entry point.
-chumicro-workspace new garage/heater --from examples/two_board_handshake/server
+## How deploy builds the file list
 
-# Scaffold a chumicro-style library (full src/tests/docs/examples tree).
-# Lands at <workspace>/libraries/<name>/ by default; --into <dir>
-# overrides.  --workbench scaffolds a host-only tool the same way.
-chumicro-workspace new gpio --library
-```
+`deploy` picks what to copy from the shape of the project:
 
-### How config flows from your edits to the device
+| Project holds | Board receives | Libraries |
+|---|---|---|
+| `app.py` with a top-level `run()`, and no `code.py` or `main.py` | The project's files, plus a generated `code.py` (`main.py` on MicroPython) | Every library `app.py` imports, under `/lib/` |
+| `code.py` for a CircuitPython board, or `main.py` for a MicroPython board | The project's files, as they are | None, unless you pass `--import-graph` |
 
-The runtime config a project receives at boot is the deep-merge of two host-side files, both using the same `[section]`-keyed TOML shape:
+Either way, the merged settings travel along as `/runtime_config.msgpack`.  `project_config.toml` and the `_generated/` folder stay on your laptop.
+
+For an `app.py` project, the board receives:
 
 ```
-secrets.toml                       projects/<name>/project_config.toml
-  workspace-wide credentials         per-project knobs: sample period,
-  and device defaults, in one        mqtt topic, sensor pins.  Wins on
-  place.  Keep it out of git.        any key both files set.
-              │                                   │
-              └────────────────┬──────────────────┘
-                               ▼
-                        merge_configs           ← chumicro_workspace.merge
-                               │                  (deep per-key merge: dicts
-                               ▼                   recurse, lists replace)
-                       flatten_config           ← chumicro_workspace.flatten
-                               │                  ([wifi] ssid becomes the
-                               ▼                   flat key "wifi.ssid")
-                    write_runtime_config        ← chumicro_workspace.writer
-                               │                  (use_single_float=True so
-                               ▼                   CircuitPython's built-in
-          /runtime_config.msgpack on device        msgpack module accepts it)
-                               │
-                               ▼
-                   chumicro_config.runtime      ← reads it on the device
-```
-
-`workspace.yml` is separate.  It carries workspace **machinery** (`library_sources`, `deploy_targets`, `quality`, the curated `libraries` table), not runtime config, and nothing from it lands on the device.
-
-Use `chumicro-workspace dump-config <project>` to print the merged dict your project would receive without deploying anything.  It is the fastest way to find out which file a key came from.
-
-`secrets.toml` carries credentials and workspace-wide device defaults; `project_config.toml` carries the per-project knobs:
-
-```toml
-# secrets.toml: values flow into every project that doesn't override them
-[wifi]
-ssid = "HomeNet"
-password = "my-real-wifi-password"
-```
-
-```toml
-# projects/back-porch/project_config.toml
-[mqtt]
-host = "192.168.1.10"
-topic = "projects/back-porch/state"
-```
-
-`app.py` exports a `run()` function, which the synthesised entrypoint shim imports and calls:
-
-```python
-# projects/back-porch/app.py
-import time
-
-def run():
-    print("back-porch coming up")
-    while True:
-        # ... your project's main loop ...
-        time.sleep(1)
-```
-
-## Deploying
-
-Two things vary independently.  The *layout* decides what file map gets built (flat, boot-shim, import-graph, or boot-shim plus import-graph) and deploy picks it from the shape of your project.  The *deploy mode* decides where the files land: `flash` writes them to the board's filesystem so they survive a reset, `ram` pushes them into memory for a fast throwaway run.  A device's mode lives in its `devices.yml` entry, and `--deploy-mode {ram,flash}` overrides it for one run.
-
-### Single project, default flat layout
-
-```bash
-chumicro-workspace deploy back-porch
-```
-
-Ships the project's directory contents to the device root via [`project_directory_source`](api.md): `app.py` lands at `/app.py`, `project_config.toml` is host-only and skipped, `_generated/` is skipped.  The merged runtime config msgpack rides along at `/runtime_config.msgpack` (the path the on-device `chumicro_config.load_runtime_config()` reads).  The device entrypoint is `/code.py` for CircuitPython and `/main.py` for MicroPython by default; override with `--entrypoint`.
-
-### Single project, AST-walked
-
-```bash
-chumicro-workspace deploy back-porch --import-graph
-```
-
-Routes through [`project_import_graph_source`](api.md): it AST-parses the entrypoint, walks the `import` and `from ... import` targets, resolves them against the workspace's `shared/`, `libraries/<name>/src/`, and `packages/` directories plus any `library_sources:` overrides in `workspace.yml`, and ships only the modules it reached.  Use it when a project imports shared code you don't want to copy by hand.
-
-### Installing libraries without the workspace tooling
-
-The default path pulls chumicro libraries into the workspace with `chumicro-workspace library add <name>`, then `deploy --import-graph` ships the ones a project imports to the board's `/lib/`.  Both steps fetch from the host's network.
-
-When the host can't reach the snapshot channel (air-gapped, behind a custom registry, or simply offline), install onto the board directly with the runtime's own package manager.  Both pull from `ChuMicro-Bundle`, take the libraries your project imports, and resolve transitive chumicro dependencies for you:
-
-```bash
-# CircuitPython: register the bundle once per machine, then install by name
-circup bundle-add ChuMicro/ChuMicro-Bundle
-circup install chumicro_wifi chumicro_mqtt chumicro_runner
-
-# MicroPython: one mip install per library, and the board needs wifi to fetch
-mpremote connect /dev/cu.usbmodem1101 mip install \
-    github:ChuMicro/ChuMicro-Bundle/chumicro_wifi
-mpremote connect /dev/cu.usbmodem1101 mip install \
-    github:ChuMicro/ChuMicro-Bundle/chumicro_mqtt
-```
-
-`circup` uses hyphens (`chumicro-wifi`); `mip` uses the underscore import name (`chumicro_wifi`).  Swap `ChuMicro-Bundle` for `ChuMicro-Bundle-Experimental` to track the pre-release channel.  Files land at `/lib/chumicro_<name>/` either way, the same place `deploy --import-graph` writes them, so a project deployed afterward finds its imports.  Full install matrix, pre-compiled `.mpy` bytecode, and pip-on-CPython: [the install guide](https://chumicro.com/ChuMicro/guides/install/).
-
-### Pointing the library channel at a mirror
-
-`library add`, `browse`, and `update` fetch from GitHub by default.  Two environment variables move the channel to any server that carries the same tree layout, over `https`, `http`, or `file`:
-
-```bash
-export CHUMICRO_CHANNEL_FILES_BASE="https://mirror.example"     # replaces raw.githubusercontent.com
-export CHUMICRO_CHANNEL_TARBALLS_BASE="https://mirror.example"  # replaces codeload.github.com
-```
-
-The URL paths keep the GitHub shapes (`<owner>/<repo>/<ref>/<path>` for raw files, `<owner>/<repo>/tar.gz/refs/tags/<tag>` for snapshot tarballs), so a mirror is a plain directory tree.  `python -m http.server` and a `file://` base both work.  The same seam exercises the acquisition path against a locally staged channel before any live repo exists.
-
-### Single project, boot-shim layout
-
-A project that ships `app.py` with a top-level `run()` and no `code.py` / `main.py` of its own gets this layout automatically, so you rarely pass the flag by hand:
-
-```bash
-chumicro-workspace deploy back-porch --boot-shim
-```
-
-Your project's files land at the device root, and deploy synthesises the entrypoint next to them:
-
-```
-/code.py                  # synthesised, three lines (or /main.py on MicroPython)
+/code.py                  # generated (main.py on MicroPython)
 /app.py                   # your code: def run(): ...
-/helpers.py               # anything else in the project directory
-/runtime_config.msgpack   # merged config
+/helpers.py               # any other file in the project folder
+/runtime_config.msgpack   # the merged settings
+/lib/chumicro_timing/...  # the libraries app.py imports
 ```
 
-The synthesised file is exactly this, and deploy overwrites it every time, so don't edit it on the board:
+Every deploy writes the generated file again, so edits to it on the board are lost.  It holds exactly this:
 
 ```python
 # Shipped by chumicro-workspace; do not edit.
@@ -273,85 +259,229 @@ from app import run as _run
 _run()
 ```
 
-Only the runtime-matching filename is written, never both.  Deploy owns that one file; you own everything else at the device root.
+`deploy` writes only the file the board's runtime starts from, `code.py` or `main.py`.  A project holding only `code.py`, deployed to a MicroPython board, stops with a message before anything is copied.  So does a project holding only `main.py`, deployed to a CircuitPython board.
 
-Combine it with `--import-graph` to also ship the libraries `app.py` imports to `/lib/`, which is what the auto-detected path does when a project reaches for chumicro libraries.
+`deploy` also refuses these project shapes before it copies anything:
 
-### One project per board
+- `app.py` defines `async def run()`.  The generated file calls `run()` without awaiting it, so the board would start and do nothing.  ChuMicro code runs in a plain `while True:` loop.
+- `code.py`, `main.py`, or `app.py` calls `microcontroller.reset()` or `machine.reset()`.  The reset would run on every start and reboot the board forever.
+- Any copied module calls a reset at its top level, for the same reason.  A reset inside a function the code calls on purpose is fine.
 
-A board runs one project at a time.  To change which one, deploy the other.
+`--boot-shim` and `--import-graph` choose the layout by hand.  Passing either flag replaces the automatic choice with exactly the flags you pass, so `--boot-shim` alone generates `code.py` without copying libraries.
 
-Staging several projects on one board (the old `deploy <a> <b> <c>` form and the `switch` command that went with it) was removed: the staged copies overran the flash budget on the smallest supported board class, 256 KB of MCU RAM with 2 MB physical flash and roughly 800 KB usable.  Pass one project name per `deploy` call.  Ordinary deploys already remove stale files, and `deploy --wipe` gives you a known-empty board when you want one.
-
-### Inspect what would land with `--dry-run`
-
-```bash
-chumicro-workspace deploy garage/sensors/door_open --dry-run
-```
-
-Builds the file map like a real deploy, then prints it (path, size, one-word category) instead of calling the transport.  Useful when:
-
-* You want to confirm the runtime config actually made it in.  The msgpack shows up in the listing with its real size.
-* A library you expected isn't reaching the board.  Anything under `/lib/` is categorised `library`, so a short list means the import walk didn't find it.
-* You want to read what deploy actually does.  The output's shape is stable enough to serve as documentation.
-
-The categories are `shim` (`/code.py` or `/main.py`, which is the firmware entrypoint no matter who wrote it), `config` (`/runtime_config.msgpack`), `library` (anything under `/lib/`), and `file` (everything else at the device root).
-
-### Multi-board deploys with `--all-devices`
+### See the file list first with --dry-run
 
 ```bash
-chumicro-workspace deploy garage/door_open --all-devices
+python3 run.py deploy garage/door_open --dry-run
 ```
 
-Loops over every entry in `devices.yml` and ships the project to each in declaration order.  Per-device failures don't abort the loop; the exit code is 1 if any device's deploy failed, 0 otherwise.  Mutually exclusive with `--device` / `--runtime` (caught at runtime with a precise message).
+`--dry-run` builds the file list the way a real deploy does, prints each board path with its size and a one-word kind, and leaves the board untouched.  The kinds are:
 
-### Per-project default device with `deploy_targets:`
+- `shim`: `/code.py` or `/main.py`, the file the board starts from.
+- `config`: `/runtime_config.msgpack`.
+- `library`: anything under `/lib/`.
+- `file`: everything else.
 
-When a workspace has several boards, typing `--device <id>` for every deploy gets tedious.  `workspace.yml`'s `deploy_targets:` block maps each project to its default device or devices, so a bare `deploy <project>` with no `--device` or `--runtime` picks the mapped target.  Projects that aren't in the mapping fall back to `devices.yml`'s `defaults:` block.
+A library missing from the `library` rows means the import walk never reached it.
+
+## Choosing the board
+
+Without `--device`, `deploy` uses the board that `workspace.yml` maps to the project under `deploy_targets:`, or else the default board in `devices.yml`.  The mapping saves typing `--device` in a workspace with several boards:
 
 ```yaml
 deploy_targets:
-  garage/door: pi-pico-w-circuitpython-board   # a bare string is fine
+  garage/door: pi-pico-w-circuitpython-board   # one board
   garage/window: [lolin-s2-circuitpython-board]
-  garage/server:                               # several devices, so a list
+  garage/server:                               # several boards
     - pi-pico-w-micropython-board
     - lolin-s2-micropython-board
 ```
 
-`deploy --all-projects` walks the whole mapping at once, every project to every device it lists, in declaration order.  It is mutually exclusive with positional names, `--device`, `--runtime`, and `--all-devices`.  A failure on one (project, device) pair doesn't abort the loop, and the exit code reflects whether any failed.  An empty or missing `deploy_targets:` block exits 2 with a hint.
+`--all-devices` and `--all-projects` deploy in a loop, and a failure on one target moves on to the next.  The exit code is non-zero when any target failed:
 
-### Clean-slate deploys with `--wipe`
+- `deploy <name> --all-devices` sends one project to every board in `devices.yml`, in file order.  It conflicts with `--device` and `--runtime`.
+- `deploy --all-projects` sends every project in `deploy_targets:` to each board listed for it, in file order.  It conflicts with a project name, `--device`, `--runtime`, and `--all-devices`, and exits 2 when `deploy_targets:` is empty.
+
+## What deploy removes from the board
+
+A plain `deploy` leaves the board holding the new files plus `boot.py`, `boot_out.txt`, and `_chu_kv.msgpack`, where `chumicro_kvstore` saves data across restarts.  It removes every other file, including a `settings.toml` on the board, because that file's WiFi settings compete with the ones `secrets.toml` provides.
+
+| Option | What survives on the board |
+|---|---|
+| `--no-wipe` | Everything outside `/lib/` and the startup and settings files (`code.py`, `main.py`, `active.py`, `runtime_config.msgpack`).  Files you copied over by hand stay. |
+| (none) | `boot.py`, `boot_out.txt`, and `_chu_kv.msgpack`. |
+| `--wipe` | Nothing.  The whole filesystem is erased before the copy. |
+
+`--wipe` suits a board whose filesystem is corrupted.  CircuitPython runs `storage.erase_filesystem()`, which reformats the drive and restarts the board.  MicroPython on RP2040, RP2350, and ESP32 boards reformats its filesystem and restarts.  Both leave the firmware itself alone.  `reset-board --yes` erases the same way and deploys nothing afterward.  [Deploys and file persistence](https://chumicro.com/ChuMicro/guides/troubleshooting/deploys-and-file-persistence/) covers a deploy that removed files you wanted to keep.
+
+## RAM mode and flash mode
+
+A board's `deploy_mode` in `devices.yml` decides where `deploy` puts the files.  `flash`, the default, writes them to the board's storage, where they survive a restart.  `ram` runs them without writing storage: CircuitPython runs the code over the serial connection, and MicroPython reads the files from your laptop while it runs.  A restart ends a RAM-mode run.  `--deploy-mode ram` or `--deploy-mode flash` sets the mode for one run.
+
+`deploy` switches a RAM-mode run to flash, and prints why, when a library in the file list declares `requires_flash = true` under `[tool.chumicro]` in its `pyproject.toml`, or when the file list holds any file other than `.py`.  Every project deploy carries `/runtime_config.msgpack`, so a project deploy lands in flash on a RAM-mode board too.  `--force-deploy-mode ram` keeps RAM mode anyway, for debugging that switch.  `--wipe` and `reset-board` do nothing in RAM mode.
+
+## When a deploy fails
+
+When the board prints a traceback that matches a known mistake, `deploy` prints a `--- hints ---` block under it:
+
+- `NameError: name '<name>' is not defined` points at a missing `from ... import ...` in `app.py`.
+- An `OSError` naming `runtime_config.msgpack` points at RAM mode, which leaves that file off the board, and suggests flash mode.
+- An `ImportError` or `ModuleNotFoundError` naming a `chumicro_*` module suggests running `setup` again.
+- `KeyError: '<key>'` names the missing setting and points at `project_config.toml` and `secrets.toml`.
+
+A traceback that matches none of them prints with no hints block.  [`detect_hints`](api.md) holds the patterns.
+
+## Libraries in depth
+
+`library add` pins each library at the version it fetched.  `--floating` records a library as following the latest release instead.  `library update` refreshes every floating library:
 
 ```bash
-chumicro-workspace deploy garage/door_open --wipe
+python3 run.py library add chumicro_mqtt --floating
+python3 run.py library update                # refresh every floating library
+python3 run.py library add chumicro_mqtt --version <tag>   # fetch one release tag
 ```
 
-A plain `deploy` is already clean-slate: it removes anything on the board that isn't part of the new payload, apart from a small keep set the device itself needs (`boot.py`, `boot_out.txt`, `_chu_kv.msgpack`).  A board-resident `settings.toml` is evicted, because it competes with config-driven wifi.
+`--channel experimental` fetches pre-release versions.  `library switch-channel <name> stable` moves a library back to the stable channel.  `library browse` opens a catalog to pick libraries from on a terminal.  `library remove <name>` deletes the library's folder and keeps its record in `workspace.yml` marked declined, so `update` skips it.  `library forget <name>` drops the record as well.  Both warn when another fetched library still needs the one you remove.
 
-Three levels, from gentlest to harshest:
+Each fetch moves the copy already in `libraries/<name>/` to `_library-backups/<name>/` first, so local edits survive in the backup.  A `.chumicro-local` file inside `libraries/<name>/` claims the folder as yours.  Every later fetch leaves that folder alone.
 
-| Flag | What survives |
-|---|---|
-| `--no-wipe` | Everything you put on the board by hand.  Only the entrypoint, the state files, and `/lib` get reconciled. |
-| (default) | The keep set.  Everything else that isn't the new payload goes. |
-| `--wipe` | Nothing.  The whole filesystem is erased before the payload is staged, keep set included. |
+### Pointing the library channel at a mirror
 
-Reach for `--wipe` when the board is corrupted or you want a provably empty starting point.  CircuitPython runs `import storage; storage.erase_filesystem()`, which reformats the FAT volume and reboots the board; MicroPython walks the user filesystem and removes every file and directory.  Firmware partitions are untouched on both runtimes, and the flag is a no-op in RAM-mode deploys since nothing was written to flash.
+`library add`, `browse`, `update`, and `switch-channel` fetch from GitHub.  Two environment variables move them to any server that holds the same folder layout, over `https`, `http`, or `file`:
 
-### Failure hints
+```bash
+export CHUMICRO_CHANNEL_FILES_BASE="https://mirror.example"     # replaces raw.githubusercontent.com
+export CHUMICRO_CHANNEL_TARBALLS_BASE="https://mirror.example"  # replaces codeload.github.com
+```
 
-When the deploy traceback matches a known workspace-shaped pattern, an indented `--- hints ---` block prints below it pointing at the fix:
+The paths keep GitHub's shapes: `<owner>/<repo>/<ref>/<path>` for single files and `<owner>/<repo>/tar.gz/refs/tags/<tag>` for release archives.  A plain folder served by `python -m http.server`, or a `file://` base, works as a mirror.
 
-* `NameError: name '<sym>' is not defined` points at the missing `from ... import ...` in `app.py`.
-* `OSError ... runtime_config.msgpack` explains that RAM-mode deploys don't persist the config msgpack, and to switch the device to flash mode.
-* `ImportError` or `ModuleNotFoundError` naming a `chumicro_*` module says the library isn't installed in this venv and suggests re-running `setup`.
-* `KeyError: '<key>'` names the missing config key and points at `projects/<project>/project_config.toml` and `secrets.toml`.
+### Installing libraries without the workspace tools
 
-Driven by [`detect_hints`](api.md) over the captured traceback and execute output.  When nothing matches, no header prints, so unmatched failures don't carry an empty heading.
+`circup` on CircuitPython and `mip` on MicroPython install ChuMicro libraries straight onto a board from `ChuMicro-Bundle`, along with the ChuMicro libraries each one needs:
 
-### Programmatic deploy
+```bash
+# CircuitPython: register the bundle once per computer, then install by name
+circup bundle-add ChuMicro/ChuMicro-Bundle
+circup install chumicro_wifi chumicro_mqtt chumicro_runner
 
-The CLI is a thin wrapper over the Python API.  Build a source explicitly when you need finer control:
+# MicroPython: one mip install per library, and the board needs WiFi to fetch
+mpremote connect /dev/cu.usbmodem1101 mip install \
+    github:ChuMicro/ChuMicro-Bundle/chumicro_wifi
+mpremote connect /dev/cu.usbmodem1101 mip install \
+    github:ChuMicro/ChuMicro-Bundle/chumicro_mqtt
+```
+
+Swap `ChuMicro-Bundle` for `ChuMicro-Bundle-Experimental` to install pre-release versions.  Files land in `/lib/chumicro_<name>/` on the board.  The next `deploy` removes every one of them its own file list leaves out, so `circup` and `mip` suit a board you program by hand, without `deploy`.  [The install guide](https://chumicro.com/ChuMicro/guides/install/) covers pre-compiled `.mpy` files and `pip` for the laptop.
+
+## Settings in depth
+
+`deploy` builds the board's settings from two files with the same `[table]` layout:
+
+```
+secrets.toml                       projects/<name>/project_config.toml
+  credentials and defaults           settings for this project:
+  every project shares.              sample period, MQTT topic,
+  Git ignores it.                    pins.  Wins on any key both set.
+              │                                   │
+              └────────────────┬──────────────────┘
+                               ▼
+                        merge_configs           ← chumicro_workspace.merge
+                               │                  (tables merge key by key,
+                               ▼                   a list replaces a list)
+                       flatten_config           ← chumicro_workspace.flatten
+                               │                  ([wifi] ssid becomes the
+                               ▼                   flat key "wifi.ssid")
+                    write_runtime_config        ← chumicro_workspace.writer
+                               │                  (32-bit floats, which
+                               ▼                   CircuitPython's msgpack reads)
+          /runtime_config.msgpack on the board
+                               │
+                               ▼
+                 load_runtime_config()          ← chumicro_config, on the board
+```
+
+Nested tables merge key by key at any depth, so a project can change `mqtt.topic` and keep `mqtt.host` from `secrets.toml`.  A list in `project_config.toml` replaces the list in `secrets.toml` whole.  The board reads flat dotted keys, one lookup per key.
+
+`workspace.yml` holds workspace machinery: the `libraries:` table, `deploy_targets:`, `quality:`, and `library_sources:`.  None of it reaches the board.
+
+`python3 run.py config-validate` checks every project's merged settings against the settings each library in the workspace marks as required, prints `OK` or `FAIL` per project, and exits 1 on any failure.
+
+[`compose_runtime_config`](api.md) returns the merged, flattened settings as a dict and writes nothing, which suits tests.  [`build_runtime_config`](api.md) also writes the file `deploy` copies:
+
+```python
+from pathlib import Path
+from chumicro_workspace.pipeline import build_runtime_config
+
+build_runtime_config(
+    secrets_toml=Path("secrets.toml"),
+    project_config=Path("projects/blinker/project_config.toml"),
+    output_path=Path("projects/blinker/_generated/runtime_config.msgpack"),
+)
+```
+
+## Firmware
+
+`install-firmware` downloads the latest stable release of the runtime a registered board already runs, and flashes it.  `--method` picks the flashing tool: `uf2` for RP2040 and RP2350 boards such as the Pi Pico, `esptool` for ESP32 boards.
+
+```bash
+python3 run.py install-firmware --method uf2                       # a Pi Pico
+python3 run.py install-firmware --method esptool                   # an ESP32 board
+python3 run.py install-firmware --method uf2 --allow-prerelease    # include release candidates
+python3 run.py install-firmware --method uf2 --url https://example.com/custom.uf2
+```
+
+The command puts the board into its bootloader where it can, and otherwise prompts for the manual step, such as holding BOOTSEL while plugging in a Pico.  `upgrade-firmware` is the same command under another name.
+
+`install-firmware` reads the board's details from `devices.yml`, so the board must be registered first.  A board with no CircuitPython or MicroPython on it gets its first firmware the way [Start here](https://chumicro.com/ChuMicro/guides/start-here/) describes.
+
+Without `--url`, the download address comes from the board's `devices.yml` entry, through `derive_firmware_url` in [`chumicro-deploy`](https://chumicro.com/ChuMicro/deploy/stable/api/):
+
+1. `hardware.firmware_source`, when set, is used as it is.  A vendor build or a mirror goes here.
+2. A CircuitPython board gets the latest stable build for its `hardware.board_id` from the Adafruit download bucket.
+3. A MicroPython board gets the latest stable build from micropython.org for its `hardware.machine`, through a built-in table of board names.
+
+ESP32 boards on MicroPython take a `.bin` file in place of `.uf2`.  Add `firmware_extension: bin` under the entry's `hardware:` block.
+
+`add-device` prints a warning, and registers the board anyway, when its firmware is older than CircuitPython 10.1 or MicroPython 1.27, or reports a version it cannot read.  [`check_firmware_supported`](api.md) makes that comparison.
+
+## Code checks: test, lint, preflight
+
+```bash
+python3 run.py test -- -k blink -x   # pytest; its own flags go after --
+python3 run.py lint -- --fix         # ruff, then chumicro-checks; ruff's flags go after --
+python3 run.py preflight             # lint, then test, stopping at the first failure
+```
+
+`test`, `lint`, and `preflight` read their settings from `quality.toml` and `workspace.yml`.  `quality.toml` at the workspace root holds the settings git tracks.  The `quality:` block in `workspace.yml` overrides them on one computer:
+
+```toml
+# quality.toml: shared settings, tracked by git
+coverage_threshold = 85    # top-level keys go before any [table]
+
+[lint]
+enabled = true
+tools = ["ruff", "chumicro-checks"]
+select = ["E", "F", "I"]
+```
+
+```yaml
+# workspace.yml: this computer's overrides
+quality:
+  lint:
+    enabled: false
+```
+
+- `lint.enabled = false` makes `lint` print a note and run nothing.
+- `lint.tools` picks the tools.  The default runs both.  An empty list acts like `enabled = false`.  An unknown tool name fails when the settings load.
+- `lint.select` goes to ruff as `--select <list>`, ahead of the flags after `--`, so your own flags win.
+- `coverage_threshold` goes to pytest as `--cov-fail-under=<n>`.
+
+With neither file present, linting runs and coverage has no minimum.  [`load_quality_config`](api.md) reads and checks both files, and an error names the file that holds the bad value.
+
+## Python API
+
+The CLI is built on the Python modules the [API reference](api.md) documents, and a script can call them directly.  This script deploys an `app.py` project with a generated `main.py` and no libraries, the layout `--boot-shim` alone gives:
 
 ```python
 from chumicro_deploy import Device, Deployer
@@ -362,7 +492,7 @@ workspace = WorkspaceLayout.from_dir()
 device = Device(transport="micropython", address="/dev/cu.usbmodem1101")
 
 source = project_boot_source(
-    workspace.project_dir("garage/sensors/door_open"),
+    workspace.project_dir("garage/door_open"),
     workspace=workspace,
     entrypoint_filename="main.py",
 )
@@ -370,118 +500,9 @@ result = Deployer(device).deploy_diff(source)
 assert result.success
 ```
 
-`deploy_diff` is the one deploy entry point: it asks the transport what is currently on the board, deletes what the new payload doesn't include, then writes and runs.
+`deploy_diff` asks the board which files it holds, deletes the ones the new file list leaves out, then copies the new files and starts the board.
 
-## REPL
-
-```bash
-# Interactive REPL on the default device.
-chumicro-workspace repl
-
-# Tail only: stream output for a window, then exit.  Useful for CI and
-# scripted "watch the next 30 seconds" checks.
-chumicro-workspace repl --tail 30
-```
-
-`repl` takes no project name.  To deploy and then watch in one command, put the tail on the deploy:
-
-```bash
-chumicro-workspace deploy garage/sensors/door_open --tail
-chumicro-workspace deploy garage/sensors/door_open --tail 60
-```
-
-`--tail` defaults to 30 seconds when you give it no number, and needs exactly one project and one device.  It exits non-zero if a traceback shows up in the tailed output; pass `--no-fail-on-traceback` when that isn't what you want.
-
-## Quality knobs
-
-`lint`, `test`, and `preflight` read their gates from two files.  `quality.toml` at the workspace root is the committed policy that travels with the repo, and `workspace.yml`'s `quality:` block is the per-machine override that wins on any key it sets.
-
-```toml
-# quality.toml: shared policy, committed
-coverage_threshold = 85    # top-level keys go before any [table]
-
-[lint]
-enabled = true
-tools = ["ruff", "chumicro-checks"]
-select = ["E", "F", "I"]
-```
-
-```yaml
-# workspace.yml: your machine's overrides
-quality:
-  lint:
-    enabled: false
-```
-
-The knobs:
-
-* `lint.enabled = false` turns `lint` into a no-op that prints a hint, so the command stays discoverable but runs nothing.
-* `lint.tools` picks which tools run.  The default runs both `ruff` and `chumicro-checks`; drop one to disable it without disabling the whole phase.  An empty list behaves like `enabled = false`, and a name outside the known set is rejected at load time so a typo surfaces instead of silently skipping a tool.
-* `lint.select` is forwarded to ruff as `--select <comma list>` ahead of anything you pass after `--`, so your own arguments still win.
-* `coverage_threshold` is forwarded to pytest as `--cov-fail-under=<n>`, which lets you set the gate without editing `pyproject.toml`'s `[tool.coverage.report]`.
-
-[`load_quality_config`](api.md) reads both files, validates each one separately so an error names the file that carries it, and merges them.  With neither file present you get permissive defaults: linting on, no coverage gate.  A malformed shape raises `WorkspaceConfigError` naming the offending field.
-
-## Config merge
-
-[`build_runtime_config`](api.md) is the deploy-time pipeline:
-
-1. Read `secrets.toml`, the workspace-wide credentials and device defaults.
-2. Read `projects/<name>/project_config.toml`.
-3. Deep-merge in that order.  The later layer wins at any nesting depth, dicts recurse, and lists replace wholesale.
-4. Flatten nested tables to dotted keys, so `[wifi] ssid` becomes `"wifi.ssid"`.  The device-side reader works with the flat shape: one hash lookup per key, no recursion.
-5. Pack as msgpack via the standard `msgpack` library with `use_single_float=True` for CircuitPython, and write to `projects/<name>/_generated/runtime_config.msgpack`.
-
-The deploy then ships that msgpack to `/runtime_config.msgpack` on the device, where apps read it via `chumicro-config`'s `load_runtime_config()`.
-
-`compose_runtime_config` runs the same steps and hands back the dict without writing anything, which is what you want in tests.  To regenerate the msgpack on disk without deploying:
-
-```python
-from pathlib import Path
-from chumicro_workspace.pipeline import build_runtime_config
-
-build_runtime_config(
-    secrets_toml=Path("secrets.toml"),
-    project_config=Path("projects/back-porch/project_config.toml"),
-    output_path=Path("projects/back-porch/_generated/runtime_config.msgpack"),
-)
-```
-
-## Firmware
-
-```bash
-# CircuitPython: latest stable from the Adafruit S3 bucket.
-chumicro-workspace install-firmware --method uf2
-
-# MicroPython: latest dated build from micropython.org/download/<BOARD>/.
-chumicro-workspace install-firmware --method esptool
-
-# Pre-release windows (CP only):
-chumicro-workspace install-firmware --method uf2 --allow-prerelease
-
-# Vendor or custom URL pinned in devices.yml, where the device entry
-# sets hardware.firmware_source: "https://my-mirror/...uf2"
-chumicro-workspace install-firmware --method uf2     # picks up firmware_source
-
-# Or override at the call site:
-chumicro-workspace install-firmware --url https://example/custom.uf2 --method uf2
-```
-
-With no `--url`, the URL is derived from the device entry in this order, by `derive_firmware_url` in [`chumicro-deploy`](https://chumicro.com/ChuMicro/deploy/stable/api/):
-
-1. `hardware.firmware_source` is set, so it is returned verbatim.
-2. The runtime is CircuitPython, so the Adafruit S3 bucket listing gives the latest stable build.
-3. The runtime is MicroPython, so a curated machine-to-BOARD map plus a micropython.org lookup gives the latest stable dated build.
-
-ESP32-family boards need `.bin` instead of `.uf2`.  Set `hardware.firmware_extension = "bin"` in the device entry to point the MicroPython lookup at the right file.
-
-`chumicro-workspace` also checks whether a board's installed firmware is new enough for the libraries you are deploying; see [`check_firmware_supported`](api.md).
-
-## `devices.yml` round-trip
-
-`devices.yml` is yours to comment and order however you like, and every rewrite preserves both.  That comes from `ruamel.yaml`, which round-trips comments and key order where PyYAML discards comments and sorts keys alphabetically.
-
-The schema and its writers live in `chumicro-deploy`, which owns the file.  Every mutation is load, mutate, dump:
+`devices.yml` belongs to `chumicro-deploy`, which reads and writes it with `ruamel.yaml` so comments and key order survive.  Every change is load, change, dump:
 
 ```python
 from pathlib import Path
@@ -497,11 +518,9 @@ update_device_address(devices, "back-porch", "/dev/cu.usbmodem1102")
 dump_devices(devices, Path("devices.yml"))
 ```
 
-`update_device_hardware` raises `HardwareOverwriteError` when a hardware-once field would change; pass `force=True` when you really did swap boards.  `rename_device` also rewrites any `defaults.<runtime>` reference pointing at the old id.  `remove_device` deletes an entry, nulls any `defaults.<runtime>` that pointed at it so the file stays loadable, and returns the removed entry for callers that want to re-register under the same id.
+`update_device_hardware` raises `HardwareOverwriteError` when a read-once field would change.  `force=True` allows the change after a board swap.  `rename_device` also rewrites any `defaults.<runtime>` entry that named the old id.  `remove_device` deletes an entry, clears any `defaults.<runtime>` that named it, and returns the removed entry.
 
-## Workbench-only
-
-This package runs on CPython and never on a microcontroller.  The on-device side of the workspace contract is [`chumicro-config`](https://chumicro.com/ChuMicro/config/stable/).
+`chumicro-workspace` runs on CPython on your laptop.  Its board-side half is [`chumicro-config`](https://chumicro.com/ChuMicro/config/stable/), which reads the settings file each deploy writes.
 
 ---
 

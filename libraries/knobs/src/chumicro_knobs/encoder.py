@@ -1,8 +1,12 @@
-"""Rotary encoders: detents counted into a position, with optional bounds and wrap."""
+"""``Encoder``: a rotary encoder read as a position counted in detents, with optional bounds and wrap.
+
+Attributes:
+    DEFAULT_DETENT_STEPS: The default number of quadrature steps in one detent, 4.  A
+        detent is the click felt as the shaft turns.
+"""
 
 import sys
 
-#: Quadrature steps that make one detent, the click a wrist feels as the shaft turns.
 DEFAULT_DETENT_STEPS = 4
 
 
@@ -23,25 +27,39 @@ def _select_encoder_source(pin_a, pin_b, *, detent_steps):
 
 
 class Encoder:
-    """One rotary encoder, read as a position in detents plus how far it just turned.
+    """One rotary encoder, read as a position counted in detents.
 
-    Every reading is a plain attribute refreshed by ``check(now_ms)``, and ``just_moved``
-    is true only for the tick the turning landed on.  ``position`` counts detents from
-    zero rather than reporting an angle, because an encoder knows how far its shaft moved
-    and never where it points.  The push switch under the shaft is a separate part on its
-    own pin.
+    Call ``check(now_ms)`` once per pass of the loop and read ``position`` and ``delta``.  Or
+    set ``on_change`` and register the encoder with ``runner.add(encoder, period_ms=20)``,
+    and the runner calls ``handle``, which calls it.  An encoder senses how far its shaft
+    turns and never where it points, so ``position`` counts detents from where the shaft sat
+    at startup.  The push switch under the shaft is a separate part on its own pin.
 
     Args:
-        pin_a: First quadrature pin, named the way this runtime names pins.  Pass both
-            pins or pass ``source``.
-        pin_b: Second quadrature pin.  Swapping the two reverses which way counts up.
-        source: Pre-built quadrature source; overrides the pins.  Tests inject a fake here.
-        detent_steps: Quadrature steps that make one detent.  Four suits a panel-mount
-            encoder with a click at every cycle; use 1 for a smooth one with no clicks.
-        bounds: ``(low, high)`` inclusive range ``position`` is held inside, or None to let
-            it run in both directions forever.
-        wrap: True to carry ``position`` around the ends of ``bounds`` instead of stopping
-            there, which is what a hue selector or a menu ring wants.  Needs ``bounds``.
+        pin_a: The first quadrature pin, such as ``board.GP16`` on CircuitPython, or a pin
+            number or ``machine.Pin`` on MicroPython.
+        pin_b: The second quadrature pin.  Swapping the two reverses which way counts up.
+        source: A ready-made quadrature source, used in place of the pins.  Tests pass
+            ``FakeEncoderSource`` from ``chumicro_knobs.testing``.
+        detent_steps: Quadrature steps in one detent.  4 suits a panel-mount encoder that
+            clicks once per cycle.  1 suits a smooth encoder with no clicks.
+        bounds: An inclusive ``(low, high)`` range that holds ``position``, or None to let it
+            run in both directions without limit.
+        wrap: True carries ``position`` around from one end of ``bounds`` to the other, as a
+            menu ring or a hue picker wants.  False stops it at the ends.  Needs ``bounds``.
+
+    Attributes:
+        position: Detents turned so far, starting at 0, or at the nearer end of ``bounds``
+            when 0 lies outside them.  Assign to it to restore a saved reading.
+        delta: Detents this tick added to ``position``, negative for the other direction.
+            Turning past an end of ``bounds`` without ``wrap`` adds 0.
+        just_moved: True only on the tick ``position`` changed.
+        on_change: Called with ``delta`` when the knob turns.
+
+    Raises:
+        ValueError: ``detent_steps`` is below 1, neither both pins nor ``source`` was
+            given, or ``wrap`` is True without ``bounds``.
+        RuntimeError: Pins were given on CPython, which has no pins to watch.
     """
 
     def __init__(
@@ -88,27 +106,23 @@ class Encoder:
             elif start_position > self._high:
                 start_position = self._high
 
-        #: Detents counted so far, held inside ``bounds`` when there are any.  Assign to it
-        #: to restore a reading saved at shutdown without turning the shaft.
         self.position = start_position
-        #: Detents this tick added to ``position``, negative the other way round.  Held
-        #: against a bound with no wrap, the turning that did not fit reports as zero.
         self.delta = 0
-        #: True only on the tick ``position`` changed.
         self.just_moved = False
-        #: Called with the signed detent change when the knob turns.
         self.on_change = None
 
         self._last_raw_position = self._source.raw_position
 
     def check(self, now_ms: int) -> bool:
-        """Read how far the shaft turned since the last tick and fold it into ``position``.
+        """Read how far the shaft turned since the last tick and add it to ``position``.
+
+        Call it once per pass of the loop.  It never waits.
 
         Args:
-            now_ms: Tick this pass of the loop is measured from.
+            now_ms: The current tick, from ``ticks_ms()``.
 
         Returns:
-            True when ``position`` changed, so a quiet tick can skip ``handle``.
+            True when ``position`` changed, which is when ``handle`` has ``on_change`` to call.
         """
         source = self._source
         source.poll(now_ms)
@@ -140,10 +154,13 @@ class Encoder:
         return self.just_moved
 
     def handle(self, now_ms: int) -> None:
-        """Call ``on_change`` when this tick's turning earned it."""
+        """Call ``on_change(delta)`` when ``check`` reported a change this tick."""
         if self.just_moved and self.on_change is not None:
             self.on_change(self.delta)
 
     def deinit(self) -> None:
-        """Release the pins and any interrupt the source installed."""
+        """Release the pins and stop the interrupt or firmware counter reading them.
+
+        Call it before using the pins for something else.
+        """
         self._source.deinit()

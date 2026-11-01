@@ -58,8 +58,8 @@ def _add_workspace_arg(parser: argparse.ArgumentParser) -> None:
         type=Path,
         default=None,
         help=(
-            "Workspace root.  Defaults to walking up from the current "
-            "directory until a workspace.yml is found."
+            "Workspace folder to use.  Defaults to the nearest folder, "
+            "at or above the current one, that holds workspace.yml."
         ),
     )
 
@@ -76,13 +76,20 @@ def _add_device_selector(parser: argparse.ArgumentParser) -> None:
         "--device",
         dest="device_id",
         default=None,
-        help="Pick a specific entry from devices.yml by id.",
+        help=(
+            "Board to use, by its id in devices.yml (the devices command "
+            "lists them).  Without --device or --runtime, the command "
+            "uses the default board in devices.yml."
+        ),
     )
     parser.add_argument(
         "--runtime",
         choices=("circuitpython", "micropython"),
         default=None,
-        help="Pick the default device for the named runtime.",
+        help=(
+            "Use the default board for this runtime.  Pass it when "
+            "devices.yml has a default board for each runtime."
+        ),
     )
 
 
@@ -98,9 +105,9 @@ def _add_non_interactive_arg(parser: argparse.ArgumentParser) -> None:
         "--non-interactive",
         action="store_true",
         help=(
-            "Skip prompts and recovery-coaching wrappers and fail fast "
-            "with a distinct exit code.  Auto-detected from stdin TTY "
-            "status; pass explicitly for CI / scripted runs."
+            "Never stop to ask a question or offer a retry.  A failure "
+            "exits at once, with a different exit code for each kind of "
+            "failure.  Pass it in CI and scripts."
         ),
     )
 

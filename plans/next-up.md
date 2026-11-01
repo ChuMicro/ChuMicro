@@ -28,6 +28,20 @@
 
 - [ ] **The kvstore guide names backends only private modules export.**  `MpNvsBackend` and `MpLittlefsBackend` live in `chumicro_kvstore._backends.*`; export them or document the capacity knob another way.
 
+- [ ] **Selecting some tests in a file fails under `chumicro-pytest-device`.**  `pytest file.py::test_x --target unix-port` (or `-k`) ends in "Device ran test(s) the host never collected": `collection.py` sends `name_filter=None` to the board but checks results against the selected items.
+
+- [ ] **`chumicro-pytest-device` needs the test harness in a standalone install.**  `session._installed_harness_source_dir` finds `chumicro_test_harness` with `find_spec`, and no declared dependency installs it.  Declare `chumicro-test-harness` once its publish status is settled.
+
+- [ ] **`KVStore.reload()` loses unsaved changes after a corrupt read.**  It clears `_dirty` before `load()`, so after `KVStoreCorrupt` the next `commit_if_changed()` writes nothing.
+
+- [ ] **The persisting-data page and Decision 0034 disagree on ESP32 NVS.**  `docs/troubleshooting/persisting-data.md` says a power cut can lose the whole saved block; Decision 0034 and the kvstore guide say an NVS commit is atomic.  Settle which holds and fix the other.
+
+- [ ] **Workbench CLI rough edges a newcomer hits.**  `add-device`, `bootstrap`, `demo`, and `repl` skip TTY auto-detection; `remove-device` and `reset-device` ignore `--non-interactive`; `deploy` lets `ConfigManifestError` escape as a traceback; the `chumicro_*` ImportError hint says to rerun `setup`, which fixes the laptop and leaves the board as it was; `chumicro-repl --baudrate` is parsed and never used; `chumicro-deploy deploy` and `flash-firmware` crash on piped input without `--non-interactive`.
+
+- [ ] **Sphinx roles render as literal text in workbench docstrings.**  The API pages render `:class:` and `:meth:` as plain text; the library API pages now use code spans, and about 1,140 roles remain in workbench/*/src and support/test_harness/src.
+
+- [ ] **Library examples name the tick `now`; READMEs and guides name it `now_ms`.**  The timing, buttons, and knobs examples still use `now`; rename it so a reader copying between a README and an example sees one name.
+
 - [ ] **AGENTS.md and the `task-checkpoint` skill disagree on committing.**  AGENTS.md says never commit unsolicited; the skill's step 6 commits and pushes at every checkpoint.  Reword one so they agree.
 
 - [ ] **`chumicro_test_harness.markers.marker` has no caller left.**  Decision 0123 moved every demo `app.py` to plain `print` for its `NAME key=value` lines, and the demos were the helper's only consumer; the sole remaining reference is `support/test_harness/tests/test_markers.py`.  Decide between deleting it with its lazy export in `chumicro_test_harness/__init__.py` and keeping it documented for people writing their own on-device tests.  Either way `markers.py` can join `_DEMO_UNUSED_HARNESS_MODULES` in `deploy_api.py`, which is flash back on a 256 KB board.  Note the guarantee that goes with it: `marker()` raised at develop time on a value carrying whitespace or `=`, where a hand-written print fails silently on the host parser instead.

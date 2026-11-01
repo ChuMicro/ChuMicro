@@ -72,6 +72,15 @@ class TestConnect:
         with raises(WebSocketURLError):
             client.connect("http://example.com/")
 
+    def test_bad_url_leaves_the_client_able_to_connect(self):
+        """A rejected URL raises without using up the client's one connect()."""
+        client, _socket, _clock, record = _make_client()
+        with raises(WebSocketURLError):
+            client.connect("http://example.com/")
+        client.connect("ws://example.com/")
+        assert client.url == "ws://example.com/"
+        assert len(record["calls"]) == 1
+
     def test_close_during_connecting_cancels_connector_and_finalizes(self):
         # Aborting a slow connect (state CONNECTING, no socket yet) must
         # not queue a CLOSE frame it can never send — the next handle()

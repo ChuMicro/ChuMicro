@@ -83,9 +83,12 @@ def _add_repl_parser(subparsers: argparse._SubParsersAction) -> None:
     """``repl``: interactive REPL or standalone tail mode."""
     repl_parser = subparsers.add_parser(
         "repl",
-        help=(
-            "Interactive REPL on the selected board, or tail its serial "
-            "output.  To deploy then watch, use `deploy <project> --tail`."
+        help="Open the board's Python prompt, or show its output for a while.",
+        description=(
+            "Open an interactive Python prompt on the board, the REPL.  "
+            "Ctrl-X leaves it.  repl --tail SECONDS prints the board's "
+            "output for that long and exits, with no prompt.  To deploy "
+            "and then watch in one command, run deploy <name> --tail."
         ),
     )
     _add_workspace_arg(repl_parser)
@@ -96,9 +99,9 @@ def _add_repl_parser(subparsers: argparse._SubParsersAction) -> None:
         default=None,
         metavar="SECONDS",
         help=(
-            "Run in tail mode for SECONDS instead of the interactive "
-            "TUI.  (To deploy then tail in one go, use "
-            "`deploy <project> --tail`.)"
+            "Print the board's output for SECONDS, then exit, in place "
+            "of the prompt.  The exit code is non-zero when a traceback "
+            "appears."
         ),
     )
     repl_parser.add_argument(
@@ -106,7 +109,7 @@ def _add_repl_parser(subparsers: argparse._SubParsersAction) -> None:
         dest="fail_on_traceback",
         action="store_false",
         default=True,
-        help="Tail mode only: do not exit non-zero on a detected traceback.",
+        help="With --tail, exit 0 even when the output shows a traceback.",
     )
     _add_non_interactive_arg(repl_parser)
     repl_parser.add_argument(
@@ -114,16 +117,14 @@ def _add_repl_parser(subparsers: argparse._SubParsersAction) -> None:
         choices=("auto", "line", "passthrough"),
         default="auto",
         help=(
-            "Interactive REPL mode.  `line` (the better-featured "
-            "default for terminal sessions) ships a host-side line "
-            "editor with persistent history, `:edit` editor handoff, "
-            "`:save`/`:load`/`:snippets`, and Tab completion against "
-            "the on-device namespace.  `passthrough` forwards "
-            "keystrokes byte-by-byte (mpremote-style, needed for "
-            "raw REPL framing or paste mode).  `auto` (default) "
-            "picks `line` when stdin is a TTY and `passthrough` "
-            "otherwise.  No effect with `--tail` (tail mode uses the "
-            "follower, not the interactive TUI)."
+            "How the prompt handles typing.  line edits each line on "
+            "your computer before sending it, with history kept between "
+            "sessions, Tab completion against the names on the board, "
+            "and the :edit, :save, :load, and :snippets commands.  "
+            "passthrough sends each key to the board as you press it, "
+            "for paste mode and raw REPL.  auto, the default, picks "
+            "line on a terminal and passthrough otherwise.  --tail "
+            "ignores this option."
         ),
     )
     repl_parser.set_defaults(func=_cmd_repl)

@@ -412,51 +412,101 @@ Another agent or the user may be working in this repo right now. Assume it.
 - Small focused diffs, preflight green, and commit messages that name the rule
   or decision applied.
 
-## Writing tone
+## Writing
 
-Read each sentence aloud. If you would not say it that way to a colleague,
-rewrite it. This governs replies and status updates as much as prose written
-into files.
+Say what a thing is and what it does, in the order things happen. These rules
+hold for every file, comment, and line of visible reasoning, replies and status
+updates included. A commit message, field note, review finding, or reply to
+the user reports a change instead. In a report the author is the actor and the
+verb comes first: `Rewrote connect_to_ap.py to loop forever`, `Bumped
+chumicro-wifi to 0.12.0`. The [`git-commit`](.github/skills/git-commit/SKILL.md)
+skill holds the commit form.
 
-Four checks per sentence:
+- Every sentence states one fact, with its subject doing something.
+  Punctuation is periods, commas, and colons. Two thoughts are two sentences.
+- Name the concrete case: the class, the function, the command, the file, the
+  value, in place of the category it belongs to. `shape`, `surface`,
+  `the algorithm`, and `the implementation` name a category.
+- A pronoun points at one named thing. Colloquialisms and implicit objects
+  read as a category too.
+- Every claim is affirmative and carries exactly the certainty the evidence
+  gives it. A negation has one use: rejecting an alternative the reader would
+  otherwise reach for.
+- A file describes its subject as it is. When a thing is removed or renamed,
+  the text stops mentioning it, and a changed rule is stated as the rule that
+  now holds. Git history holds what came before, the commit message holds the
+  why, and a field note holds what a session did.
+- A thing is introduced before it is called "the X". A paragraph opens on its
+  first fact.
+- A sentence describes its subject, never the reader or what the reader has
+  done.
+- Every fact has one home. Everywhere else links to it.
+- Prose stays true on any day it is read. Dates live in frontmatter, headers,
+  commit messages, and [`plans/field-notes/`](plans/field-notes/).
+- Cut any sentence that announces or counts what follows, sets up the next
+  one, or explains a change the content carries on its own.
 
-- **Concise.** Cut connectors that restate what the structure already implies.
-- **Direct.** Lead with the load-bearing fact.
-- **Concrete.** Name real classes, functions, and files. No `shape`, `surface`,
-  `the algorithm`, or `the implementation`.
-- **Professional.** No colloquialisms, implicit objects, or ambiguous pronouns.
+### Shapes to catch on the reread
 
-Say it once, in the fewest words that carry it. Length is not thoroughness. A
-second pass removes words; it does not add qualifiers.
+A comment saying code used to be here, or a sentence saying what a thing is
+not, is the writer talking about a thing by saying it is not talking about it.
+These shapes are the writer's context showing through. What sits in view while
+writing sways the writer more than any rule. Read prose that follows the rules
+above before writing. Read each paragraph back after writing it. At every join
+(a dash, a colon, a semicolon, a comma), read each side alone and hear whether
+the two sides are one thought or two. Never ship:
 
-Never ship:
-
-- **Em-dashes.** Enforced by `CHU037`.
-- **Litotes.** Affirming by negating the opposite: *not unlike*, *not
-  uncommon*, *necessary but not sufficient*, *does not cover it*. State the
-  positive claim.
-- **Tombstones.** A marker left where something used to be: *moved to X*,
+- **A thing as the actor of a report.** *The example regains its loop*, *the
+  gate chose it*. In a report the author acts and the thing is the object:
+  *Rewrote the example's loop*.
+- **Welds.** Two full thoughts on either side of a join. Read each side alone.
+  When both stand as sentences, write two. Subordinate one only when it
+  modifies the other.
+- **Litotes.** Defining a thing by what it is not: *not unlike*, *not
+  uncommon*, *necessary but not sufficient*, or a negation restating what the
+  sentence already said positively. State the positive claim. The contrast tic
+  (*x rather than y*, where nothing turned on y) is the same fault. Keep a
+  negation only when it rejects an alternative the reader would otherwise reach
+  for.
+- **Tombstones.** A marker where something used to be: *moved to X*,
   *previously this did Y*, *formerly `old_name`*, a deprecation note, an
-  `## Update` banner. Delete the thing and the marker together. `git log` holds
-  the history.
-- **Status dates.** *As of 2026-08-23*, *validated 2026-07-05*, *current as of
-  the last audit*. A date in prose is stale the day after it is written. Dates
-  belong in commit messages and [`plans/field-notes/`](plans/field-notes/).
+  `## Update` banner, or a comment left where code was deleted. Deleted means
+  gone. Git history holds the history. A changed rule is the same trap in
+  reverse: state the rule that now holds, never the absence of the one it
+  replaced. The announcement form (*this thing is not used anymore*) is a
+  tombstone, a signpost, and a disclaimer in one sentence.
+- **Dates in prose.** *As of 2026-08-23*, *validated 2026-07-05*, *current as
+  of the last audit*. A date in prose is stale the day after it is written.
 - **Disclaimers.** *This may not be exhaustive*, *your mileage may vary*,
   *note that this could change*. Either the claim holds or it does not.
-- **Restatements.** A sentence repeating what the heading, the previous
-  sentence, or the code already said.
+- **Signposting.** `It is worth noting`, `Let's dive into`, `In this section
+  we will`, or a sentence restating what the heading, the previous sentence,
+  or the code already said.
+- **Preambles.** A sentence that announces facts instead of stating one: *Two
+  runtime facts shape what an example can prove*, *Three things matter here*,
+  *Several considerations inform this choice*. Its subject is an abstraction
+  (facts, things, reasons) and its verb does nothing (shape, matter, inform).
+  *The win is…* and *Its floor is…* are the same fault: find the actor and let
+  it act. An abstract opener restated concretely after a colon is a preamble
+  too. Delete it and start with the first fact. A count belongs in a list,
+  never in a sentence promising one.
+- **Framing prose.** A sentence wrapped around a change to explain it instead
+  of letting the change carry itself. The test is whether the sentence still
+  earns its place once its framing story is gone. When the content needs the
+  frame to make sense, fix the content: reorder the rows, rewrite the entry, put
+  the fact where the reader is already looking.
+- **Comment essays.** An inline comment is one or two lines and earned: a
+  constraint the code cannot show, never a box checked or a step narrated.
+  [`.claude/rules/comments.md`](.claude/rules/comments.md) is the contract.
+- **Em-dashes.** Enforced by `CHU037`.
 - **Empty adjectives.** `comprehensive`, `robust`, `seamless`, `cutting-edge`.
   Name what the thing covers or survives.
-- **Filler openers.** `It is worth noting`, `Let's dive into`, `In this
-  section we will`.
-- **An abstract subject with a weak verb.** *The win is…*, *Its floor is…*.
-  Find the actor and let it act.
-- **An abstract opener restated concretely after a colon.** Delete the opener.
 - **`the` before a forward reference or a brand name.**
 
-Degraded prose gets rewritten from a fresh read of what the thing does. It is
-never trimmed again.
+No rule above is satisfied by moving words. A sentence bent to dodge a word
+reads bent. A sentence that breaks a rule is rewritten from what it has to say,
+in the order things happen, and the paragraph is read whole afterward. Degraded
+prose gets the same fresh rewrite, never another trim.
 
 Prose documentation also follows
 [Documentation tone](docs/contributing/style-guide.md#documentation-tone).

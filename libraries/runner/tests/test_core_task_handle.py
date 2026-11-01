@@ -174,9 +174,7 @@ def test_object_task_with_period() -> None:
 
 
 def test_task_plus_handler_is_rejected() -> None:
-    """The separate check-plus-handler shape was removed: a task object
-    and a handler in one registration is a ValueError, not a silent
-    override."""
+    """A task object and a handler in one registration raise ValueError."""
     runner = Runner(ticks=FakeTicks())
     with raises(ValueError):
         runner.add(_GateTask(should_fire=True), handler=lambda now: None)

@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **Ask an internet time server what time it is, without pausing your `while True:` loop.**
 
-A board with no battery-backed clock starts every boot with the wrong date.  `chumicro-ntp` asks a time server such as `pool.ntp.org` for the current time and hands it back as Unix seconds, the count of seconds since 1 January 1970 UTC.  You send the question, then check for the answer on each pass of your loop, so an LED keeps blinking while the reply is on its way.  It speaks SNTP (Simple Network Time Protocol, the simplified client form of NTP) in pure Python that runs unchanged on CircuitPython, MicroPython, and CPython.
+A board with no battery-backed clock starts every boot with the wrong date.  `chumicro-ntp` asks a time server such as `pool.ntp.org` for the current time and hands it back as Unix seconds, the count of seconds since 1 January 1970 UTC.  `client.query()` sends the question and returns at once.  The loop checks for the answer on each pass, so an LED keeps blinking while the reply is on its way.  It speaks SNTP, the simple client form of the Network Time Protocol, in pure Python that runs on CircuitPython, MicroPython, and CPython.
 
 <br clear="left">
 
@@ -24,11 +24,13 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_ntp
 pip install chumicro-ntp
 ```
 
-For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and details on PyPI naming, see the [ChuMicro install guide](https://chumicro.com/ChuMicro/guides/install/).
+The `Runner` loop in the quick example comes from `chumicro-runner`.  Install it the same way.
+
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
 
-This `code.py` asks for the time once a minute and prints it, for as long as the board has power.  It assumes CircuitPython has already joined your wifi, which it does at startup when `settings.toml` sets `CIRCUITPY_WIFI_SSID` and `CIRCUITPY_WIFI_PASSWORD`.
+This CircuitPython `code.py` asks for the time once a minute and prints it.  It relies on CircuitPython's own wifi join, which runs at startup when `settings.toml` sets `CIRCUITPY_WIFI_SSID` and `CIRCUITPY_WIFI_PASSWORD`:
 
 ```python
 import time
@@ -54,7 +56,7 @@ while True:
         request = client.query()
         next_sync_ms = ticks_add(now_ms, 60_000)
 
-    # check() is True while a reply is pending; handle() reads it when it lands.
+    # check() is True while a reply is pending, and handle() reads it when it lands.
     if client.check(now_ms):
         client.handle(now_ms)
 
@@ -69,37 +71,71 @@ while True:
     time.sleep(0.02)  # rest 20 ms between passes
 ```
 
-On MicroPython, join wifi with `network.WLAN` first, drop `import wifi`, and pass `radio=None`.  Each `ticks_ms()` value is a millisecond count from `chumicro-timing`, and `ticks_diff` / `ticks_add` do the arithmetic on it safely when the count wraps around.
+On MicroPython, join wifi with `network.WLAN` first, drop `import wifi`, and pass `radio=None`.
 
-`query()` looks up the server's address before it sends, and that DNS lookup waits for the answer; pass an IP address as `server=` to skip it.  Waiting for the time server's reply never blocks.
+`ticks_ms()`, `ticks_diff`, and `ticks_add` come from `chumicro-timing` and keep the arithmetic correct when the millisecond count rolls over.  `client` is a service, an object a loop drives through two methods.  `check(now_ms)` returns `True` when the client has work to do.  `handle(now_ms)` does one small step of that work.
 
-The [user guide](https://chumicro.com/ChuMicro/ntp/stable/guide/) covers turning Unix seconds into a date, running the client under [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner), bringing your own UDP socket, and every way a query can fail.
+In a program with more going on, hand the loop to [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner).  A timed job sends the query once a minute, and the runner reads the reply:
+
+```python
+from chumicro_runner import Runner
+
+pending = []  # the query waiting for its reply, if there is one
+
+def start_sync(now_ms):
+    if not client.busy:
+        pending.append(client.query())
+
+runner = Runner()
+runner.add(client)                                                   # reads the reply while one is outstanding
+runner.add_periodic(start_sync, period_ms=60_000, start_after_ms=0)  # every minute, starting now
+
+while True:
+    now_ms = runner.tick()
+
+    if pending and pending[0].done:
+        request = pending.pop()
+        if request.error is None:
+            print("unix seconds:", request.unix_seconds)
+        else:
+            print("no answer this time, retrying in a minute:", request.error)
+
+    runner.wait(now_ms)  # sleeps until the next reply check or the next sync
+```
+
+The [user guide](https://chumicro.com/ChuMicro/ntp/stable/guide/) covers turning Unix seconds into a date, bringing your own UDP socket, and every way a query can fail.
 
 ## What's included
 
-| Symbol | Purpose |
+| Symbol | Description |
 |---|---|
-| `NTPClient(socket=None, *, transport_factory=None, server="pool.ntp.org", port=123, timeout_ms=5000, ticks=None)` | The time client.  Pass exactly one of `socket` (an open, non-blocking UDP socket) or `transport_factory` (a function that opens one when the first query goes out). |
-| `NTPClient.from_config(config, *, radio=None)` | Builds a client from the optional `ntp.server`, `ntp.port`, and `ntp.timeout_ms` config keys and opens its own UDP socket through `chumicro-sockets`. |
-| `client.query()` | Sends one request and returns an `NTPResult` without waiting for the reply.  One query runs at a time; `client.busy` is `True` until it finishes. |
-| `client.check(now_ms)` / `client.handle(now_ms)` | Call both on every pass of your loop.  `check` is `True` while a reply is pending; `handle` reads the reply, or fails the query once `timeout_ms` has passed. |
-| `client.cancel()` / `client.close()` | Abandon the query in flight; close the UDP socket. |
-| `NTPResult` | One query's outcome.  Once `done` is `True`, `unix_seconds` holds the time or `error` holds what went wrong. |
-| `NTPError` | `OSError` subclass for a timeout, a malformed or refused reply, or a cancel. |
+| `NTPClient(socket=None, *, transport_factory=None, server="pool.ntp.org", port=123, timeout_ms=5000, ticks=None)` | The time client.  Pass exactly one of `socket`, an open non-blocking UDP socket, or `transport_factory`, a function that opens one when the first query goes out |
+| `NTPClient.from_config(config, *, radio=None)` | Builds a client from the optional `ntp.server`, `ntp.port`, and `ntp.timeout_ms` config keys and opens its own UDP socket through `chumicro-sockets` |
+| `client.query()` | Sends one request and returns an `NTPResult` without waiting for the reply.  One query runs at a time.  `client.busy` is `True` until it finishes |
+| `client.check(now_ms)` / `client.handle(now_ms)` | Call both on every pass of the loop.  `check` returns `True` while a reply is pending.  `handle` reads the reply, or fails the query once `timeout_ms` has passed |
+| `client.cancel()` / `client.close()` | `cancel()` abandons the query in flight.  `close()` closes the UDP socket |
+| `NTPResult` | One query's outcome.  Once `done` is `True`, `unix_seconds` holds the time or `error` holds what went wrong |
+| `NTPError` | `OSError` subclass for a timeout, a malformed or refused reply, or a cancel |
 
 ## Where this fits
 
-Depends on [`chumicro-sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets) for the UDP socket and [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) for the millisecond clock; `pip install chumicro-ntp` brings both.  Your application calls it directly; no other ChuMicro library depends on it.
+Depends on [`chumicro-sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets) for the UDP socket and [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) for the millisecond clock.  Both install with this library.  Runs as a service on a [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) loop, as the quick example shows.
 
 ## Platform support
 
-Pure Python, with the same behavior on CircuitPython, MicroPython, and CPython.
+Works on CPython, MicroPython, and CircuitPython, in pure Python.
+
+`query()` looks up the server's address before it sends, and that DNS lookup holds the loop until the answer comes.  An IP address passed as `server=` skips the lookup.  Waiting for the time server's reply never holds the loop.
 
 ## Examples
 
 | Example | What it shows |
 |---|---|
-| [`examples/ntp_query.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/ntp/examples/ntp_query.py) | Joins wifi, then asks `pool.ntp.org` for the time once a minute and prints it as Unix seconds and a UTC clock time.  A failed query prints its reason and the next one goes out a minute later.  CircuitPython or MicroPython board with wifi. |
+| [`ntp_query.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/ntp/examples/ntp_query.py) | Joins wifi, then asks `pool.ntp.org` for the time once a minute and prints it as Unix seconds and a UTC clock time.  A failed query prints its reason, and the next one goes out a minute later.  CircuitPython or MicroPython board with wifi |
+
+### Running the examples
+
+The example joins wifi through `helpers.py`, which sits beside it in `examples/`.  Set `WIFI_SSID` and `WIFI_PASSWORD` at the top of the example.  Copy it to the board as `code.py` on CircuitPython or `main.py` on MicroPython, together with `helpers.py` and the libraries it imports.  From a clone of the [ChuMicro repository](https://github.com/ChuMicro/ChuMicro), `chumicro-workspace deploy-example ntp ntp_query` does the copying and takes the wifi settings from `secrets.toml`.  [Wiring wifi credentials](https://chumicro.com/ChuMicro/guides/wiring-wifi-credentials/) walks through both ways.
 
 ## Contributing
 

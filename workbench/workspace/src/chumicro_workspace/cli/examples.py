@@ -534,10 +534,14 @@ def _add_demo_parser(subparsers: argparse._SubParsersAction) -> None:
     """``demo``: deploy the built-in payload."""
     demo_parser = subparsers.add_parser(
         "demo",
-        help=(
-            "Deploy a built-in 'hello world' that counts once a second "
-            "on the active device, forever.  Cross-runtime safe; prints "
-            "the first ten seconds of output and leaves it running."
+        help="Send the board a counting program to check that it works.",
+        description=(
+            "Copy a small program to the board that prints 'Hello from "
+            "ChuMicro!' and then counts once a second for as long as the "
+            "board has power.  The command shows the first output and "
+            "leaves the program running.  The program uses no pins, so "
+            "it runs on any CircuitPython or MicroPython board.  The "
+            "next deploy replaces it."
         ),
     )
     _add_workspace_arg(demo_parser)
@@ -550,10 +554,18 @@ def _add_deploy_example_parser(subparsers: argparse._SubParsersAction) -> None:
     """``deploy-example``: front-door for the first-touch board flow."""
     deploy_example_parser = subparsers.add_parser(
         "deploy-example",
-        help=(
-            "Deploy a library example (libraries/<lib>/examples/<name>.py) "
-            "to a registered device.  Front-door command for running "
-            "the first hello-world on a board."
+        help="Copy one library example onto a board and show its output.",
+        description=(
+            "Copy libraries/<library>/examples/<example>.py onto the "
+            "board as its startup file, together with the libraries it "
+            "imports, then restart the board.  On a terminal, the "
+            "command then opens the board's prompt so the output keeps "
+            "scrolling.  Ctrl-X leaves the prompt.  With no board registered, "
+            "the command first runs the bootstrap steps.  Networked "
+            "examples read WiFi settings from secrets.toml.  Exit codes: "
+            "2 a check failed before copying, 3 no board is registered, "
+            "4 the deploy failed, 5 board setup was cancelled, 6 the "
+            "board runs neither CircuitPython nor MicroPython."
         ),
     )
     _add_workspace_arg(deploy_example_parser)
@@ -562,8 +574,8 @@ def _add_deploy_example_parser(subparsers: argparse._SubParsersAction) -> None:
         nargs="?",
         default=None,
         help=(
-            "Library name under libraries/ (e.g. 'timing').  Required "
-            "unless --list is passed without an argument."
+            "Library folder under libraries/, such as timing.  "
+            "chumicro_timing works too.  Optional with --list."
         ),
     )
     deploy_example_parser.add_argument(
@@ -572,17 +584,16 @@ def _add_deploy_example_parser(subparsers: argparse._SubParsersAction) -> None:
         default=None,
         metavar="example",
         help=(
-            "Example file stem under libraries/<lib>/examples/ "
-            "(e.g. 'circuitpython_blink' or 'circuitpython_blink.py'; "
-            "trailing .py is optional)."
+            "Example file under libraries/<library>/examples/, such as "
+            "circuitpython_blink.  The .py ending is optional."
         ),
     )
     deploy_example_parser.add_argument(
         "--list",
         action="store_true",
         help=(
-            "List every available example under libraries/<lib>/examples/ "
-            "and exit.  Pass a library positional to scope to one library."
+            "List the examples as library/example and exit.  Give a "
+            "library name to list only its examples."
         ),
     )
     _add_device_selector(deploy_example_parser)
@@ -593,10 +604,9 @@ def _add_deploy_example_parser(subparsers: argparse._SubParsersAction) -> None:
         action="store_false",
         default=True,
         help=(
-            "Refuse to fall into the bootstrap wizard when no device is "
-            "registered for the example's runtime: exit 3 with a "
-            "structured stderr hint instead.  Default behavior is to "
-            "fall through into the wizard in interactive mode."
+            "With no board registered for the example's runtime, exit 3 "
+            "and print the add-device command to run, in place of "
+            "starting board setup."
         ),
     )
     tail_group = deploy_example_parser.add_mutually_exclusive_group()
@@ -606,16 +616,16 @@ def _add_deploy_example_parser(subparsers: argparse._SubParsersAction) -> None:
         action="store_true",
         default=True,
         help=(
-            "After deploy, drop into `chumicro-repl tail` to follow the "
-            "example's output.  Interactive default; suppressed by "
-            "--non-interactive."
+            "After the deploy, open the board's prompt so its output "
+            "keeps scrolling.  On by default on a terminal.  "
+            "--non-interactive turns it off."
         ),
     )
     tail_group.add_argument(
         "--no-tail",
         dest="tail",
         action="store_false",
-        help="Exit cleanly after deploy instead of tailing the REPL.",
+        help="Exit right after the deploy.",
     )
     deploy_example_parser.add_argument(
         "--no-wipe",
@@ -623,25 +633,20 @@ def _add_deploy_example_parser(subparsers: argparse._SubParsersAction) -> None:
         action="store_false",
         default=True,
         help=(
-            "Additive mode: leave board files that aren't this "
-            "example's payload in place.  The default is clean-slate: "
-            "the deploy removes anything that isn't the new payload "
-            "or a device-required keep-set file (boot.py, "
-            "boot_out.txt, _chu_kv.msgpack); a board-resident "
-            "settings.toml is evicted (it competes with config-driven "
-            "wifi).  Use --no-wipe only when you deliberately "
-            "hand-manage board files.  Same semantics as "
-            "`chumicro-workspace deploy --no-wipe`."
+            "Remove old files only from /lib/ and the startup and "
+            "settings files.  Other files on the board stay, such as "
+            "settings.toml or images you copied over.  The default "
+            "removes every file this deploy does not copy, except "
+            "boot.py, boot_out.txt, and _chu_kv.msgpack."
         ),
     )
     deploy_example_parser.add_argument(
         "--wipe",
         action="store_true",
         help=(
-            "Erase the *entire* device filesystem before deploying, "
-            "the keep set (boot.py, boot_out.txt, _chu_kv.msgpack) "
-            "included.  Stricter than the clean-slate default; for "
-            "corruption recovery.  No-op in RAM mode."
+            "Erase the board's whole filesystem before copying, "
+            "boot.py, boot_out.txt, and _chu_kv.msgpack included.  Use "
+            "it to recover a board whose files are corrupted."
         ),
     )
     deploy_example_parser.add_argument(
@@ -649,16 +654,12 @@ def _add_deploy_example_parser(subparsers: argparse._SubParsersAction) -> None:
         type=float,
         default=None,
         help=(
-            "How long to capture serial output after the entrypoint's "
-            "soft-reboot (CircuitPython flash mode only; MP transport "
-            "ignores this).  Default uses the transport's built-in "
-            "timeout (10 s).  Raise it for slow-wifi boards (Pi Pico W "
-            "cyw43 wifi-up + first network call takes 5-10 s) so the "
-            "first prints don't land outside the capture window, "
-            "common in --non-interactive --no-tail use (sweep harness, "
-            "CI runs).  Set to 0 to skip the capture entirely and "
-            "return as soon as the soft-reboot has been triggered, "
-            "leaving the board running."
+            "Seconds of output to capture right after the restart, on a "
+            "CircuitPython board in flash mode.  MicroPython boards "
+            "ignore it.  Defaults to 10.  Raise it for a board whose "
+            "first output comes late, such as a Pi Pico W joining WiFi.  "
+            "0 returns as soon as the board restarts and leaves it "
+            "running."
         ),
     )
     deploy_example_parser.set_defaults(func=_cmd_deploy_example)

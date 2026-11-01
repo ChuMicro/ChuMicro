@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **A dict that keeps its values through a reset or a power cut.**
 
-Keep a boot count, the last reading, a calibration value, or a login token on the board and find it again after a reset.  `KVStore` works like a Python dict: change it as often as you like, then call `commit()` when you want the change saved.  It picks the right place to save for the board it runs on: `microcontroller.nvm` on CircuitPython, NVS (the ESP32's built-in settings storage) or a file in flash on MicroPython, and plain memory on a laptop.  NVM sits outside the CIRCUITPY drive, so on CircuitPython saving works even while the drive is mounted on your computer and your code cannot write files.
+`KVStore` keeps a boot count, the last reading, a calibration value, or a login token on the board, and finds it again after a reset.  It works like a Python dict: change it as often as you like, then call `commit()` to save the change.  It picks the place to save for the board it runs on: `microcontroller.nvm` on CircuitPython, NVS (the ESP32's built-in settings storage) or a file in flash on MicroPython, and plain memory on a laptop.  NVM sits outside the CIRCUITPY drive.  On CircuitPython, saving works even while the drive is mounted on your laptop and your code cannot write files.
 
 <br clear="left">
 
@@ -24,7 +24,7 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_kvstore
 pip install chumicro-kvstore
 ```
 
-For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and details on PyPI naming, see the [ChuMicro install guide](https://chumicro.com/ChuMicro/guides/install/).
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
 
@@ -45,25 +45,25 @@ while True:
     print(f"Boot {store['boot_count']}, still running")
 ```
 
-Saving writes to flash, and flash wears out after many writes.  In a loop that might save often, call `store.commit_if_changed()` instead: it writes only when a value actually changed.
+Saving writes to flash, which wears out after many writes.  In a loop that might save often, `store.commit_if_changed()` writes only when a value changed.
 
 ## What's included
 
-| Symbol | What it does |
+| Symbol | Description |
 |---|---|
-| `KVStore(backend="auto")` | Open the store; `"auto"` picks NVM (CircuitPython), NVS (MicroPython on ESP32), a flash file (other MicroPython boards), or memory (CPython) |
+| `KVStore(backend="auto")` | Open the store.  `"auto"` picks NVM (CircuitPython), NVS (MicroPython on ESP32), a flash file (other MicroPython boards), or memory (CPython) |
 | `store[key]`, `store[key] = value`, `del store[key]`, `store.get(key, default)` | Read and change values the way you would in a dict |
 | `store.commit()` | Save every value now |
-| `store.commit_if_changed()` | Save only when something changed since the last save; a call with nothing new to save costs no flash write |
+| `store.commit_if_changed()` | Save only when something changed since the last save.  A call with nothing new to save costs no flash write |
 | `store.reload()` | Throw away unsaved changes and read the saved values again |
 | `store.capacity`, `store.bytes_used` | How many bytes the store can hold, and how many the current values take |
 | `store.is_corrupt`, `store.backend_name` | Whether the saved data was damaged at startup, and where the store saves |
-| `KVStoreFull`, `KVStoreCorrupt` | Raised when a save does not fit, or `reload()` finds damaged data; catch `KVStoreError` for both |
+| `KVStoreFull`, `KVStoreCorrupt` | Raised when a save does not fit, or `reload()` finds damaged data.  Catch `KVStoreError` for both |
 | `chumicro_kvstore.testing.FakeKVStore` | An in-memory store for your own tests, with switches to make it full or corrupt |
 
 ## Where this fits
 
-Depends on [`chumicro-msgpack`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/msgpack), which turns the dict into bytes for saving; `circup` and `mip` install it for you.  No other ChuMicro library depends on kvstore: use it directly in your own code.
+Depends on [`chumicro-msgpack`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/msgpack) to turn the dict into bytes for saving.  It installs with this library.
 
 ## Platform support
 

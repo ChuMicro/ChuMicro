@@ -1,7 +1,4 @@
-"""Test helpers for libraries that depend on ``chumicro-kvstore``.
-
-``FakeKVStore`` gives downstream tests a real store to run against.
-"""
+"""``FakeKVStore``, a ``KVStore`` for tests that saves to memory and needs no board."""
 
 __chumicro_test_support__ = True
 
@@ -10,12 +7,25 @@ from chumicro_kvstore.core import KVStore
 
 
 class FakeKVStore(KVStore):
-    """In-memory ``KVStore`` with explicit corruption and capacity hooks.
+    """``FakeKVStore`` runs the real ``KVStore`` code over an in-memory backend.
+
+    Code under test takes it wherever it takes a ``KVStore``. Its extra
+    methods make a save too large or the saved bytes damaged on demand.
 
     Args:
-        capacity: Optional capacity override in bytes, to drive the ``KVStoreFull`` path.
-        initial_payload: Optional pre-seeded msgpack payload.
-        record_calls: When ``True``, each public-API call is appended to ``self.calls``.
+        capacity: Most bytes ``commit()`` saves before raising
+            ``KVStoreFull``. ``None`` sets the limit to ``sys.maxsize``.
+        initial_payload: Bytes the backend starts with, as if an earlier run
+            saved them. Another store's ``raw_payload`` simulates a reboot.
+            Bytes that do not unpack to a dict start the store empty with
+            ``is_corrupt`` set.
+        record_calls: When ``True``, ``calls`` records each ``__setitem__``,
+            ``__delitem__``, ``commit``, ``commit_if_changed``, and ``reload``
+            call. The first entry is ``("reload", ())``, from ``__init__``.
+
+    Attributes:
+        calls: The recorded calls as ``(method_name, args)`` tuples, empty
+            unless ``record_calls`` is ``True``.
     """
 
     def __init__(
@@ -61,19 +71,23 @@ class FakeKVStore(KVStore):
         super().reload()
 
     def simulate_corrupt(self) -> None:
-        """Mark the underlying memory backend corrupt."""
+        """Make the next ``reload()`` raise ``KVStoreCorrupt``.
+
+        The values in memory stay as they are. A ``commit()`` or
+        ``reset_corrupt()`` clears the damage.
+        """
         self._memory_backend.force_corrupt()
 
     def reset_corrupt(self) -> None:
-        """Clear the simulated-corrupt flag."""
+        """Undo ``simulate_corrupt()``, so ``reload()`` reads the saved bytes again."""
         self._memory_backend.reset_corrupt()
 
     def set_capacity(self, capacity: int) -> None:
-        """Adjust the simulated capacity mid-test."""
+        """Set the byte limit the next ``commit()`` checks, on the store and its backend."""
         self._memory_backend.capacity = capacity
         self.capacity = capacity
 
     @property
     def raw_payload(self) -> bytes:
-        """Raw msgpack bytes currently held by the backend."""
+        """Bytes the backend holds: the last saved payload, or ``initial_payload`` before any save."""
         return self._memory_backend._payload  # noqa: SLF001 - test helper

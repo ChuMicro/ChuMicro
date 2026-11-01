@@ -2,9 +2,9 @@
 
 ## Overview
 
-`chumicro-compat` brings standard-library features that CircuitPython and MicroPython leave out to all three runtimes.  It holds one today: `functools.partial`, imported from `chumicro_compat.functools`.
+`chumicro-compat` adds standard-library features that CircuitPython and MicroPython leave out, under the same names on all three runtimes.  It holds one: `functools.partial`, imported from `chumicro_compat.functools`.
 
-`partial(func, first_argument)` returns a new function with `first_argument` already filled in.  Calling the new function calls `func` with the filled-in arguments first, followed by whatever you pass at the call.  On CPython the import hands you the standard library's own `functools.partial`; on CircuitPython and MicroPython it hands you a small pure-Python version that behaves the same way.
+`partial(func, first_argument)` returns a new function with `first_argument` already filled in.  Calling the new function calls `func` with the filled-in arguments first, followed by the arguments given at the call.
 
 ## Getting started
 
@@ -47,7 +47,7 @@ power LED on pin 2: 0%
 
 ## Keyword arguments
 
-`partial` fills in keyword arguments the same way.  A keyword you pass when you call replaces the filled-in one for that call only:
+`partial` fills in keyword arguments the same way.  A keyword given at the call replaces the filled-in one for that call only:
 
 ```python
 from chumicro_compat.functools import partial
@@ -64,7 +64,7 @@ connect_api(timeout=10)    # connecting to api.example.com:443 (timeout=10s)
 
 ## Callbacks that carry their own context
 
-Code that calls you back, such as a button handler or a scheduler, usually passes only the event: a time, a value.  `partial` lets each callback also know which pin or device it belongs to, with no global variable:
+A button handler or a scheduler calls its callback with the event alone, such as a time or a value.  `partial` fills in the pin number ahead of time, so each callback knows its own pin without a global variable:
 
 ```python
 from chumicro_compat.functools import partial
@@ -83,7 +83,7 @@ handle_button_4(2500)   # button on pin 4 pressed at 2500 ms
 
 ## Looking inside a partial
 
-`func`, `args`, and `keywords` hold what you filled in, as they do on CPython's `functools.partial`:
+A partial keeps the wrapped function in `func`, the filled-in positional arguments in `args`, and the filled-in keywords in `keywords`.  CPython's `functools.partial` has the same three attributes:
 
 ```python
 from chumicro_compat.functools import partial
@@ -100,7 +100,7 @@ print(broker.keywords)   # {'tls': True}
 print(broker(1883))      # broker.local:1883 tls=True
 ```
 
-Wrap your own Python functions this way on every runtime.  Wrapping a built-in and passing it a keyword, such as `partial(int, base=16)`, works on CPython but raises `TypeError` on MicroPython and CircuitPython, whose built-ins take those arguments by position only.
+A partial over a function written in Python works on every runtime.  A partial that passes a keyword to a built-in, such as `partial(int, base=16)`, works on CPython only.  MicroPython and CircuitPython built-ins take those arguments by position, so calling that partial raises `TypeError` there.
 
 ## Platform notes
 
@@ -110,7 +110,7 @@ Wrap your own Python functions this way on every runtime.  Wrapping a built-in a
 | MicroPython | A small pure-Python version |
 | CircuitPython | A small pure-Python version |
 
-Calling a partial, its `func`, `args`, and `keywords` attributes, and its `repr()` work the same on all three runtimes.
+Calling a partial, its `func`, `args`, and `keywords` attributes, and its `repr()` behave the same on all three runtimes.
 
 ## Examples
 

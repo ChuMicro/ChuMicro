@@ -464,6 +464,13 @@ def generate_llms_txt() -> str:
         "each Arduino and Adafruit Learn habit (delay(), millis(), "
         "time.sleep(), debouncing, settings.toml) mapped to its ChuMicro "
         "equivalent, with side-by-side code.",
+        f"- [Project: a WiFi temperature sensor]({SITE_ROOT}/{GUIDES_PREFIX}/"
+        "tutorial-wifi-sensor/): one board built up in six steps, from a "
+        "blink to MQTT readings that survive a reboot.",
+        f"- [How it works]({SITE_ROOT}/{GUIDES_PREFIX}/how-it-works/): one "
+        "`while True:` loop sharing many jobs, from time.sleep() to the runner.",
+        f"- [Glossary]({SITE_ROOT}/{GUIDES_PREFIX}/glossary/): every term the "
+        "documentation uses, each linked to the page that explains it.",
         f"- [Questions people ask]({SITE_ROOT}/{GUIDES_PREFIX}/faq/): why a board "
         "freezes on the network, whether the libraries use async, what they cost "
         "in flash, and how to test without hardware.",

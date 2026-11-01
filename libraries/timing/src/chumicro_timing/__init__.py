@@ -1,4 +1,8 @@
-"""Wrap-safe millisecond ticks plus wait value objects (``Deadline`` / ``Rate``)."""
+"""Millisecond timers for a loop that never sleeps.
+
+``ticks_ms``, ``ticks_add``, and ``ticks_diff`` read and compare the clock.  ``Rate`` comes due
+every so many milliseconds, and ``Deadline`` expires once.
+"""
 
 import gc
 

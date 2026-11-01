@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Find what you are seeing in the left column and open the page beside it. Each page starts with the quickest check, then the fix, then why it happens.
+Find what you see in the left column and open the page beside it.
 
 | What you see | Page |
 |---|---|
@@ -27,21 +27,21 @@ Find what you are seeing in the left column and open the page beside it. Each pa
 
 ## Reading the commands
 
-Every command on these pages runs on your laptop, from the folder of your workbench (your copy of the [workbench template](https://github.com/ChuMicro/ChuMicro-Workbench-Template)), in the same form [Start here](../start-here.md) uses:
+Every command on these pages runs on your laptop, inside your [workspace](../glossary.md#workspace): your copy of the [workbench template](https://github.com/ChuMicro/ChuMicro-Workbench-Template), set up by [Start here](../start-here.md).
 
 ```bash
 python3 run.py doctor
 ```
 
-Error messages sometimes print the same command as `chumicro-workspace doctor`. That is the program `run.py` starts for you, so either spelling works, and inside the ChuMicro repository itself `chumicro-workspace` is the one to type.
+Some error messages spell a command as `chumicro-workspace doctor`. In a workspace, type it as `python3 run.py doctor`: `run.py` starts `chumicro-workspace` from the workspace's own virtual environment. Inside the ChuMicro repository, type `chumicro-workspace` as printed.
 
-Most failures already print two or three fix steps right under the error. Read those first. These pages cover the problems that take more than one message to explain, or whose error names a symptom rather than the cause.
+Most failures print their fix steps right under the error. Read those first.
 
 ## Windows
 
-The tools that talk to a board run on macOS and Linux. On native Windows they stop with `chumicro-deploy is not supported on native Windows`. WSL2 (Linux running inside Windows) works, but a USB board only appears inside it after you attach it with [`usbipd-win`](https://github.com/dorssel/usbipd-win). Editing, linting, and host-side tests run on Windows directly; [CONTRIBUTING](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#prerequisites) covers what each platform gets.
+The tools that talk to a board run on macOS and Linux. On native Windows they stop with `chumicro-deploy is not supported on native Windows`. They run under WSL2, the Linux system that runs inside Windows. A USB board appears inside WSL2 once [`usbipd-win`](https://github.com/dorssel/usbipd-win) attaches it. [CONTRIBUTING § Prerequisites](https://github.com/ChuMicro/ChuMicro/blob/main/CONTRIBUTING.md#prerequisites) lists what a contributor runs on native Windows.
 
 ## Related
 
 - [Device testing guide](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/device-testing.md): registering boards in `devices.yml` and running the tests that need real hardware.
-- [Contributor cheat sheet](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/cheat-sheet.md): one-line fixes for lint, test, and coverage failures in the ChuMicro repository.
+- [Contributor cheat sheet](https://github.com/ChuMicro/ChuMicro/blob/main/docs/contributing/cheat-sheet.md): the everyday commands in the ChuMicro repository, and where each failure's fix lives.

@@ -6,7 +6,9 @@ title: "chumicro-requests: non-blocking HTTP client for CircuitPython and MicroP
 
 **Fetch web pages and call web APIs from your board while your main loop keeps running.**
 
-With `adafruit_requests`, `response = requests.get(url)` holds your program on that line until the server answers.  With `chumicro-requests`, `client.get(url)` returns a request handle at once, your `while True` loop moves the request forward a small step on each pass, and `request.done` turns `True` when the response is in.  Your LED keeps blinking while the server works on its answer, while the page downloads, and while a stalled server runs out its timeout.  Opening the connection is the exception: [Platform notes](guide.md#platform-notes) lists which connect steps hold the loop on each runtime.  Built on `chumicro-sockets` and `chumicro-timing`.
+With `adafruit_requests`, `response = requests.get(url)` holds your program on that line until the server answers, so your LED stops blinking and button presses wait for as long as the server takes.  With `chumicro-requests`, `client.get(url)` returns a request handle at once.  Your `while True:` loop calls `client.handle(now_ms)` on each pass.  Each call moves the request one small step and returns, and `request.done` turns `True` when the response is in.
+
+The client speaks HTTP and HTTPS, sends GET, POST, PUT, PATCH, and DELETE with a `json=` shortcut, follows redirects, and decodes chunked responses.  For a body bigger than RAM, such as a firmware image, `stream=True` hands it over a piece at a time through a buffer you own.  The same code runs on CircuitPython, MicroPython, and CPython.
 
 ## Install
 
@@ -21,11 +23,13 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_requests
 pip install chumicro-requests
 ```
 
-No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+The `Runner` loop in the quick example comes from `chumicro-runner`.  Install it the same way.
+
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
 
-A CircuitPython `code.py` that fetches a page every 30 seconds.  Put your network name and password in the `connect()` call.
+This CircuitPython `code.py` fetches a page every 30 seconds.  Put your network name and password in the `connect()` call:
 
 ```python
 import wifi
@@ -54,11 +58,11 @@ while True:
         request = client.get("http://example.com/")
 ```
 
-On MicroPython, join wifi with `network.WLAN` as usual and call `connector_factory()` with no `radio`.  `request.response` carries `status_code`, `headers`, `body`, `text`, and `json()`; a failed request sets `request.error` instead.
+On MicroPython, join wifi with `network.WLAN` first, drop `import wifi` and the `connect()` line, and call `connector_factory()` with no `radio`.
 
-## The same fetch, written top to bottom
+`client` is a service, an object a loop drives through two methods.  `check(now_ms)` returns `True` when the client has work to do.  `handle(now_ms)` does one small step of that work.  `request.response` holds what came back: `status_code`, `headers`, `body` as raw bytes, `text` decoded, and `json()`.  A failed request sets `request.error` instead, an `HttpError` that says what went wrong: no answer within 10 seconds, a refused connection, or a reply that is not valid HTTP.
 
-A generator function lets the fetch read like `adafruit_requests` code.  `yield from get(...)` pauses only `fetch_forever` until the response is in, and the `Runner` loop at the bottom keeps the rest of the board running meanwhile:
+In a program with more going on, hand the loop to [`chumicro-runner`](https://chumicro.com/ChuMicro/runner/stable/) and write the fetch as a generator function.  `yield from get(...)` pauses only `fetch_forever` until the response is in, so the fetch reads like `adafruit_requests` code while the runner keeps the rest of the board running:
 
 ```python
 from chumicro_requests import HttpError
@@ -85,14 +89,16 @@ runner.add_generator(fetch_forever())
 
 while True:
     now_ms = runner.tick()  # fetch_forever runs when what it waits for is ready
-    runner.wait(now_ms)     # the CPU rests until then
+    runner.wait(now_ms)     # sleep until then
 ```
+
+[`generator_fetch.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/requests/examples/generator_fetch.py) is the full program.  Opening a connection holds the loop on a board.  [Platform notes](guide.md#platform-notes) lists which steps hold it on each runtime.
 
 ## Documentation
 
-- [User Guide](guide.md): the request loop, reading responses, generator functions, running beside other services, sending data, timeouts and errors, redirects, streaming large bodies, HTTPS, bringing your own transport
+- [User Guide](guide.md): the request loop, reading responses, writing the fetch as a generator, the runner pattern, sending data, timeouts and errors, redirects, streaming large bodies, HTTPS, and bringing your own transport
 - [API Reference](api.md): `HttpClient`, `RequestHandle`, and `Response`, plus the `yield from` generator helpers
-- [Testing Helpers](testing.md): using `FakeHttpClient` in your tests
+- [Testing Helpers](testing.md): `FakeHttpClient`, a scripted stand-in client for your tests
 
 ---
 

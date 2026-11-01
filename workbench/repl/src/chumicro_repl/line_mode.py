@@ -554,7 +554,8 @@ def run_line_mode(
     edit, history navigation, reverse search), ships them to the
     device, and renders the response with the same pattern-detector
     + traceback highlighter the passthrough TUI uses.  Returns 0 on
-    a clean exit (``:quit`` / EOF / Ctrl-C at the empty prompt).
+    a clean exit: ``:quit``, Ctrl-X, or the end of input.  Ctrl-C and
+    Ctrl-D go to the board.
 
     Args:
         port: Open :class:`SerialPort`.  Caller owns close.

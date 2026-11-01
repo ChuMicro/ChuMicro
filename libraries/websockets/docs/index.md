@@ -4,9 +4,9 @@ title: "chumicro-websockets: WebSocket client and server for CircuitPython and M
 
 # chumicro-websockets
 
-**Non-blocking WebSocket (RFC 6455) client and server for CircuitPython, MicroPython, and CPython.**
+**Non-blocking WebSocket (RFC 6455) client and server, plain and TLS.**
 
-A WebSocket is a network connection that stays open, so a board and a laptop, browser, or server can each send messages whenever they like.  `WebSocketClient` connects your board to a server, and `WebSocketServer` lets other devices connect to your board.  Both do their network work in small steps, so an LED or a button check in the same program keeps running while messages come and go.
+A WebSocket is a network connection that stays open, so a board and a laptop, browser, or server can each send messages whenever they like.  A board can push sensor readings to a dashboard or take commands from a script without polling for them.  `WebSocketClient` connects your board to a server, and `WebSocketServer` lets other devices connect to your board.  Both do their network work in small steps, so an LED or a button check in the same program keeps running while messages come and go.  Text and binary messages, ping/pong keep-alives, `wss://` over TLS, and a size cap on incoming messages are all built in.  The same code runs on CircuitPython, MicroPython, and CPython.
 
 ## Install
 
@@ -21,9 +21,9 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_websockets
 pip install chumicro-websockets
 ```
 
-The quick example below also uses `chumicro_runner` and `chumicro_wifi`; install them the same way.
+The quick example joins wifi with `chumicro-wifi` and runs on a `Runner` from `chumicro-runner`.  Install both the same way.
 
-No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
 
@@ -44,7 +44,7 @@ while not wifi.connected:
     now_ms = runner.tick()
     runner.wait(now_ms)
 
-# radio= is the CircuitPython radio; MicroPython and CPython ignore it.
+# CircuitPython needs radio=, and MicroPython and CPython ignore it.
 client = WebSocketClient(transport_factory=connector_factory(radio=wifi.adapter.radio))
 client.on_text = lambda text: print("received:", text)
 client.connect("ws://192.168.1.42:8765/")
@@ -59,17 +59,17 @@ def send_hello(now_ms):
 runner.add_periodic(send_hello, period_ms=5000)
 
 while True:
-    now_ms = runner.tick()  # wifi, the client, and the timer each take a turn
-    runner.wait(now_ms)     # then the CPU idles until a message arrives or the timer is due
+    now_ms = runner.tick()  # wifi, the client, and the timer each take one small step
+    runner.wait(now_ms)     # sleep until a message arrives or the timer is due
 ```
 
-A `Runner` keeps a list of tasks.  `runner.tick()` gives each one a short turn, and `runner.wait()` then idles the CPU until a message arrives or the timer is due.  The [User Guide](guide.md) covers the server side, reconnecting after a drop, and reading messages with a generator.  Each [example](guide.md#examples) has a one-line command to run the other end on your laptop.
+`runner.tick()` runs every job that is due.  `runner.wait(now_ms)` sleeps until the next one is.  `client` is a service, an object a loop drives through two methods.  `check(now_ms)` returns `True` when the client has work to do.  `handle(now_ms)` does one small step of that work.  The [`client.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/client.py) example adds reconnecting after a dropped connection.
 
 ## Documentation
 
-- [User Guide](guide.md): clients, servers, reconnecting, generators, callbacks, errors, bring-your-own transport, memory notes, and per-tick knobs
+- [User Guide](guide.md): clients, servers, reconnecting, reading messages with a generator task, callbacks, errors, bringing your own transport, memory notes, and per-tick settings
 - [API Reference](api.md): `WebSocketClient`, `WebSocketServer`, and the close codes and errors they raise
-- [Testing Helpers](testing.md): using `FakeConnection` and `FakeListener` in your tests
+- [Testing Helpers](testing.md): `FakeConnection` and `FakeListener` for your tests
 
 ---
 

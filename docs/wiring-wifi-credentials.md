@@ -1,6 +1,6 @@
 # Wiring WiFi credentials
 
-Your wifi name and password live in one file on your laptop, `secrets.toml`, and never in your code.  Each deploy copies them to the board, and your program reads them there.
+Your WiFi name and password live in one file on your laptop, `secrets.toml`, and never in your code.  Each deploy copies them to the board, where your program reads them.
 
 ## The smallest secrets.toml
 
@@ -10,15 +10,13 @@ ssid = "your-network"
 password = "your-password"
 ```
 
-The file sits at the top of your workspace, next to `workspace.yml`, and git ignores it, so the password stays out of your history.  Workspace setup creates it with placeholder values that never join anything; replace the two values with your own.
-
-Deploy as usual:
+The file sits at the top of your workspace, next to `workspace.yml`.  Git ignores it, so the password stays out of your history.  `python3 run.py setup` creates the file with placeholder values.  Replace both with your own, then deploy:
 
 ```bash
 python3 run.py deploy <project>
 ```
 
-On the board, `load_runtime_config()` hands your program the values, and `WifiService.from_config()` picks out `wifi.ssid` and `wifi.password`:
+On the board, `load_runtime_config()` returns the values.  `WifiService.from_config()` picks out `wifi.ssid` and `wifi.password`:
 
 ```python
 from chumicro_config import load_runtime_config
@@ -42,24 +40,28 @@ while True:
     runner.wait(now_ms)
 ```
 
-If the board never prints `wifi: connecting -> connected`, [WiFi won't connect](troubleshooting/wifi-wont-connect.md) starts from that symptom.
+When the board never prints `wifi: connecting -> connected`, [WiFi won't connect](troubleshooting/wifi-wont-connect.md) starts from that symptom.
 
 ## What the deploy does with it
 
-The deploy merges `secrets.toml` with the project's own `project_config.toml`, joins each table name and key with a dot, so `ssid` under `[wifi]` becomes `wifi.ssid`, and writes the result to `/runtime_config.msgpack` on the board.  `load_runtime_config()` reads that file back as a dictionary keyed by the dotted names.
+Each deploy merges `secrets.toml` with the project's own `project_config.toml`.  It joins each table name and key with a dot, so `ssid` under `[wifi]` becomes `wifi.ssid`.  It writes the result to `/runtime_config.msgpack` on the board.  `load_runtime_config()` reads that file back as a dictionary keyed by the dotted names.
 
-Two commands show the result without touching a board:
+`dump-config` and `config-validate` read the merged settings without touching a board:
 
 ```bash
 python3 run.py dump-config <project>       # print what the board will receive
 python3 run.py config-validate <project>   # check every library finds the keys it needs
 ```
 
-`secrets.toml` holds credentials and the defaults every project shares.  Settings that are not secret, such as an MQTT topic or a sample period, go in `projects/<name>/project_config.toml`, which is safe to commit and wins over `secrets.toml` for any key both files set.
+`secrets.toml` holds credentials and the defaults every project shares.  Settings that are not secret, such as an MQTT topic or a sample period, go in `projects/<name>/project_config.toml`.  That file is safe to commit.  For a key both files set, `project_config.toml` wins.
+
+## CircuitPython auto-connect
+
+CircuitPython reads `CIRCUITPY_WIFI_SSID` and `CIRCUITPY_WIFI_PASSWORD` from a `settings.toml` on the board.  Those keys switch on the firmware's own auto-connect, which fights `WifiService` for the radio.  Keep them out of `settings.toml`.  A workspace deploy removes `settings.toml` from the board for that reason.
 
 ## Adding an MQTT broker
 
-`chumicro-mqtt` has no default broker, so `MQTTClient.from_config()` stops with a missing-key error until you name one:
+`chumicro-mqtt` ships with no default broker.  `MQTTClient.from_config()` raises a missing-key error until `secrets.toml` names one:
 
 ```toml
 [wifi]
@@ -86,7 +88,7 @@ port = 1883
 
 ## Running an example from a clone of the ChuMicro repository
 
-The repository is a workspace too, with its own gitignored `secrets.toml` at the root.  `python3 scripts/prepare_workspace.py` creates it from the same placeholder template on first run.  Fill in `[wifi]`, and `[mqtt.broker]` for the MQTT examples, then deploy any networked example:
+A clone of the ChuMicro repository is a workspace too, with its own gitignored `secrets.toml` at the root.  `python3 scripts/prepare_workspace.py` creates that file with placeholder values on its first run.  Fill in `[wifi]`, plus `[mqtt.broker]` for the MQTT examples.  Then deploy any networked example:
 
 ```bash
 chumicro-workspace deploy-example wifi connect_to_ap --tail
@@ -96,16 +98,16 @@ The library examples and the hardware tests under each library's `functional_tes
 
 ## Without a workspace
 
-Copying an example straight to the board as `code.py` (CircuitPython) or `main.py` (MicroPython) skips the deploy, so no `/runtime_config.msgpack` reaches the board.  Most networked examples carry constants near the top for this case:
+An example copied straight to the board as `code.py` or `main.py` skips the deploy, so no `/runtime_config.msgpack` reaches the board.  Most networked examples carry constants near the top for this case:
 
 ```python
 WIFI_SSID = "your-wifi-ssid"          # replace before copying
 WIFI_PASSWORD = "your-wifi-password"  # replace before copying
 ```
 
-Those examples import `wifi_up()` from the `helpers.py` beside them, so copy `helpers.py` to the board too.  When a `/runtime_config.msgpack` is present, its values win over the constants.  When it is absent, the constants are used, and `wifi_up()` stops with a `RuntimeError` naming them if they still hold the placeholders.  The MQTT examples add a `BROKER_HOST` constant, empty until you set it.  `connect_to_ap.py` in `chumicro-wifi` has no constants and needs a workspace deploy.
+Those examples import `wifi_up()` from the `helpers.py` beside them.  Copy `helpers.py` to the board too.  When `/runtime_config.msgpack` is present, its values win over the constants.  When it is absent, `wifi_up()` uses the constants.  If they still hold the placeholders, `wifi_up()` raises a `RuntimeError` that names them.  The MQTT examples add a `BROKER_HOST` constant, empty until you set it.  `connect_to_ap.py` in `chumicro-wifi` reads its settings only from a deploy, so it needs a workspace.
 
-In your own code without a workspace, build the settings in code instead of reading them from the board:
+Your own code can build the settings itself instead of reading them from the board:
 
 ```python
 from chumicro_wifi import WifiConfig, WifiService
@@ -113,4 +115,4 @@ from chumicro_wifi import WifiConfig, WifiService
 wifi = WifiService(WifiConfig(ssid="your-network", password="your-password"))
 ```
 
-That puts the password in a file on the board, so keep that file out of git.
+That puts the password in a file on the board.  Keep that file out of git.

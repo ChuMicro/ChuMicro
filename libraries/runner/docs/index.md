@@ -4,9 +4,9 @@ title: "chumicro-runner: run many jobs in one loop on CircuitPython and MicroPyt
 
 # chumicro-runner
 
-**Run several jobs from one `while True:` loop on a microcontroller, with no `time.sleep()` and no `async`.**
+**Run several jobs from one `while True:` loop on a board, with no `time.sleep()` and no `async`.**
 
-A `time.sleep()` blink works until the board needs a second job: while the loop sleeps for the LED, nothing else happens.  The runner keeps your `while True:` loop and puts a small scheduler inside it.  You register each job once and say how often it runs; `runner.tick()` runs whichever jobs are due, and `runner.wait()` sleeps the board until the next one is.  Every networked library in ChuMicro (`chumicro-wifi`, `chumicro-sockets`, `chumicro-mqtt`, `chumicro-requests`, `chumicro-http-server`, `chumicro-websockets`) registers with the same runner, so your LED keeps blinking through a slow HTTP response or a stalled MQTT peer.
+A `time.sleep()` blink works until the board needs a second job.  `chumicro-runner` keeps your `while True:` loop and puts a small scheduler inside it.  Each job is registered once, with how often it runs.  `runner.tick()` runs whichever jobs are due.  `runner.wait()` sleeps the board until the next one is.  Every ChuMicro network library registers with the same runner, so your LED keeps blinking through a slow HTTP response or a stalled server.  It runs on CircuitPython, MicroPython, and CPython.
 
 ## Install
 
@@ -21,11 +21,11 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_runner
 pip install chumicro-runner
 ```
 
-No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
 
-Two jobs at two different paces, from one loop:
+Print one line every second and another every five seconds, from one loop:
 
 ```python
 from chumicro_runner import Runner
@@ -45,13 +45,15 @@ while True:
     runner.wait(now_ms)      # sleep until the next job is due
 ```
 
-This runs as-is on your computer and on a board.  `now_ms` is the time of the current tick in milliseconds; the runner passes it to every job.
+This program runs as-is on a laptop and on a board.  Each job is a function that does one quick step and returns.  `runner.tick()` reads the clock once, runs every job that is due, and returns that reading in milliseconds as `now_ms`, the same value it passed to each job.  `runner.wait(now_ms)` sleeps until the next job is due.
+
+Keep the `wait()` line.  Without it, the loop spins the CPU flat out and wastes power.
 
 ## Documentation
 
 - [User Guide](guide.md): from a `time.sleep()` blink to the runner, then timed jobs, services, and generator tasks in order, how `wait()` sleeps, and what happens when a job raises
 - [API Reference](api.md): `Runner` with its `add_periodic` / `add` / `add_generator` registrations, `TaskHandle`, `GeneratorHandle`, and the `sleep_until` pause helper
-- [Testing Helpers](testing.md): `CallRecorder`, `validate_service`, and `FakePoller` for testing your own jobs on your computer
+- [Testing Helpers](testing.md): `CallRecorder`, `validate_service`, and `FakePoller` for testing your own jobs on a laptop
 
 ---
 

@@ -1,6 +1,6 @@
-"""HTTP/1.1 wire format for chumicro-http-server.
+"""``chumicro_http_server._wire`` parses HTTP/1.1 requests from bytes its caller supplies.
 
-The main entry point is :class:`RequestParser`.
+It also holds the server's size limits and error types.
 """
 
 try:
@@ -36,22 +36,40 @@ CRLF = b"\r\n"
 
 
 class ServerError(Exception):
-    """Base class for chumicro-http-server failures."""
+    """``ServerError`` is the base class of the errors the request parser and response encoders raise."""
 
 
 class ServerProtocolError(ServerError):
-    """Inbound bytes don't conform to HTTP/1.1 (the connection is closed without a response)."""
+    """``ServerProtocolError`` reports request bytes that break HTTP/1.1.
+
+    A request with a ``Transfer-Encoding`` header counts as a break.
+    ``HttpServer`` closes a connection whose request raises it, with no
+    response.  The response encoders also raise it for a reason phrase or
+    header that holds CR, LF, or NUL, and ``HttpServer`` then sends a 500 in
+    place of the route handler's response.
+    """
 
 
 class ServerLimitError(ServerError):
-    """A sender-controlled allocation hit a documented cap."""
+    """``ServerLimitError`` reports a request that passed one of the server's size limits.
 
-    #: HTTP status the connection layer emits; every subclass sets its own.
+    ``HttpServer`` answers with ``status_code`` and closes the connection.
+
+    Attributes:
+        status_code: HTTP status for the answer.  Each subclass sets its own.
+    """
+
     status_code = 400
 
 
 class ServerOversizedError(ServerLimitError):
-    """Request ``Content-Length`` exceeds ``max_body_bytes`` (413)."""
+    """``ServerOversizedError`` reports a request whose ``Content-Length`` exceeds the body limit.
+
+    ``HttpServer`` answers 413.
+
+    Attributes:
+        reported_length: The ``Content-Length`` the client sent, in bytes.
+    """
 
     status_code = 413
 
@@ -61,19 +79,30 @@ class ServerOversizedError(ServerLimitError):
 
 
 class ServerRequestLineTooLargeError(ServerLimitError):
-    """Request line grew past ``max_request_line_bytes`` without a CRLF (414)."""
+    """``ServerRequestLineTooLargeError`` reports a request line longer than ``max_request_line_bytes``.
+
+    ``HttpServer`` answers 414.
+    """
 
     status_code = 414
 
 
 class ServerHeadersTooLargeError(ServerLimitError):
-    """Header section grew past ``max_headers_bytes`` (431)."""
+    """``ServerHeadersTooLargeError`` reports a header section longer than ``max_headers_bytes``.
+
+    ``HttpServer`` answers 431.
+    """
 
     status_code = 431
 
 
 class CaseInsensitiveDict:
-    """Header dict whose lookups fold to lowercase."""
+    """``CaseInsensitiveDict`` holds headers and query parameters, with lookups that ignore letter case.
+
+    ``request.headers["content-type"]`` finds a ``Content-Type`` entry.  It
+    supports ``[]`` lookup and assignment, ``in``, ``len``, iteration over
+    names in the order they were first added, ``get``, ``items``, and ``add``.
+    """
 
     def __init__(self):
         # noqa: CHU027 - same dict body as chumicro-requests _wire.py; per-consumer duplication kept intentionally
@@ -120,7 +149,7 @@ class CaseInsensitiveDict:
         return f"CaseInsensitiveDict({{{pairs}}})"
 
     def get(self, name, default=None):
-        """Return the value for *name* or *default* if missing."""
+        """Return the value for ``name`` in any letter case, or ``default``."""
         entry = self._entries.get(name.lower())
         if entry is None:
             return default
@@ -132,7 +161,7 @@ class CaseInsensitiveDict:
             yield self._entries[lower]
 
     def add(self, name, value):  # noqa: CHU027 - same docstring as chumicro-requests _wire.add; per-consumer duplication kept intentionally
-        """Append *value* to an existing header, joining with ``, ``."""
+        """Add ``value`` under ``name``, joined to any existing value with a comma and a space."""
         lower = name.lower()
         existing = self._entries.get(lower)
         if existing is None:
@@ -145,13 +174,16 @@ class CaseInsensitiveDict:
 
 
 def parse_charset(content_type: str | None) -> str:  # noqa: CHU027 - same docstring as chumicro-requests _wire.parse_charset; per-consumer duplication kept intentionally
-    """Extract the ``charset=...`` parameter from a Content-Type header.
+    """Return the ``charset`` parameter of a ``Content-Type`` header value.
+
+    ``"text/plain; charset=iso-8859-1"`` gives ``"iso-8859-1"``.
 
     Args:
         content_type: Raw ``Content-Type`` header value, or ``None``.
 
     Returns:
-        The detected charset name, or ``"utf-8"`` as the default.
+        The charset name, or ``"utf-8"`` when the header is missing or names
+            no charset.
     """
     if not content_type:
         return "utf-8"
@@ -168,7 +200,12 @@ def parse_charset(content_type: str | None) -> str:  # noqa: CHU027 - same docst
 
 
 class RequestParseState:
-    """Streaming request parser states."""
+    """``RequestParseState`` names the values ``RequestParser.state`` takes.
+
+    A request moves from ``REQUEST_LINE`` to ``HEADERS``, then to ``BODY``
+    when a ``Content-Length`` body follows.  ``DONE`` means the whole request
+    arrived.  ``ERROR`` means ``RequestParser.error`` holds the failure.
+    """
 
     REQUEST_LINE = "request_line"
     HEADERS = "headers"
@@ -181,7 +218,23 @@ _PARSER_TERMINAL_STATES = (RequestParseState.DONE, RequestParseState.ERROR)
 
 
 class RequestParser:
-    """Streaming HTTP/1.1 request parser."""
+    """``RequestParser`` turns the bytes of one HTTP/1.1 request into a method, target,
+    headers, and body as they arrive.
+
+    ``feed`` takes each received chunk, and ``feed_eof`` records that the
+    client closed the connection.  At ``RequestParseState.DONE`` the
+    attributes hold the request.  At ``RequestParseState.ERROR``, ``error``
+    holds the exception.  A request body must carry ``Content-Length``.  A
+    ``Transfer-Encoding`` header, chunked included, fails the parser.
+
+    Attributes:
+        state: Current ``RequestParseState`` value.
+        method: Request method, such as ``"GET"``.
+        target: Raw request target, such as ``"/api?page=2"``.
+        http_version: Version from the request line, such as ``"HTTP/1.1"``.
+        headers: ``CaseInsensitiveDict`` of the request headers.
+        error: The ``ServerError`` that stopped the parser, or ``None``.
+    """
 
     def __init__(
         self,
@@ -192,15 +245,21 @@ class RequestParser:
         body_buffer: bytearray | None = None,
         body_buffer_view: memoryview | None = None,
     ) -> None:
-        """Construct a parser for one request; a caller-owned body buffer
-        lets successive parser instances reuse one allocation.
+        """Create a parser for one request.
 
         Args:
-            max_body_bytes: Body-size cap; a bigger body is rejected with 413.
-            max_request_line_bytes: Request-line cap; a longer line without a CRLF is rejected with 414.
-            max_headers_bytes: Header-section cap; crossing it is rejected with 431.
-            body_buffer: Optional caller-owned bytearray reused per body; ``None`` allocates per body.
-            body_buffer_view: Pre-cached memoryview of *body_buffer*; made for you when omitted.
+            max_body_bytes: Largest ``Content-Length`` accepted, in bytes.  A
+                larger one fails the parser with ``ServerOversizedError``
+                before any body is read.
+            max_request_line_bytes: Longest request line, in bytes.  A longer
+                one fails the parser with ``ServerRequestLineTooLargeError``.
+            max_headers_bytes: Largest header section, in bytes.  A larger one
+                fails the parser with ``ServerHeadersTooLargeError``.
+            body_buffer: ``bytearray`` to reuse for bodies that fit in it, so
+                successive parsers share one allocation, or ``None`` to
+                allocate per body.
+            body_buffer_view: ``memoryview(body_buffer)``, or ``None`` to
+                create it.
         """
         self._max_body_bytes = max_body_bytes
         self._max_request_line_bytes = max_request_line_bytes
@@ -255,14 +314,22 @@ class RequestParser:
 
     @property
     def body(self):
-        """Body bytes received so far (final once :attr:`state` is ``DONE``)."""
+        """A copy of the body bytes received so far.
+
+        The body is complete once ``state`` is ``RequestParseState.DONE``.
+        """
         return bytes(self._body_view[:self._body_write_offset])
 
     def feed(self, chunk):
-        """Append *chunk* to the parser's buffer and advance the state.
+        """Parse ``chunk``, the next bytes received from the client, and advance ``state``.
+
+        A request that breaks HTTP/1.1 or passes a size limit moves ``state``
+        to ``RequestParseState.ERROR`` and stores the exception in ``error``.
+        A call after ``DONE`` or ``ERROR`` does nothing.
 
         Raises:
-            ServerProtocolError: The bytes don't conform to HTTP/1.1.
+            ServerProtocolError: The request line or a header line holds
+                non-ASCII bytes.  The parser also stores it in ``error``.
         """
         if self.state in _PARSER_TERMINAL_STATES:
             return
@@ -274,7 +341,10 @@ class RequestParser:
         self._advance()
 
     def feed_eof(self):
-        """Signal that the peer closed."""
+        """Record that the client closed the connection.
+
+        A close before ``DONE`` fails the parser with ``ServerProtocolError``.
+        """
         if self.state in _PARSER_TERMINAL_STATES:
             return
         if self.state == RequestParseState.BODY and self._body_remaining > 0:
@@ -458,7 +528,11 @@ class RequestParser:
 
 
 def split_target(target: str) -> tuple[str, str]:
-    """Split a request-target into ``(path, raw_query)``."""
+    """Split a request target into ``(path, raw_query)`` at the first ``?``.
+
+    ``"/items?page=2"`` gives ``("/items", "page=2")``.  A target without
+    ``?`` gives ``(target, "")``.
+    """
     question_index = target.find("?")
     if question_index == -1:
         return target, ""
@@ -466,7 +540,12 @@ def split_target(target: str) -> tuple[str, str]:
 
 
 def parse_query(raw_query: str) -> "CaseInsensitiveDict":
-    """Parse a ``foo=bar&baz=qux`` query string into a header-shaped dict."""
+    """Parse a query string such as ``"page=2&sort=name"`` into a ``CaseInsensitiveDict``.
+
+    A repeated name joins its values with a comma and a space.  A name with
+    no ``=`` maps to ``""``.  Percent-escapes such as ``%20`` stay as
+    received.
+    """
     result = CaseInsensitiveDict()
     if not raw_query:
         return result

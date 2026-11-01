@@ -1,6 +1,6 @@
 site_name: chumicro-repl
 site_description: >-
-  Serial REPL for CircuitPython and MicroPython boards, with line editing, history, and log tailing from your computer.
+  Open the Python prompt of a CircuitPython or MicroPython board from your computer, with line editing, per-board history, and output tailing.
 site_url: https://chumicro.com/ChuMicro/repl/
 repo_url: https://github.com/ChuMicro/ChuMicro/tree/main/workbench/repl
 repo_name: Source

@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **Non-blocking WebSocket (RFC 6455) client and server, plain and TLS.**
 
-A WebSocket is a network connection that stays open, so a board and a laptop, browser, or server can each send messages whenever they like.  A board can push sensor readings to a dashboard or take commands from a script without polling for them.  `WebSocketClient` connects your board to a server, and `WebSocketServer` lets other devices connect to your board.  Both do their network work in small steps, so an LED or a button check in the same program keeps running while messages come and go.  Text and binary messages, ping/pong keep-alives, `wss://` over TLS, and a size cap on incoming messages are all built in.
+A WebSocket is a network connection that stays open, so a board and a laptop, browser, or server can each send messages whenever they like.  A board can push sensor readings to a dashboard or take commands from a script without polling for them.  `WebSocketClient` connects your board to a server, and `WebSocketServer` lets other devices connect to your board.  Both do their network work in small steps, so an LED or a button check in the same program keeps running while messages come and go.  Text and binary messages, ping/pong keep-alives, `wss://` over TLS, and a size cap on incoming messages are all built in.  The same code runs on CircuitPython, MicroPython, and CPython.
 
 <br clear="left">
 
@@ -24,11 +24,13 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_websockets
 pip install chumicro-websockets
 ```
 
-The quick examples below also use `chumicro_runner` and `chumicro_wifi`; install them the same way.  For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and details on PyPI naming, see the [ChuMicro install guide](https://chumicro.com/ChuMicro/guides/install/).
+The quick example joins wifi with `chumicro-wifi` and runs on a `Runner` from `chumicro-runner`.  Install both the same way.
+
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
 
-A client that joins wifi, connects to a WebSocket server, sends `hello` every five seconds, and prints every message the server sends back:
+This client joins wifi, connects to a WebSocket server, sends `hello` every five seconds, and prints every message the server sends back:
 
 ```python
 from chumicro_runner import Runner
@@ -45,7 +47,7 @@ while not wifi.connected:
     now_ms = runner.tick()
     runner.wait(now_ms)
 
-# radio= is the CircuitPython radio; MicroPython and CPython ignore it.
+# CircuitPython needs radio=, and MicroPython and CPython ignore it.
 client = WebSocketClient(transport_factory=connector_factory(radio=wifi.adapter.radio))
 client.on_text = lambda text: print("received:", text)
 client.connect("ws://192.168.1.42:8765/")
@@ -60,13 +62,13 @@ def send_hello(now_ms):
 runner.add_periodic(send_hello, period_ms=5000)
 
 while True:
-    now_ms = runner.tick()  # wifi, the client, and the timer each take a turn
-    runner.wait(now_ms)     # then the CPU idles until a message arrives or the timer is due
+    now_ms = runner.tick()  # wifi, the client, and the timer each take one small step
+    runner.wait(now_ms)     # sleep until a message arrives or the timer is due
 ```
 
-A `Runner` from `chumicro-runner` keeps a list of tasks.  `runner.tick()` gives each one a short turn, and `runner.wait()` then idles the CPU until a message arrives or the timer is due.  The [`client.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/client.py) example adds reconnecting after a dropped connection.
+`runner.tick()` runs every job that is due.  `runner.wait(now_ms)` sleeps until the next one is.  `client` is a service, an object a loop drives through two methods.  `check(now_ms)` returns `True` when the client has work to do.  `handle(now_ms)` does one small step of that work.  The [`client.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/client.py) example adds reconnecting after a dropped connection.
 
-A server that sends every text message back to the client that sent it:
+This server sends every text message back to the client that sent it:
 
 ```python
 from chumicro_runner import Runner
@@ -96,30 +98,30 @@ runner.add(server)
 
 while True:
     now_ms = runner.tick()  # the server accepts clients and moves their messages
-    runner.wait(now_ms)     # then the CPU idles until a client needs attention
+    runner.wait(now_ms)     # sleep until a client needs attention
 ```
 
 To talk to it from a laptop, run `pip install websockets`, then `python -m websockets ws://<board-ip>:8765/`, and type a line.
 
 ## What's included
 
-| Component | Purpose |
+| Symbol | Description |
 |---|---|
-| `WebSocketClient` | Connects to a `ws://` or `wss://` server.  Add it to a `Runner`, or call its `check(now_ms)` / `handle(now_ms)` pair from your own loop. |
-| `WebSocketServer` + `Connection` | Listens for clients on a port; hands you one `Connection` per client, with the client's send methods and every client callback except `on_open`. |
-| `InboundMessage` | What `next_message()` returns when you read messages with a generator: `is_text`, `text`, `data`. |
-| `WhenOversized` | What to do with an incoming message larger than `max_message_bytes`: `DROP_SILENT`, `DROP_WITH_EVENT`, `DISCONNECT`. |
-| `WebSocketState` | Connection states (`CONNECTING` / `OPEN` / `CLOSING` / `CLOSED`). |
-| `parse_ws_url(url)` | Split `ws://` / `wss://` URLs into `(scheme, host, port, path)`. |
-| `make_websocket_key()` / `derive_accept_key(key)` | RFC 6455 §4.2.2 nonce + accept-token derivation. |
-| `WebSocketError` + subclasses | Exception hierarchy: protocol, handshake, URL, timeout, backpressure, state. |
-| `OPCODE_*` / `CLOSE_*` constants | RFC 6455 opcode and close-code values. |
+| `WebSocketClient` | Connects to a `ws://` or `wss://` server.  Add it to a `Runner`, or call its `check(now_ms)` and `handle(now_ms)` from your own loop |
+| `WebSocketServer` and `Connection` | Listens for clients on a port.  Hands you one `Connection` per client, with the client's send methods and every client callback except `on_open` |
+| `InboundMessage` | What `next_message()` returns when a generator task reads messages: `is_text`, `text`, `data` |
+| `WhenOversized` | What to do with an incoming message larger than `max_message_bytes`: `DROP_SILENT`, `DROP_WITH_EVENT`, `DISCONNECT` |
+| `WebSocketState` | Connection states: `CONNECTING`, `OPEN`, `CLOSING`, `CLOSED` |
+| `parse_ws_url(url)` | Split a `ws://` or `wss://` URL into `(scheme, host, port, path)` |
+| `make_websocket_key()` / `derive_accept_key(key)` | The handshake key and the accept token from RFC 6455 §4.2.2 |
+| `WebSocketError` and subclasses | Errors for the protocol, the handshake, the URL, a timeout, backpressure, and a call in the wrong state |
+| `OPCODE_*` / `CLOSE_*` constants | RFC 6455 opcode and close-code values |
 
-The wire-format pieces (`FrameParser`, `encode_frame`, the handshake parsers and encoders, the close-payload codec, `validate_text_payload`, and the `DEFAULT_*` knob values) live in `chumicro_websockets._wire`, for tests and custom tools.
+The wire-format pieces (`FrameParser`, `encode_frame`, the handshake parsers and encoders, the close-payload codec, `validate_text_payload`, and the `DEFAULT_*` setting values) live in `chumicro_websockets._wire`, for tests and custom tools.
 
 ## Where this fits
 
-Depends on [`chumicro-sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets), which opens the network connections, and [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing), which supplies the millisecond clock.  Runs beside [`chumicro-http-server`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server) in the same program, so one board can serve a web page on one port and a WebSocket on another, over TLS or not.
+Depends on [`chumicro-sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets) for the network connections and [`chumicro-timing`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/timing) for the millisecond clock.  Both install with this library.  Runs as a service on a [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) loop, as the quick example shows.  It runs beside [`chumicro-http-server`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server) in the same program, so one board can serve a web page on one port and a WebSocket on another.
 
 ## Platform support
 
@@ -129,11 +131,13 @@ Works on CPython, MicroPython, and CircuitPython.
 
 | Example | What it shows |
 |---|---|
-| [`client.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/client.py) | Sends `hello N` to an echo server every five seconds, prints each reply, and reconnects after the connection drops. |
-| [`server.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/server.py) | Echoes every text message back to its sender and sends a count to every connected client every five seconds. |
-| [`receive_stream.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/receive_stream.py) | Prints each message a server streams, read with a `next_message()` generator, and reconnects when the stream ends. |
+| [`client.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/client.py) | Sends `hello N` to an echo server every five seconds, prints each reply, and reconnects after the connection drops |
+| [`server.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/server.py) | Echoes every text message back to its sender and sends a count to every connected client every five seconds |
+| [`receive_stream.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/websockets/examples/receive_stream.py) | Prints each message a server streams, read with a `next_message()` generator task, and reconnects when the stream ends |
 
-Each example runs on CircuitPython and MicroPython boards, ends in a `while True:` loop that runs until you unplug the board, and says in its docstring what to run on a laptop for the other end.
+### Running the examples
+
+Each example runs on CircuitPython and MicroPython boards, and its docstring says what to run on a laptop for the other end.  Each one joins wifi through `helpers.py`, which sits beside it in `examples/`.  Set `WIFI_SSID` and `WIFI_PASSWORD` at the top of the example.  Copy the example to the board as `code.py` on CircuitPython or `main.py` on MicroPython, together with `helpers.py` and the libraries it imports.  From a clone of the [ChuMicro repository](https://github.com/ChuMicro/ChuMicro), `chumicro-workspace deploy-example websockets client` does the copying and takes the wifi settings from `secrets.toml`.  [Wiring wifi credentials](https://chumicro.com/ChuMicro/guides/wiring-wifi-credentials/) walks through both ways.
 
 ## Contributing
 

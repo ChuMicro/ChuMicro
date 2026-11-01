@@ -1,44 +1,29 @@
-"""Test helpers for libraries that use chumicro-runner.
-
-Provides ``validate_service`` (asserts a service's runner-contract
-shape), ``CallRecorder`` (records handler invocations), and
-``FakePoller`` (host-test stand-in for ``select.poll().ipoll``).
-"""
+"""Host-test helpers for code on a ``Runner``: ``validate_service``, ``FakePoller``, and ``CallRecorder``."""
 
 __chumicro_test_support__ = True
 
 
 def validate_service(service: object) -> None:
-    """Assert *service* has a coherent runner-service shape.
+    """Raise ``ValueError`` when ``service`` lacks a member ``Runner`` needs, or has one without its partner.
 
-    Checks shape only, never behavior: it reads which contract members
-    the service exposes and enforces the coherence rules the ``Runner``
-    dispatch relies on. It never calls ``check`` / ``handle`` / any hook.
+    ``validate_service`` reads which members the service defines and calls none of them, so
+    it is safe on a service wired to hardware.  It checks that:
 
-    The rules the ``Runner`` dispatch relies on.  Only the first raises on
-    its own; the other two silently no-op when violated, which is why this
-    checker exists:
+    * ``check`` and ``handle`` are both callable.
+    * ``io_socket`` and ``io_interest`` come together.  ``Runner.wait`` watches the socket
+      only through ``io_interest``.
+    * ``io_error`` comes with an ``io_socket``, the socket whose poll errors it receives.
 
-    * ``check`` and ``handle`` are both required. ``Runner.add`` reads
-      ``task.check`` and ``task.handle`` unconditionally, so a service
-      missing either cannot register.
-    * ``io_socket`` and ``io_interest`` come as a pair. The poll sync
-      reads interest through ``io_interest`` and the socket through the
-      ``io_socket`` attribute; one without the other never reaches the
-      poller.
-    * ``io_error`` requires ``io_socket``. It is dispatched only when the
-      service's ``io_socket`` reports a poll error.
-
-    ``next_deadline`` is optional and stands alone. ``io_socket`` is a
-    data attribute (the socket itself, or ``None`` before connect); the
-    other members are callables.
+    ``Runner.add`` accepts a service that breaks either of the last two rules, and the
+    service's socket hooks then never run.  ``next_deadline`` is optional and stands
+    alone.  ``io_socket`` is a plain attribute holding the socket, or None before it
+    connects.  The other members are methods.
 
     Args:
-        service: The object a consumer would pass to ``Runner.add``.
+        service: The object you would pass to ``Runner.add``.
 
     Raises:
-        ValueError: A required member is missing or a coherence rule is
-            broken; the message names the offending member.
+        ValueError: A rule is broken.  The message names the member at fault.
     """
     for name in ("check", "handle"):
         if not callable(getattr(service, name, None)):
@@ -65,7 +50,19 @@ def validate_service(service: object) -> None:
 
 
 class FakePoller:
-    """Host-test fake for ``select.poll().ipoll``."""
+    """A stand-in for ``select.poll()`` that records what ``Runner.wait`` asks it to watch.
+
+    Pass it as ``Runner(poller=FakePoller())``.  ``set_ready`` queues the events the next
+    ``ipoll`` returns, and ``ipoll`` returns at once.
+
+    Attributes:
+        registered: The objects being watched now, keyed by ``id(obj)``, each as an
+            ``(obj, eventmask)`` pair.
+        register_calls: Every ``(obj, eventmask)`` passed to ``register``, oldest first.
+        modify_calls: Every ``(obj, eventmask)`` passed to ``modify``, oldest first.
+        unregister_calls: Every object passed to ``unregister``, oldest first.
+        ipoll_calls: Every ``timeout_ms`` passed to ``ipoll``, oldest first.
+    """
 
     def __init__(self) -> None:
         self.registered: dict = {}
@@ -76,31 +73,41 @@ class FakePoller:
         self._ready: list = []
 
     def register(self, obj: object, eventmask: int) -> None:
+        """Start watching ``obj`` for ``eventmask`` and record the call."""
         self.registered[id(obj)] = (obj, eventmask)
         self.register_calls.append((obj, eventmask))
 
     def modify(self, obj: object, eventmask: int) -> None:
+        """Change the ``eventmask`` ``obj`` is watched for and record the call."""
         self.registered[id(obj)] = (obj, eventmask)
         self.modify_calls.append((obj, eventmask))
 
     def unregister(self, obj: object) -> None:
+        """Stop watching ``obj`` and record the call."""
         self.registered.pop(id(obj), None)
         self.unregister_calls.append(obj)
 
     def ipoll(self, timeout_ms: int) -> list:
-        """Record the call; return whatever ``set_ready`` queued."""
+        """Record ``timeout_ms`` and return the ``(obj, eventmask)`` pairs queued since the last call."""
         self.ipoll_calls.append(timeout_ms)
         ready = self._ready
         self._ready = []
         return ready
 
     def set_ready(self, obj: object, eventmask: int) -> None:
-        """Queue *obj* / *eventmask* for the next ``ipoll`` return."""
+        """Queue ``obj`` with ``eventmask`` for the next ``ipoll`` to return."""
         self._ready.append((obj, eventmask))
 
 
 class CallRecorder:
-    """Callable that records each invocation for test assertions."""
+    """A job function that records the ``now_ms`` of every call, for a test to assert on.
+
+    Register it anywhere a handler goes, such as ``runner.add_periodic(recorder, period_ms=100)``.
+    ``len(recorder)`` is the number of calls so far.
+
+    Attributes:
+        calls: The ``now_ms`` of each call, oldest first.
+    """
 
     def __init__(self) -> None:
         self.calls: list[int] = []
@@ -112,5 +119,5 @@ class CallRecorder:
         return len(self.calls)
 
     def clear(self) -> None:
-        """Discard all recorded calls."""
+        """Forget every recorded call."""
         self.calls.clear()

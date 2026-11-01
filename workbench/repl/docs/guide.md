@@ -1,8 +1,6 @@
 # User Guide
 
-`chumicro-repl` ships four surfaces: an interactive line-mode editor (default), a byte-passthrough TUI, a one-shot `tail()` follow-mode, and a programmatic `ReplSession`.
-
-All four share a pyserial wrapper, a UTF-8-safe streaming decoder, and a pattern detector for the kinds of output that matter (tracebacks, safe-mode banners, hard faults, soft reboots).
+`chumicro-repl` connects your laptop's terminal to the REPL of a CircuitPython or MicroPython board over USB serial.  The REPL is the board's `>>>` prompt, where it runs each line of Python as you enter it.  Inside a ChuMicro workspace, `chumicro-workspace repl --device NAME` opens the same session by the board's name.
 
 ## Install
 
@@ -10,147 +8,188 @@ All four share a pyserial wrapper, a UTF-8-safe streaming decoder, and a pattern
 pip install chumicro-repl
 ```
 
-Host-only. No bundle registration or device-side install needed. After install, a `chumicro-repl` console script is on your PATH.
+The install puts a `chumicro-repl` command on your `PATH`.  The board needs only its CircuitPython or MicroPython firmware.
 
-## Command-line interface
+## Open a session
+
+`--address` is the board's serial port.  On macOS, `ls /dev/cu.*` lists the ports.  A board with native USB shows up there as `/dev/cu.usbmodem…`.  On Linux, `ls /dev/ttyACM* /dev/ttyUSB*` lists them.  Run the listing with the board unplugged and again with it plugged in: the new entry is the board.
 
 ```bash
-# Interactive REPL by serial path.  On a terminal this opens line mode.
-chumicro-repl --address /dev/cu.usbmodem14101
-
-# One-shot tail for 5 seconds, fail on traceback (default).
-chumicro-repl --address /dev/cu.usbmodem14101 --tail 5
-
-# Tail without failing on traceback (useful for diagnosing crash loops).
-chumicro-repl --address /dev/cu.usbmodem14101 --tail 30 --no-fail-on-traceback
+chumicro-repl --address /dev/cu.usbmodem1101
 ```
 
-By default in a TTY, `chumicro-repl` opens **line mode**, a host-side line editor that buffers each line locally before shipping it to the device.  Switch to byte-passthrough with `--mode passthrough` if you need raw-REPL framing or paste-mode forwarding.
+```text
+chumicro-repl line mode: /dev/cu.usbmodem1101
+history: /Users/you/.chumicro-repl/history/dev_cu_usbmodem1101/history.txt
+  :help     list commands
+  :quit     exit
+  Ctrl-X    exit
+  Ctrl-C    interrupt running program on device
+  Ctrl-D    soft-reboot device (at empty prompt)
+>>>
+```
+
+A terminal session opens in line mode.  The same keys work in both modes:
+
+| Key | Effect |
+|---|---|
+| Ctrl-X | Ends the session.  The board keeps running. |
+| Ctrl-C | Stops the program running on the board and returns to `>>>`. |
+| Ctrl-D | At an empty prompt, soft-reboots the board, which restarts its `code.py` or `main.py`. |
+
+Another program with the port open, such as Thonny, Mu, or a `screen` session, keeps the session from starting.  [When a session fails to start](#when-a-session-fails-to-start) shows what `chumicro-repl` prints then.
 
 ## Line mode
 
-The default for terminal sessions.  `prompt_toolkit` reads a complete line on the host, giving you cursor edit, arrow keys, history navigation, and Ctrl-R reverse search, then ships the line to the device when you press Enter.  The device responds in the friendly REPL, and the response streams back through the same pattern detector and traceback highlighter `tail()` uses.
+Line mode edits each line on your laptop and sends it to the board when you press Enter.  The arrow keys move the cursor, up-arrow recalls earlier lines, and Ctrl-R searches them.  The board's answer prints below the line, with tracebacks in red.
 
-Lines starting with `:` are interpreted locally as builtin commands rather than shipped to the device:
+A line that starts with `:` runs a command on your laptop and never reaches the board:
 
 | Command | What it does |
 |---|---|
-| `:help` | List every registered command. |
-| `:edit` | Open `$EDITOR` with the last 10 input lines pre-seeded.  On save and exit, every non-empty line ships line-by-line to the device.  Falls back to `vi` when `$EDITOR` is unset.  Honors shell-shaped values: `EDITOR="code -w"` works. |
-| `:save NAME` | Persist the last 10 input lines to `~/.chumicro-repl/snippets/NAME.py`. |
-| `:load NAME` | Replay a saved snippet line-by-line. |
-| `:snippets` | List saved snippet names. |
-| `:rescan` | Drop the cached `dir()` so the next Tab re-queries the device.  Use it after `import`-ing a new module. |
-| `:quit` | Exit without rebooting the device.  EOF (Ctrl-D) and Ctrl-C at an empty prompt do the same. |
+| `:help` | Lists every command. |
+| `:edit` | Opens `$EDITOR` holding your last 10 lines.  On save and exit, each non-empty line goes to the board in turn.  `vi` opens when `$EDITOR` is unset.  A value with arguments, such as `EDITOR="code -w"`, works. |
+| `:save NAME` | Saves your last 10 lines to `~/.chumicro-repl/snippets/NAME.py`. |
+| `:load NAME` | Sends a saved snippet to the board line by line. |
+| `:snippets` | Lists saved snippet names. |
+| `:rescan` | Clears the cached board names, so the next Tab asks the board again.  Use it after an `import`. |
+| `:quit` | Ends the session and leaves the board running, like Ctrl-X. |
 
 ```text
-chumicro-repl · /dev/cu.usbmodem14101 · circuitpython · 115200 baud
-:help to list commands · :quit to exit
-
->>> import wifi
 >>> :rescan
 line-mode: completion cache cleared; next Tab will re-query the device
->>> wifi.r<Tab>
-            radio
->>> wifi.radio.connect("MySSID", "secret")
 >>> :save bringup-wifi
-line-mode: saved 3 line(s) to ~/.chumicro-repl/snippets/bringup-wifi.py
+line-mode: saved 3 line(s) to /Users/you/.chumicro-repl/snippets/bringup-wifi.py
 >>> :quit
 line-mode: bye
 ```
 
-History is persistent per-device at `~/.chumicro-repl/history/<sanitized-address>/history.txt` so a session on `back-porch` doesn't pollute one on `greenhouse`.
+History lives in one file per serial port, so lines typed at one board stay out of another board's history.  Port `/dev/cu.usbmodem1101` keeps its history at `~/.chumicro-repl/history/dev_cu_usbmodem1101/history.txt`.
 
 ### Tab completion
 
-Two sources merge in line mode:
+Tab merges two sources:
 
-* **Static catalog**, meaning Python keywords (`for`, `import`, `True`, and so on) and public builtins (`print`, `range`, `len`, and so on).  Always available; no device round-trip.
-* **On-device `dir()`**, populated lazily on first Tab via a `print(repr(dir()))` round-trip through raw REPL.  Measured across four boards (Lolin S2 and Pi Pico W, each running CircuitPython and MicroPython), the round-trip took between 8 ms and 45 ms.  Cached for the session; `:rescan` invalidates it after a new `import`.
+- **Python keywords and builtins**, such as `for`, `import`, `print`, and `range`.  These need no board.
+- **The board's own names**, from `dir()` on the board.  The first Tab fetches them through the raw REPL.  The session then keeps them cached.  The round trip took between 8 ms and 45 ms on Lolin S2 and Pi Pico W boards under both runtimes.  `:rescan` clears the cache after an `import`.
 
-The friendly-banner reprint that the round-trip's `Ctrl-B` triggers is captured before line-mode resumes drawing, so it never leaks into your terminal.  Embedding the round-trip in your own shape?  Call `chumicro_repl.completion.fetch_device_names(port)`.
+The round trip makes the board reprint its startup banner.  Line mode reads that banner before redrawing the prompt, so it stays off your screen.  `chumicro_repl.completion.fetch_device_names(port)` runs the same round trip from your own code.
 
-CircuitPython's bare REPL has an empty user namespace by design: `dir()` returns only `__name__` and `__file__` until you `import` something.  MicroPython pre-imports a handful of platform modules (`gc`, `os`, `machine`, `rp2`, `vfs`).  The static catalog covers what's typed most regardless.
+A fresh CircuitPython REPL defines only `__name__` and `__file__` until something is imported.  MicroPython imports a few platform modules at startup, such as `gc`, `os`, and `machine`.  The keyword list covers the names typed most either way.
 
-## Passthrough mode (`--mode passthrough`)
+## Passthrough mode
 
-When you need byte-exact forwarding for paste mode, raw-REPL framing, or mpremote-shape Ctrl-C / Ctrl-D semantics, pass `--mode passthrough`.  Keystrokes go straight to the device and the board does its own line editing.
+Passthrough mode sends every key to the board as you press it.  The board does its own line editing.  Paste mode (Ctrl-E on MicroPython) and tools that drive the raw REPL need it.
 
 ```bash
-chumicro-repl --mode passthrough --address /dev/cu.usbmodem14101
+chumicro-repl --address /dev/cu.usbmodem1101 --mode passthrough
 ```
 
-Startup prints a dim banner identifying the connection (`chumicro-repl · /dev/cu.usbmodem14101 · circuitpython · 115200 baud`) and the four keys you might want, then sends a single carriage return to nudge the friendly REPL into reprinting its `>>>`:
+The session prints a dim banner with the port, the baud rate, and the keys, then sends one carriage return so the board reprints its `>>>`:
 
 | Key | Effect |
-|-----|--------|
-| Ctrl-C | Forwarded; interrupts on-device. |
-| Ctrl-D | Forwarded; soft-reboots the runtime. |
-| Ctrl-E | Forwarded; enters MicroPython paste mode. |
-| Ctrl-X | **Local exit**: quits the TUI without rebooting the board. |
+|---|---|
+| Ctrl-C | Sent to the board.  Stops the running program. |
+| Ctrl-D | Sent to the board.  Soft-reboots it. |
+| Ctrl-E | Sent to the board.  Enters MicroPython's paste mode. |
+| Ctrl-X | Ends the session on your laptop.  The board keeps running. |
 
-All other keystrokes pass through unchanged.  The board does its own line editing, so arrow keys, backspace, and history all work, but they live on the device, not the host.  No `:` commands, no Tab completion against the host catalog, no persistent history file (the device's own history scrolls inside the runtime's `>>>` prompt).
+Every other key goes to the board unchanged.  Arrow keys, backspace, and up-arrow history work through the board's own line editor.  Passthrough mode has no `:` commands and no Tab completion from your laptop.  When the cable drops, passthrough mode tries to reopen the port for up to 60 seconds.  Ctrl-X cancels the wait.
 
-Choose passthrough when you need byte-exact behavior or when you're piping input over stdin (line mode requires interactive input from a TTY); choose line mode for everyday inner-loop work.  `--mode auto` (the default) inspects `sys.stdin.isatty()` and picks the right one.
+`--mode auto`, the default, picks line mode when input comes from a terminal and passthrough when input is piped, because line mode reads from a terminal.  `--mode line` and `--mode passthrough` pick one outright.
 
-## Tail mode for deploy follow-ups
+## Watch output with `--tail`
+
+`--tail SECONDS` prints the board's output for that long and exits, in place of an interactive session:
+
+```bash
+chumicro-repl --address /dev/cu.usbmodem1101 --tail 30
+```
+
+`--tail` sends nothing to the board, so the board keeps running whatever it was running.  The exit status says why the window ended:
+
+| Exit status | Meaning |
+|---|---|
+| 0 | The time ran out. |
+| 1 | A traceback, a CircuitPython safe-mode message, or a CircuitPython hard fault appeared. |
+| 2 | Ctrl-C ended the tail. |
+| 3 | The board disconnected and stayed gone for 30 seconds. |
+
+`--no-fail-on-traceback` keeps printing for the full time after a traceback and exits 0, to watch a board that crashes and restarts in a loop.  A MicroPython soft-reboot banner prints in dim cyan and never ends the tail.  When the cable drops, the tail waits up to 30 seconds for the board to come back.  That wait adds to the window.
+
+## When a session fails to start
+
+An interactive session that cannot open the board names the failure, prints the steps that fix it, and waits for Enter to retry, up to three attempts.  A held port looks like this:
+
+```text
+Attempt 1/3 failed: SerialException
+  <the error the serial port raised>
+
+The serial port is held by another process.
+  • Close any other tool that may have the port open: Mu, Thonny, the Arduino IDE, screen / minicom, another mpremote, PyCharm or VS Code serial console.
+  • On macOS / Linux, `lsof <port>` shows the holding process; kill it or quit the app and retry.
+  • If the port was held by a crashed process, unplug + replug the board to force the OS to release it.
+
+Fix the condition above and press Enter to retry…  (2 retries remaining; type 'q' to abort)
+```
+
+`q`, `quit`, `abort`, or `exit` stops retrying.  With piped input, the steps print once and the command stops without asking.  `--tail` skips this coaching.
+
+| Kind | What happened | First fix |
+|---|---|---|
+| `PORT_NOT_FOUND` | No port exists at the address | Plug the board in with a data cable, and check the address with `ls` |
+| `PORT_BUSY` | Another program holds the port | Close that program |
+| `PORT_PERMISSION_DENIED` | Your user account cannot open the port | On Linux, `sudo usermod -a -G dialout $USER`, then log out and back in |
+| `RAW_REPL_UNRESPONSIVE` | The port opened, but the board's REPL did not answer | Tap RESET, or flash CircuitPython or MicroPython |
+| `UNKNOWN` | No known pattern matched | Read the error, then retry |
+
+This coaching covers a session that never opened.  A board that drops after the session opened goes through the reconnect waits in passthrough mode and `--tail`.  Line mode ends the session when a write to the dropped port fails.
+
+## Use it from Python
+
+### Follow a board: `tail()`
 
 ```python
 from chumicro_deploy import Device
 from chumicro_repl import tail, ExitCode
 
-device = Device(
-    transport="circuitpython",
-    address="/dev/cu.usbmodem14101",
-)
+device = Device(transport="circuitpython", address="/dev/cu.usbmodem14101")
 
 result = tail(device, seconds=10.0, fail_on_traceback=True)
 if result is ExitCode.TRACEBACK_DETECTED:
     raise SystemExit("deploy crashed on the board")
-elif result is ExitCode.OK:
-    print("clean tail: board ran without surfacing a traceback")
 ```
 
-`tail()` accepts either a `chumicro_deploy.Device` or a bare port path string. Output is decoded UTF-8 safely (multi-byte code-points split across reads do not corrupt the stream) and ANSI-highlighted as it scrolls past: tracebacks are bold red, safe-mode banners are yellow, hard faults are red-on-red, MicroPython soft-reboot banners are dim cyan.
+`tail()` takes a `chumicro_deploy.Device` or a bare port path.  It returns an `ExitCode`: `OK`, `TRACEBACK_DETECTED`, `INTERRUPTED`, or `DISCONNECTED`, worth 0 to 3 as in the [exit status table](#watch-output-with-tail).  `reconnect_seconds=0.0` turns off the reconnect wait, so a CI job fails at once on a dropped board.  The output stays correct when a multi-byte UTF-8 character splits across two reads.
 
-The window ends when:
+### Run code on the board: `ReplSession`
 
-- The `seconds` budget elapses → `ExitCode.OK`.
-- `fail_on_traceback=True` (default) and a traceback / safe-mode / hard-fault block is detected → `ExitCode.TRACEBACK_DETECTED`.
-- A `KeyboardInterrupt` reaches the read loop → `ExitCode.INTERRUPTED`.
-
-Soft-reboot banners are informational and never end a tail early.
-
-## Programmatic raw REPL with `ReplSession`
-
-`ReplSession` is a context manager that puts the board into raw REPL on entry and exits cleanly. Three primitives:
+`ReplSession` is a context manager.  Entering it stops the program the board is running and switches the board to its raw REPL.  Leaving it returns the board to the normal `>>>` prompt.
 
 ```python
 from chumicro_repl import ReplSession
 
 with ReplSession("/dev/cu.usbmodem14101") as session:
-    # Run a block, get stdout back as a UTF-8 string.
-    output = session.exec("import os\nprint(os.uname())\n")
+    # Run a block and get back what it printed.
+    output = session.exec("import os\nprint(os.listdir('/'))\n")
 
-    # Call a named function with literal args, parse the repr.
-    voltage = session.call("supervisor.runtime.usb_voltage")
+    # Call a function and get its return value as a Python object.
+    session.exec("import gc")
+    free_bytes = session.call("gc.mem_free")
 
-    # Stream-read until a regex matches.  Useful for waiting on a
-    # board signal before the next exec.
+    # Wait for the board to print a line that matches a regex.
     captured = session.read_until(r"READY", timeout=5.0)
 ```
 
-`exec(code, timeout=10.0)` returns stdout. If the board emitted stderr (typically because the code raised an exception), `ReplSession` raises `ReplSessionError` with the stderr block attached as the exception's `.stderr` attribute. Raw REPL never raises a Python exception object across the wire, so surfacing it as a string is the closest host-side analog.
+- `exec(code, timeout=10.0)` returns what the code printed.  Code that raises on the board makes `exec` raise `ReplSessionError`, with the board's error text in its `.stderr` attribute.
+- `call(function_name, *args, **kwargs)` runs `print(repr(function_name(*args, **kwargs)))` on the board and parses the result with `ast.literal_eval`.  Numbers, strings, bytes, tuples, lists, dicts, sets, booleans, and `None` come back as Python objects.  Any other return value raises `ReplSessionError`.  The function's module must be imported first with `exec`.
+- `read_until(pattern, timeout=...)` reads until the regex matches and returns the text up to the match.
 
-`call(function_name, *args, **kwargs)` builds a `print(repr(<function_name>(*args, **kwargs)))` and parses the result via `ast.literal_eval`. Round-trips numbers, strings, bytes, tuples, lists, dicts, sets, booleans, and `None`. Anything else raises `ReplSessionError` because the repr is not a literal.
+`ReplSession` accepts a `chumicro_deploy.Device`, a bare port path, or any object with `.address` and `.baudrate`.
 
-`read_until(pattern, timeout)` reads bytes from the port until the regex matches the accumulated decoded text. Operates on the friendly REPL too, so callers tailing a deploy can wait for a specific signal without bouncing through raw REPL.
+### Retry a failed start: `InteractiveReplSession`
 
-The session accepts a `chumicro_deploy.Device`, a bare serial-port path, or any object with `.address` and `.baudrate` attributes. Tests inject `time` (a `TimeSource` protocol) and `port_factory` (any callable returning a `SerialPort` protocol) so the whole context is exercised without real hardware.
-
-## Recover from session-start failures with `InteractiveReplSession`
-
-`ReplSession` raises directly on a failed session-start, which is the deterministic surface programmatic callers want.  For interactive use, `InteractiveReplSession` wraps a `ReplSession` with classification, a retry-loop, and user-facing coaching, mirroring `chumicro_deploy.RecoveringDeployer`.
+`InteractiveReplSession` wraps `ReplSession` with the startup coaching the command prints:
 
 ```python
 from chumicro_repl import InteractiveReplSession
@@ -159,55 +198,37 @@ with InteractiveReplSession(device, max_attempts=3) as session:
     output = session.exec("print('hello')")
 ```
 
-When the underlying session fails to open, the wrapper:
-
-1. Classifies the exception into a `ReplFailureKind`: one of `PORT_NOT_FOUND`, `PORT_BUSY`, `PORT_PERMISSION_DENIED`, `RAW_REPL_UNRESPONSIVE`, or `UNKNOWN`.
-2. Prints the matching `RecoveryPlan` (headline plus ordered fix-steps) to *output*.
-3. Prompts the user via *prompt*: bare Enter retries; `q` / `quit` / `abort` / `exit` re-raises the last error.
-4. After `max_attempts` attempts, the last exception re-raises.
-
-`prompt` and `output` are injectable so you can plug the wrapper into a TUI dialog, a logging framework, or a test scripted with a queue of canned responses.
+`prompt` and `output` take any callable, so a test can feed scripted replies and a GUI can show the steps.  `classify_session_failure(error)` returns the `ReplFailureKind` for an exception, for code that handles failures itself:
 
 ```python
-from chumicro_repl import InteractiveReplSession, classify_session_failure, ReplFailureKind
+from chumicro_repl import ReplFailureKind, ReplSession, ReplSessionError, classify_session_failure
 
-# Custom orchestrator: classify directly without using the wrapper.
 try:
     with ReplSession(device) as session:
         ...
 except (OSError, ReplSessionError) as error:
-    kind = classify_session_failure(error)
-    if kind is ReplFailureKind.PORT_BUSY:
-        ...  # close-the-other-tool flow
+    if classify_session_failure(error) is ReplFailureKind.PORT_BUSY:
+        ...  # ask the user to close the other program
 ```
 
-Mid-session disconnects (after the handshake completed) do *not* route through this layer.  Those are handled by the auto-reconnect loop in `tail()` and `run_loop()` (see `reconnect_seconds`).  Subclass `ReplSessionDisconnected` matters for that path; `InteractiveReplSession` matters for "the session never opened".
+`coached_session_start(factory)` runs the same retry loop around any function that opens a session.  The `chumicro-repl` command wraps `interactive_line` and `interactive` with it.
 
-The interactive [`demo_repl_robustness.py`](https://github.com/ChuMicro/ChuMicro/blob/main/workbench/repl/examples/demo_repl_robustness.py) example walks every scenario against a real board: happy path, port-not-found (bogus address), port-busy (open the port elsewhere first), raw-REPL-unresponsive (board stuck in interrupt-disabled code), auto-reconnect during tail (yank and replug the cable), and abort during reconnect.
-
-## Pattern detection and highlighting
+### Find tracebacks in text: `detect_patterns` and `colorize`
 
 ```python
-from chumicro_repl import detect_patterns, colorize, Theme
+from chumicro_repl import Theme, colorize, detect_patterns
 
-text = "running\n" + boards_traceback_output
-matches = detect_patterns(text)
-for match in matches:
+text = "running\n" + board_output
+for match in detect_patterns(text):
     print(match.kind, match.start, match.end)
 
-# Render with default colors.
-print(colorize(text), end="")
-
-# Custom theme.
-theme = Theme(traceback="32")  # green tracebacks
-print(colorize(text, theme=theme), end="")
+print(colorize(text), end="")                           # default colors
+print(colorize(text, theme=Theme(traceback="32")), end="")  # green tracebacks
 ```
 
-The `StreamingPatternDetector` is the primitive `tail()` and the TUI build on. It buffers a bounded amount of trailing context so a pattern that spans a chunk boundary still matches without growing memory on long-running sessions. Use it directly for any custom streaming consumer.
+`chumicro_repl.patterns.StreamingPatternDetector` finds the same patterns in a stream.  It keeps a bounded tail of recent text, so a traceback split across two reads still matches while memory stays flat in a long session.  `tail()` and both interactive modes use it.
 
-## Test fakes
-
-Host-side tests can drive every surface without real hardware:
+### Test without a board
 
 ```python
 from chumicro_repl import ReplSession
@@ -225,24 +246,38 @@ with ReplSession(
     assert session.exec("print('hello')") == "hello\n"
 ```
 
-Three fakes are exposed under `chumicro_repl.testing`:
+`chumicro_repl.testing` holds three fakes:
 
-- `FakeSerialPort`, a drop-in for `serial.Serial`. Records writes; replays scripted `read_chunks`.
-- `FakeKeyboard`, which replays scripted keystrokes for `chumicro_repl.tui.run_loop`.
-- `FakeTime`, a deterministic seconds-domain time source. `monotonic()` is stable; `sleep()` advances the clock without a real wait.
+- `FakeSerialPort` stands in for `serial.Serial`.  It records writes in `.writes` and returns the scripted `read_chunks` in order.
+- `FakeKeyboard` replays scripted keystrokes for `chumicro_repl.tui.run_loop`.
+- `FakeTime` is a clock that moves only when told.  `monotonic()` holds still between calls.  `sleep()` advances the clock with no real wait.
 
-## Runtime notes
+## Reference
 
-The raw-REPL framing is identical between CircuitPython and MicroPython. Both runtimes emit the same `OK<stdout>\x04<stderr>\x04>` shape on the same Ctrl-A/Ctrl-D handshake. The only divergence is what a friendly-REPL Ctrl-D prints: MicroPython emits `MPY: soft reboot` and CircuitPython is silent. `ReplSession` never leaves raw REPL during operation, so the divergence never surfaces there; it's a concern only for `tail()` (which highlights the soft-reboot banner) and the passthrough TUI (which forwards Ctrl-D and shows whatever the board prints).
+### Runtime notes
 
-Pattern detection covers:
+CircuitPython and MicroPython frame the raw REPL the same way.  Both answer Ctrl-A with the raw prompt and send `OK<stdout>\x04<stderr>\x04>` after each command.  They differ in what Ctrl-D prints at the normal `>>>` prompt: MicroPython prints `MPY: soft reboot`, and CircuitPython prints nothing.  `ReplSession` stays in the raw REPL, so only `tail()` and passthrough mode show the difference.
 
-| Kind | Source | When it appears |
-|------|--------|-----------------|
-| Traceback | both | An uncaught exception. |
-| Safe mode | CircuitPython | Repeated crashes or supervisor reload into a broken state. |
-| Hard fault | CircuitPython | A crash below the Python-exception layer. |
-| Soft reboot | MicroPython | Ctrl-D in the friendly REPL or `machine.soft_reset()`. |
+### Highlighted output
+
+| Kind | Runtime | When it appears | Color |
+|---|---|---|---|
+| Traceback | both | An uncaught exception | Bold red |
+| Safe mode | CircuitPython | The supervisor drops into safe mode after repeated crashes | Bold yellow |
+| Hard fault | CircuitPython | A crash below the level of Python exceptions | Bold on a red background |
+| Soft reboot | MicroPython | Ctrl-D at the `>>>` prompt, or `machine.soft_reset()` | Dim cyan |
+
+### Files on your laptop
+
+| Path | Holds |
+|---|---|
+| `~/.chumicro-repl/history/<port>/history.txt` | Line-mode history for one port, with `/` and `.` in the port turned into `_` |
+| `~/.chumicro-repl/snippets/NAME.py` | A snippet `:save NAME` wrote |
+
+### Examples
+
+- [`tail_after_deploy.py`](https://github.com/ChuMicro/ChuMicro/blob/main/workbench/repl/examples/tail_after_deploy.py) follows a board for ten seconds and exits non-zero on a traceback.
+- [`demo_repl_robustness.py`](https://github.com/ChuMicro/ChuMicro/blob/main/workbench/repl/examples/demo_repl_robustness.py) walks a real board through each startup failure and reconnect: a clean session, a wrong address, a held port, a board stuck in code that ignores Ctrl-C, a cable pulled during a tail, and a reconnect cancelled partway.
 
 ---
 

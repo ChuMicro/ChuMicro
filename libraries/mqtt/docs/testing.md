@@ -1,14 +1,10 @@
 # Testing Helpers
 
-`chumicro_mqtt.testing` provides pre-baked broker-response byte sequences plus two fixtures for building a client and ticking it.  Tests drive `MQTTClient` against a `chumicro_sockets.testing.FakeSocket`: script the broker's responses with these helpers, let the client tick, then assert the wire format on `sock.sent`.  The helpers stay on the host: `chumicro-deploy` reads the test-support marker at the top of the module and leaves it out of every device bundle it builds.
+`chumicro_mqtt.testing` stands in for the MQTT broker.  It holds the byte packets a broker sends back and two helpers that build an `MQTTClient` and tick it.  A test queues the broker's replies on a `FakeSocket` from `chumicro_sockets.testing`, ticks the client, and reads the bytes the client wrote from `sock.sent`.  `pip install chumicro-mqtt pytest` installs everything the tests on this page import, `chumicro-sockets` and `chumicro-timing` included.  Project deploys and the board bundles leave the module out.
 
-Each helper spells out one packet shape once, so a test reads `canned_suback_bytes(packet_id=1)` instead of a byte literal nobody can check by eye.
+## The smallest test
 
-## Building a client and ticking it
-
-`new_client(sock, ticks, **overrides)` builds an `MQTTClient` on *sock* with test defaults: client id `"test-client"`, a 60-second keep-alive, a 5-second ack timeout, and two publish retries.  Any keyword you pass replaces one of those defaults or sets another `MQTTClient` argument.  `drive(client, ticks, count=1)` calls `client.handle(ticks.ticks_ms())` *count* times, which is the loop most tests need after an action that expects a broker response.
-
-Pass a hand-driven clock as *ticks* so the test decides when keep-alives and ack timeouts fire.  `chumicro_timing.testing.FakeTicks` is one, and it only moves when you call `advance()`:
+Save this as `test_mqtt_connect.py` and run `pytest test_mqtt_connect.py`:
 
 ```python
 from chumicro_mqtt import ProtocolState
@@ -22,18 +18,38 @@ def test_client_reaches_connected():
     ticks = FakeTicks()
     sock.enqueue_recv(canned_connack_bytes(return_code=0))
 
-    client = new_client(sock, ticks, keep_alive_seconds=30)
+    client = new_client(sock, ticks)
     client.connect()
     drive(client, ticks, count=3)
 
     assert client.state == ProtocolState.CONNECTED
 ```
 
-Give the client and the tick values you drive it with the same source.  A client left on the real clock and then handed a made-up `now_ms` sees every deadline as long past, and it fails on the first response it gets.
+The CONNACK waits on the socket from the start.  The client reads it after its CONNECT goes out.  `drive` ticks the client three times, enough to send CONNECT and read the reply.
 
-## A full round-trip
+## `new_client` and `drive`
 
-Enqueue each broker response just before the client action that expects it.  The client drains the socket greedily, so a PUBACK sitting in the recv queue before its PUBLISH has been sent counts as an unsolicited ack and faults the client.
+| Helper | What it does |
+|---|---|
+| `new_client(sock, ticks, **overrides)` | Builds an `MQTTClient` on `sock` with client id `"test-client"`, a 60-second keep-alive, a 5-second ack timeout, and two publish retries.  Each keyword replaces one of those or sets another `MQTTClient` argument. |
+| `drive(client, ticks, count=1)` | Calls `client.handle(ticks.ticks_ms())` `count` times. |
+
+Pass a `FakeTicks` as `ticks`, so the test decides when keep-alives and ack timeouts fire.  The client and the `now_ms` it is driven with share that clock.  A client left on the real clock and handed a made-up `now_ms` sees every deadline as long past and fails on the first reply.
+
+## Broker packets
+
+| Helper | Returns |
+|---|---|
+| `canned_connack_bytes(*, return_code=0, session_present=False)` | A CONNACK.  `return_code=0` accepts the connection, and 1 to 5 are the MQTT 3.1.1 refusal codes. |
+| `canned_puback_bytes(packet_id)` | A PUBACK, which acknowledges a QoS 1 publish. |
+| `canned_suback_bytes(packet_id, granted_qos=0)` | A SUBACK for a one-topic SUBSCRIBE. |
+| `canned_unsuback_bytes(packet_id)` | An UNSUBACK. |
+| `canned_pingresp_bytes()` | A PINGRESP, the reply to a keep-alive ping. |
+| `canned_publish_bytes(topic, payload, *, qos=0, retain=False, packet_id=None)` | A PUBLISH from the broker, for a message arriving on a subscription.  QoS 1 or 2 needs a `packet_id`. |
+
+`canned_connack_bytes` takes its arguments by keyword only, as in `canned_connack_bytes(return_code=4)`.
+
+Queue each reply just before the client action that expects it.  The client reads everything waiting on the socket, so a PUBACK queued before its PUBLISH goes out counts as an unasked-for ack and faults the client.  Packet ids start at 1 and count up for each outgoing packet that needs one:
 
 ```python
 from chumicro_mqtt.testing import (
@@ -47,11 +63,10 @@ from chumicro_sockets.testing import FakeSocket
 from chumicro_timing.testing import FakeTicks
 
 
-def test_connect_subscribe_publish_roundtrip():
+def test_subscribe_then_publish():
     sock = FakeSocket()
     ticks = FakeTicks()
     sock.enqueue_recv(canned_connack_bytes(return_code=0))
-
     client = new_client(sock, ticks)
     client.connect()
     drive(client, ticks, count=3)
@@ -69,33 +84,24 @@ def test_connect_subscribe_publish_roundtrip():
     drive(client, ticks, count=3)
 
     assert acked == ["sensors/temp"]
-    # Inspect what the client wrote on the wire.  `sock.sent` is a
-    # bytearray of everything send()'d in order.
-    assert sock.sent[0] == 0x10  # CONNECT fixed header
+    assert sock.sent[0] == 0x10
 ```
 
-Packet ids start at 1 and count up per outbound packet that needs one, which is why the SUBSCRIBE above is acked with `packet_id=1` and the PUBLISH with `packet_id=2`.
+`sock.sent` holds every byte the client wrote, in order.  Its first byte, `0x10`, opens the CONNECT packet.
 
-## Available helpers
-
-| Helper | Returns |
-|---|---|
-| `canned_connack_bytes(*, return_code=0, session_present=False)` | CONNACK packet.  `return_code=0` means accepted; 1 to 5 are the rejection codes in MQTT 3.1.1 §3.2.2.3. |
-| `canned_puback_bytes(packet_id)` | PUBACK packet, which acknowledges a QoS 1 publish. |
-| `canned_suback_bytes(packet_id, granted_qos=0)` | SUBACK packet acknowledging a one-subscription SUBSCRIBE. |
-| `canned_unsuback_bytes(packet_id)` | UNSUBACK packet acknowledging an UNSUBSCRIBE. |
-| `canned_pingresp_bytes()` | PINGRESP packet, the keep-alive response. |
-| `canned_publish_bytes(topic, payload, *, qos=0, retain=False, packet_id=None)` | PUBLISH packet shaped like the broker would send.  Feed it to `sock.enqueue_recv()` to simulate an inbound message. |
-
-Arguments after the `*` are keyword-only: `canned_connack_bytes(return_code=4)` works, `canned_connack_bytes(4)` raises `TypeError`.
-
-## Simulating a broker rejection
+A refusal code in the CONNACK plays a broker that turns the client away:
 
 ```python
-def test_client_handles_connect_refusal():
+from chumicro_mqtt import ProtocolState
+from chumicro_mqtt.testing import canned_connack_bytes, drive, new_client
+from chumicro_sockets.testing import FakeSocket
+from chumicro_timing.testing import FakeTicks
+
+
+def test_bad_credentials_fail_the_client():
     sock = FakeSocket()
     ticks = FakeTicks()
-    sock.enqueue_recv(canned_connack_bytes(return_code=4))   # bad credentials
+    sock.enqueue_recv(canned_connack_bytes(return_code=4))
 
     client = new_client(sock, ticks)
     client.connect()
@@ -104,14 +110,24 @@ def test_client_handles_connect_refusal():
     assert client.state == ProtocolState.FAILED
 ```
 
-## Simulating an inbound message
+`canned_publish_bytes` delivers a message on a subscription:
 
 ```python
-def test_subscriber_receives_publish():
+from chumicro_mqtt.testing import (
+    canned_connack_bytes,
+    canned_publish_bytes,
+    canned_suback_bytes,
+    drive,
+    new_client,
+)
+from chumicro_sockets.testing import FakeSocket
+from chumicro_timing.testing import FakeTicks
+
+
+def test_subscriber_receives_a_message():
     sock = FakeSocket()
     ticks = FakeTicks()
     sock.enqueue_recv(canned_connack_bytes(return_code=0))
-
     received = []
     client = new_client(sock, ticks)
     client.on_message = lambda topic, payload: received.append((topic, payload))
@@ -122,24 +138,15 @@ def test_subscriber_receives_publish():
     client.subscribe("sensors/+")
     drive(client, ticks, count=3)
 
-    # Broker now pushes a retained or fresh message on the subscription.
     sock.enqueue_recv(canned_publish_bytes("sensors/temp", b"22.1"))
     drive(client, ticks, count=3)
 
     assert received == [("sensors/temp", b"22.1")]
 ```
 
-## Using these fakes in your own tests
+The [sockets Testing Helpers](https://chumicro.com/ChuMicro/sockets/stable/testing/) page covers `FakeSocket`, including how it simulates a dropped connection.
 
-Your own test suite imports the helpers the same way, and needs nothing beyond the `chumicro-mqtt` install itself:
-
-```python
-from chumicro_mqtt.testing import canned_connack_bytes, canned_publish_bytes
-```
-
-`FakeSocket` comes from `chumicro_sockets.testing` and `FakeTicks` from `chumicro_timing.testing`, both installed alongside `chumicro-mqtt` as its dependencies.
-
-## API Reference
+## API reference
 
 ::: chumicro_mqtt.testing
 

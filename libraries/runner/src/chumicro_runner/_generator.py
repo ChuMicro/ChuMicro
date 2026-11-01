@@ -6,7 +6,12 @@ _NEXT_TICK_WAIT = _NextTickWait()
 
 
 class GeneratorHandle:
-    """Handle returned by ``Runner.add_generator``."""
+    """The handle ``Runner.add_generator`` returns for one generator task.
+
+    Attributes:
+        done: True once the generator returns, raises, or is cancelled.
+        error: The exception that ended the generator, or None.
+    """
 
     def __init__(self) -> None:
         self.done = False
@@ -14,7 +19,12 @@ class GeneratorHandle:
         self._wrapper: _GeneratorWrapper | None = None
 
     def cancel(self) -> None:
-        """Stop the generator and remove it from the runner."""
+        """Close the generator, unregister it, and set ``done`` to True.
+
+        Python raises ``GeneratorExit`` at the paused ``yield``, so the generator's
+        ``finally`` blocks run.  A second call, or a call after the task finished, does
+        nothing.
+        """
         wrapper = self._wrapper
         if wrapper is not None:
             self._wrapper = None

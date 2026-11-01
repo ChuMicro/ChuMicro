@@ -6,7 +6,7 @@ title: "chumicro-msgpack: MessagePack for CircuitPython and MicroPython"
 
 **Turn a dict into a few bytes and back again: the job JSON does, in fewer bytes.**
 
-`packb(reading)` turns a dict, list, number, or string into compact bytes you can save in NVM, write to a file, or send over the network, and `unpackb(data)` turns them back.  The bytes follow the [MessagePack](https://msgpack.org) format, so the same code runs on CircuitPython, MicroPython, and CPython, and a laptop can read what a board wrote.  On a CircuitPython board whose firmware has the built-in `msgpack` module, these functions use it.
+`packb(reading)` turns a dict, list, number, or string into compact bytes you can save in NVM, write to a file, or send over the network.  `unpackb(data)` turns them back.  The bytes follow the [MessagePack](https://msgpack.org) format, so a laptop reading them with the PyPI `msgpack` package gets the same values.  On a CircuitPython board whose firmware has the built-in `msgpack` module, these functions use it.  The same code runs on CircuitPython, MicroPython, and CPython.
 
 ## Install
 
@@ -21,7 +21,7 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_msgpack
 pip install chumicro-msgpack
 ```
 
-No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
 
@@ -44,6 +44,8 @@ while True:
 
     time.sleep(1)
 ```
+
+The same reading as JSON text takes 28 bytes.
 
 ## Documentation
 

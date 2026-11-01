@@ -1,4 +1,4 @@
-"""Rotary encoders and analog knobs, read as a position that holds still."""
+"""Rotary encoders and analog knobs, read as a position that holds still: ``Encoder`` and ``AnalogKnob``."""
 
 import gc
 

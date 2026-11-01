@@ -1,4 +1,10 @@
-"""Cross-runtime wrap-safe millisecond ticks and signed-difference math; values wrap every ~6.2 days."""
+"""``ticks_ms``, ``ticks_add``, and ``ticks_diff``: a millisecond clock that stays correct when it rolls over.
+
+A tick is a reading from ``ticks_ms()``, a whole number of milliseconds from 0 to
+``TICKS_MAX`` (2**29 - 1).  The count rolls back to 0 about every 6.2 days.  Compare two
+ticks with ``ticks_diff`` and offset one with ``ticks_add``.  Plain ``-``, ``+``, and ``<``
+give wrong answers across the rollover.
+"""
 
 # The wrap constants, the ticks_ms source-resolution order, and the ticks_add /
 # ticks_diff math in this module come from Adafruit_CircuitPython_Ticks:
@@ -54,15 +60,29 @@ _raw_ticks_ms = _resolve_ticks_ms()
 
 
 def ticks_ms() -> int:
-    """Returns the current tick in ``[0, TICKS_MAX]``; compare with ``ticks_diff``, not subtraction."""
+    """Return the current tick: milliseconds on the runtime's clock, from 0 to ``TICKS_MAX``.
+
+    Read it once per pass of the loop and hand that one reading to every timer, so every
+    timer judges the pass by the same instant.
+    """
     return _raw_ticks_ms() & TICKS_MAX
 
 
 def ticks_add(ticks: int, delta: int) -> int:
-    """Returns ``ticks`` advanced by ``delta`` within the wrap-safe range.
+    """Return the tick ``delta`` milliseconds after ``ticks``, rolled over into the tick range.
+
+    ``ticks_add(ticks_ms(), 500)`` is the tick half a second from now, the usual way to
+    build a deadline.
+
+    Args:
+        ticks: A tick from ``ticks_ms()`` or an earlier ``ticks_add``.
+        delta: Milliseconds to add.  A negative ``delta`` gives an earlier tick.
+
+    Returns:
+        The new tick, from 0 to ``TICKS_MAX``.
 
     Raises:
-        OverflowError: When ``delta`` reaches half a period (~3.1 days) in either direction.
+        OverflowError: ``delta`` is 2**28 ms (about 3.1 days) or more in either direction.
     """
     if -TICKS_HALFPERIOD < delta < TICKS_HALFPERIOD:
         return (ticks + delta) % TICKS_PERIOD
@@ -70,11 +90,20 @@ def ticks_add(ticks: int, delta: int) -> int:
 
 
 def ticks_diff(end: int, start: int) -> int:
-    """Returns the signed millisecond distance from ``start`` to ``end``.
+    """Return the signed number of milliseconds from ``start`` to ``end``.
+
+    The result is positive when ``end`` is later than ``start`` and negative when it is
+    earlier, even when the clock rolled over between the two.
+    ``ticks_diff(now_ms, deadline_ms) >= 0`` tests whether a deadline has passed.
+
+    Args:
+        end: The tick to measure to, usually the current one.
+        start: The tick to measure from.
 
     Returns:
-        Signed value in ``[-TICKS_HALFPERIOD, TICKS_HALFPERIOD)``; gaps over ~3.1 days
-        (half the wrap period) alias to the wrong sign.
+        Milliseconds from ``start`` to ``end``, from ``-TICKS_HALFPERIOD`` up to
+            ``TICKS_HALFPERIOD - 1`` (2**28 is about 3.1 days).  Two ticks further apart
+            than that come out with the wrong sign.
     """
     diff = (end - start) & TICKS_MAX
     return ((diff + TICKS_HALFPERIOD) & TICKS_MAX) - TICKS_HALFPERIOD

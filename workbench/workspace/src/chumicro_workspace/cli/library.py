@@ -576,14 +576,27 @@ def _add_library_parsers(subparsers: argparse._SubParsersAction) -> None:
     """Register the ``library`` command group."""
     library_parser = subparsers.add_parser(
         "library",
-        help="Curate chumicro libraries into the workspace from a channel.",
+        help="Fetch ChuMicro libraries into the workspace's libraries/ folder.",
+        description=(
+            "Fetch ChuMicro libraries from their published releases into "
+            "libraries/, and record each one in the libraries: table of "
+            "workspace.yml.  deploy then copies the ones a project "
+            "imports onto the board.  Releases come in two channels: "
+            "stable, and experimental for pre-release versions."
+        ),
     )
     verbs = library_parser.add_subparsers(
         dest="library_command", required=True,
     )
 
     list_parser = verbs.add_parser(
-        "list", help="Show curated libraries (channel, version, state).",
+        "list",
+        help="List the fetched libraries with their channel and version.",
+        description=(
+            "Print each library recorded in workspace.yml with its "
+            "channel and version.  A flag marks a library that is "
+            "declined, missing from libraries/, or held as local edits."
+        ),
     )
     _add_workspace_arg(list_parser)
     _add_non_interactive_arg(list_parser)
@@ -591,41 +604,78 @@ def _add_library_parsers(subparsers: argparse._SubParsersAction) -> None:
 
     browse_parser = verbs.add_parser(
         "browse",
-        help="Interactive catalog browser (TTY only; scripted? use 'add').",
+        help="Pick libraries from an interactive catalog.",
+        description=(
+            "Open a catalog of the published libraries and fetch the "
+            "ones you pick.  It needs a terminal.  Scripts use library "
+            "add."
+        ),
     )
     browse_parser.add_argument(
         "--channel", choices=VALID_CHANNELS, default=DEFAULT_CHANNEL,
-        help=f"Channel to open on (Tab toggles in-app; default: {DEFAULT_CHANNEL}).",
+        help=(
+            "Channel to open on.  Tab switches channel inside the "
+            f"catalog.  Default: {DEFAULT_CHANNEL}."
+        ),
     )
     _add_workspace_arg(browse_parser)
     browse_parser.set_defaults(func=_cmd_library_browse)
 
     add_parser = verbs.add_parser(
-        "add", help="Fetch a library + its chumicro deps from a snapshot.",
+        "add",
+        help="Fetch a library, and the libraries it needs, into libraries/.",
+        description=(
+            "Fetch the library and every ChuMicro library it depends on "
+            "into libraries/<name>/, and record each in workspace.yml.  "
+            "The record pins the version fetched, and library update "
+            "leaves a pinned library alone.  --floating records the "
+            "library as following the latest release.  On a terminal, "
+            "add asks whether to keep each library the requested one "
+            "depends on.  An existing copy moves to "
+            "_library-backups/ before the new one lands.  A copy with a "
+            ".chumicro-local file in it stays as it is."
+        ),
     )
-    add_parser.add_argument("name", help="Import name, e.g. chumicro_mqtt.")
+    add_parser.add_argument(
+        "name", help="Library import name, such as chumicro_timing.",
+    )
     add_parser.add_argument(
         "--channel", choices=VALID_CHANNELS, default=DEFAULT_CHANNEL,
-        help=f"Release channel (default: {DEFAULT_CHANNEL}).",
+        help=(
+            f"Release channel.  Default: {DEFAULT_CHANNEL}.  "
+            "experimental carries pre-release versions."
+        ),
     )
     add_parser.add_argument(
         "--version", default=None,
-        help="Pin to this channel snapshot tag (default: latest snapshot).",
+        help="Fetch this release tag.  Default: the latest release.",
     )
     add_parser.add_argument(
         "--floating", action="store_true",
-        help="Track the channel's latest (records version: HEAD).",
+        help=(
+            "Record the library as following the latest release, so "
+            "library update refreshes it."
+        ),
     )
     _add_workspace_arg(add_parser)
     _add_non_interactive_arg(add_parser)
     add_parser.set_defaults(func=_cmd_library_add)
 
     update_parser = verbs.add_parser(
-        "update", help="Re-fetch floating libraries (pinned ones skip).",
+        "update",
+        help="Fetch the latest release of each floating library.",
+        description=(
+            "Fetch the latest release of each library added with "
+            "--floating.  A library pinned to a version stays as it is, "
+            "and so does a declined one."
+        ),
     )
     update_parser.add_argument(
         "name", nargs="?", default=None,
-        help="Library to update (default: all curated).",
+        help=(
+            "Library to update.  Default: every library recorded in "
+            "workspace.yml."
+        ),
     )
     _add_workspace_arg(update_parser)
     _add_non_interactive_arg(update_parser)
@@ -633,28 +683,50 @@ def _add_library_parsers(subparsers: argparse._SubParsersAction) -> None:
 
     remove_parser = verbs.add_parser(
         "remove",
-        help="Uninstall a library; keep its row as declined (audit trail).",
+        help="Delete a library from libraries/ and mark it declined.",
+        description=(
+            "Delete the library's folder from libraries/ and keep its "
+            "record in workspace.yml marked declined, so library update "
+            "skips it.  library forget drops the record as well.  A "
+            "warning names any other fetched library that still needs "
+            "it."
+        ),
     )
-    remove_parser.add_argument("name", help="Library to remove.")
+    remove_parser.add_argument(
+        "name", help="Library to remove, such as chumicro_timing.",
+    )
     _add_workspace_arg(remove_parser)
     _add_non_interactive_arg(remove_parser)
     remove_parser.set_defaults(func=_cmd_library_remove)
 
     forget_parser = verbs.add_parser(
         "forget",
-        help="Drop a library's record entirely (uninstalls if present).",
+        help="Delete a library and its record in workspace.yml.",
+        description=(
+            "Delete the library's folder from libraries/, if present, "
+            "and drop its record from workspace.yml."
+        ),
     )
-    forget_parser.add_argument("name", help="Library to forget.")
+    forget_parser.add_argument(
+        "name", help="Library to forget, such as chumicro_timing.",
+    )
     _add_workspace_arg(forget_parser)
     _add_non_interactive_arg(forget_parser)
     forget_parser.set_defaults(func=_cmd_library_forget)
 
     switch_parser = verbs.add_parser(
-        "switch-channel", help="Move a library between stable/experimental.",
+        "switch-channel",
+        help="Move a library between the stable and experimental channels.",
+        description=(
+            "Fetch the latest release of the library from the other "
+            "channel and record the new channel in workspace.yml."
+        ),
     )
-    switch_parser.add_argument("name", help="Library to switch.")
     switch_parser.add_argument(
-        "channel", choices=VALID_CHANNELS, help="Target channel.",
+        "name", help="Library to move, such as chumicro_timing.",
+    )
+    switch_parser.add_argument(
+        "channel", choices=VALID_CHANNELS, help="Channel to move it to.",
     )
     _add_workspace_arg(switch_parser)
     _add_non_interactive_arg(switch_parser)

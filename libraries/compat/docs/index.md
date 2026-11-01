@@ -6,7 +6,7 @@ title: "chumicro-compat: functools.partial for CircuitPython and MicroPython"
 
 **`functools.partial` for CircuitPython and MicroPython, which leave it out.**
 
-`partial(set_led, 13)` gives you a new function with some of its arguments already filled in: the tidy way to hand a callback the pin, sensor, or name it should work on.  Import it from `chumicro_compat.functools` and the same code runs on CircuitPython, MicroPython, and CPython.  On CPython the import hands you the standard library's own `functools.partial`.
+`partial(set_led, 13)` returns a new function with some of its arguments already filled in.  It hands a callback the pin, sensor, or name it should work on, without a global variable or a wrapper function for each one.  With `from chumicro_compat.functools import partial`, the same code runs on CircuitPython, MicroPython, and CPython.
 
 ## Install
 
@@ -21,7 +21,7 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_compat
 pip install chumicro-compat
 ```
 
-No board running yet?  [Start here](https://chumicro.com/ChuMicro/guides/start-here/) goes from a new board to your own code running on it.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the experimental channel, and the pre-compiled `.mpy` packages.
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
 
@@ -57,7 +57,7 @@ while True:
 
 ## Documentation
 
-- [User Guide](guide.md): filling in positional and keyword arguments, callbacks, the `func` / `args` / `keywords` attributes, platform notes
+- [User Guide](guide.md): filling in positional and keyword arguments, callbacks, the `func` / `args` / `keywords` attributes, and platform notes
 - [API Reference](api.md): `partial` and its `func` / `args` / `keywords` attributes
 
 ---

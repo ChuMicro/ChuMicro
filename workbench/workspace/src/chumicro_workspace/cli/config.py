@@ -140,34 +140,40 @@ def _add_config_parsers(subparsers: argparse._SubParsersAction) -> None:
     """Register ``dump-config`` / ``config-validate``."""
     dump_config_parser = subparsers.add_parser(
         "dump-config",
-        help=(
-            "Print the merged runtime config a project would receive on "
-            "deploy (secrets.toml defaults + project_config.toml "
-            "deep-merged), without actually deploying."
+        help="Print the settings a project gets on the board, without deploying.",
+        description=(
+            "Merge secrets.toml with the project's project_config.toml "
+            "the way deploy does, and print the result as JSON.  Each "
+            "setting prints under its flat name, such as wifi.ssid for "
+            "ssid in the [wifi] table.  A setting in both files takes "
+            "the value from project_config.toml."
         ),
     )
     _add_workspace_arg(dump_config_parser)
     dump_config_parser.add_argument(
         "project",
-        help="Project name (bare / slash / dotted).",
+        help="Project to inspect, such as blinker or garage/door_open.",
     )
     dump_config_parser.add_argument(
         "--repr",
         action="store_true",
         help=(
-            "Use repr() instead of JSON for the dump.  Useful when the "
-            "raw Python types matter (e.g. distinguishing bytes vs str)."
+            "Print Python's repr() of the settings in place of JSON, "
+            "which shows each value's type, such as bytes or str."
         ),
     )
     dump_config_parser.set_defaults(func=_cmd_dump_config)
 
     config_validate_parser = subparsers.add_parser(
         "config-validate",
-        help=(
-            "Validate the merged runtime config for one or more projects "
-            "against the union manifest of every library reachable from "
-            "the import graph.  Exits 1 on any failure; designed as a "
-            "fast pre-deploy / CI gate."
+        help="Check that each project has every setting its libraries require.",
+        description=(
+            "Merge secrets.toml with each project's project_config.toml "
+            "the way deploy does, then check that every setting a "
+            "library in the workspace marks as required is present.  "
+            "Prints OK or FAIL for each project, names each missing "
+            "setting, and exits 1 when any project fails.  Run it "
+            "before a deploy or in CI."
         ),
     )
     _add_workspace_arg(config_validate_parser)
@@ -175,8 +181,8 @@ def _add_config_parsers(subparsers: argparse._SubParsersAction) -> None:
         "projects",
         nargs="*",
         help=(
-            "Project names to validate (bare / slash / dotted).  When "
-            "omitted, every project under projects/ is validated."
+            "Projects to check, such as blinker.  Without names, every "
+            "project under projects/ is checked."
         ),
     )
     config_validate_parser.set_defaults(func=_cmd_config_validate)

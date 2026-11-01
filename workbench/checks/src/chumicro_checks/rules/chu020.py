@@ -1,6 +1,6 @@
 """CHU020: closed AI-tic phrase set in user-facing prose.
 
-The AGENTS.md "Writing tone" non-negotiable enumerates a small set of
+The AGENTS.md "Writing" rules enumerate a small set of
 phrases that drop information without adding any.  The five adjectives
 (``comprehensive``, ``robust``, ``seamlessly``, ``cutting-edge``,
 ``best-in-class``) and three sentence-opener filler phrases (``It is

@@ -1,18 +1,10 @@
 # Testing Helpers
 
-`chumicro_http_server.testing` provides `FakeListener` and `request_bytes`. Together they push a request through a real `HttpServer` and your real routes on a laptop, without opening a socket, binding a port, or waiting on a real clock. The module declares the `__chumicro_test_support__` marker, and the deploy tool drops every module carrying it, so these fakes never ship to a board.
+`chumicro_http_server.testing` stands in for the network side of a web server.  `FakeListener` replaces the listening socket that accepts browsers.  `request_bytes` builds the request a browser would send.  A test pushes that request through a real `HttpServer` and its real routes, then reads the response bytes, with no port, no network, and no waiting.  `pip install chumicro-http-server pytest` installs everything the tests on this page import, `chumicro-sockets` and `chumicro-timing` included.  Project deploys and the board bundles leave the module out.
 
-## `FakeListener`
+## The smallest test
 
-`FakeListener(connections)` stands in for a listening socket. Each `accept()` pops one entry off *connections* and returns it; once the queue is empty, `accept()` raises `OSError(EAGAIN)`, which is what a real non-blocking listener does between clients. Every entry is the `(socket, peer)` pair the server expects, where *socket* is anything with the client-socket methods (`send`, `recv_into`, `close`, `setblocking`) and *peer* is the `(host, port)` tuple the request carries as `request.peer`. `chumicro_sockets.testing.FakeSocket` is the usual socket to hand it. `close()` and `setblocking()` are accepted and do nothing.
-
-## `request_bytes`
-
-`request_bytes(method="GET", path="/", *, headers=None, body=b"")` builds a raw HTTP/1.1 request as a single `bytes`, ready for `FakeSocket.enqueue_recv`. *headers* takes `(name, value)` tuples. A non-empty *body* gets its `Content-Length` header added for you, so a POST test only spells out what it actually cares about.
-
-## Serving one request end to end
-
-Queue the request bytes on a `FakeSocket`, hand that socket to a `FakeListener`, and tick the server until nothing is in flight. Assertions then read straight off `sock.sent`, the bytes the server wrote back.
+Save this as `test_widget_route.py` and run `pytest test_widget_route.py`:
 
 ```python
 from chumicro_http_server import HttpServer, build_response
@@ -20,22 +12,13 @@ from chumicro_http_server.testing import FakeListener, request_bytes
 from chumicro_sockets.testing import FakeSocket
 from chumicro_timing.testing import FakeTicks
 
-def drive(server, ticks, limit=50):
-    """Tick until the server has no connection left in flight."""
-    for _ in range(limit):
-        server.handle(ticks.ticks_ms())
-        if server.in_flight == 0:
-            return
-        ticks.advance(1)
-    raise AssertionError("server still busy")
 
 def test_route_returns_the_path_parameter():
-    client = FakeSocket()
-    client.enqueue_recv(request_bytes(path="/widgets/7"))
+    browser = FakeSocket()
+    browser.enqueue_recv(request_bytes(path="/widgets/7"))
     ticks = FakeTicks()
-
     server = HttpServer(
-        transport_factory=lambda: FakeListener([(client, ("127.0.0.1", 50000))]),
+        transport_factory=lambda: FakeListener([(browser, ("192.168.1.20", 50000))]),
         ticks=ticks,
     )
 
@@ -43,54 +26,34 @@ def test_route_returns_the_path_parameter():
     def widget(request):
         return build_response(200, json={"id": request.path_params["id"]})
 
-    drive(server, ticks)
+    for _ in range(10):
+        server.handle(ticks.ticks_ms())
+        ticks.advance(1)
 
-    assert client.sent.startswith(b"HTTP/1.1 200 OK\r\n")
-    assert client.sent.endswith(b'{"id": "7"}')
+    assert browser.sent.startswith(b"HTTP/1.1 200 OK\r\n")
+    assert browser.sent.endswith(b'{"id": "7"}')
 ```
 
-`FakeTicks` keeps the loop instant: nothing sleeps, and `ticks.advance(1)` moves the server's deadlines forward as fast as the test runs.
+`FakeSocket` from `chumicro_sockets.testing` plays the browser's connection.  It holds the request bytes.  `browser.sent` collects the bytes the server writes back.  `FakeTicks` moves the server's clock one millisecond per pass, so the loop finishes at once.
 
-## Asserting on a request body
+## `FakeListener`
 
-`request_bytes` fills in `Content-Length`, so a handler that parses JSON gets a well-formed request without the test counting bytes:
+`FakeListener(connections)` stands in for the listening socket an `HttpServer` opens.  Each entry in `connections` is a `(socket, peer)` pair, where `socket` is the client connection and `peer` is the `(host, port)` the server reports as `request.peer`.
 
-```python
-def test_sensor_route_reads_the_posted_json():
-    client = FakeSocket()
-    client.enqueue_recv(
-        request_bytes(
-            "POST",
-            "/sensor",
-            headers=[("Content-Type", "application/json")],
-            body=b'{"celsius": 21.5}',
-        ),
-    )
-    ticks = FakeTicks()
-    seen = {}
+| Call | What it does |
+|---|---|
+| `accept()` | Returns the next `(socket, peer)` pair.  With none left it raises `OSError(EAGAIN)`, as a listener does between clients. |
+| `close()`, `setblocking(flag)` | Accept the call. |
 
-    server = HttpServer(
-        transport_factory=lambda: FakeListener([(client, ("127.0.0.1", 50000))]),
-        ticks=ticks,
-    )
-
-    @server.route("/sensor", methods=["POST"])
-    def sensor(request):
-        seen["payload"] = request.json()
-        return build_response(201, json={"ok": True})
-
-    drive(server, ticks)
-
-    assert seen["payload"] == {"celsius": 21.5}
-    assert client.sent.startswith(b"HTTP/1.1 201 Created\r\n")
-```
-
-## Testing the quiet path
-
-A `FakeListener` with an empty queue raises `EAGAIN` on every `accept()`, which is what a server sees before anyone connects. Use it to assert that an idle `handle()` call opens no connection:
+An empty `FakeListener` plays a server nobody has connected to yet:
 
 ```python
-def test_idle_tick_opens_no_connection():
+from chumicro_http_server import HttpServer
+from chumicro_http_server.testing import FakeListener
+from chumicro_timing.testing import FakeTicks
+
+
+def test_an_idle_tick_opens_no_connection():
     ticks = FakeTicks()
     server = HttpServer(transport_factory=lambda: FakeListener([]), ticks=ticks)
 
@@ -99,17 +62,48 @@ def test_idle_tick_opens_no_connection():
     assert server.in_flight == 0
 ```
 
-## Using these fakes in your own tests
+## `request_bytes`
 
-Installing `chumicro-http-server` puts `chumicro_http_server.testing` on your path, so your own suite imports the fakes the library's own tests use:
+`request_bytes(method="GET", path="/", *, headers=None, body=b"")` returns one raw HTTP/1.1 request as `bytes`, ready for `FakeSocket.enqueue_recv`.  `headers` takes `(name, value)` pairs.  A non-empty `body` gets its `Content-Length` header added, so a POST test spells out only the body:
 
 ```python
+from chumicro_http_server import HttpServer, build_response
 from chumicro_http_server.testing import FakeListener, request_bytes
+from chumicro_sockets.testing import FakeSocket
+from chumicro_timing.testing import FakeTicks
+
+
+def test_sensor_route_reads_the_posted_json():
+    browser = FakeSocket()
+    browser.enqueue_recv(
+        request_bytes(
+            "POST",
+            "/sensor",
+            headers=[("Content-Type", "application/json")],
+            body=b'{"celsius": 21.5}',
+        ),
+    )
+    ticks = FakeTicks()
+    server = HttpServer(
+        transport_factory=lambda: FakeListener([(browser, ("192.168.1.20", 50000))]),
+        ticks=ticks,
+    )
+    seen = {}
+
+    @server.route("/sensor", methods=["POST"])
+    def sensor(request):
+        seen["payload"] = request.json()
+        return build_response(201, json={"ok": True})
+
+    for _ in range(10):
+        server.handle(ticks.ticks_ms())
+        ticks.advance(1)
+
+    assert seen["payload"] == {"celsius": 21.5}
+    assert browser.sent.startswith(b"HTTP/1.1 201 Created\r\n")
 ```
 
-That is all the setup there is. Your route handlers run against real parsing and real response writing, and the test needs no network, no free port, and no waiting.
-
-## API Reference
+## API reference
 
 ::: chumicro_http_server.testing
 

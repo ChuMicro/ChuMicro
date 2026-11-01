@@ -23,13 +23,16 @@ def _add_device_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--address",
         required=True,
-        help="Serial port path (e.g. /dev/cu.usbmodem... or COM3).",
+        help=(
+            "Serial port of the board, such as /dev/cu.usbmodem1101 on "
+            "macOS or /dev/ttyACM0 on Linux."
+        ),
     )
     parser.add_argument(
         "--baudrate",
         type=int,
         default=115200,
-        help="Serial baudrate (CircuitPython only; default 115200).",
+        help="Serial speed in baud (default: 115200).",
     )
 
 
@@ -38,9 +41,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="chumicro-repl",
         description=(
-            "Interactive serial REPL for CircuitPython and MicroPython "
-            "boards, with traceback highlighting and a follow-mode "
-            "tail() for deploy orchestration."
+            "Open the Python prompt (the REPL) of a CircuitPython or "
+            "MicroPython board over USB serial, or print the board's "
+            "output for a set time.  Tracebacks print in red.  "
+            "Inside a ChuMicro workspace, chumicro-workspace repl opens "
+            "the same session by the board's name in devices.yml."
+        ),
+        epilog=(
+            "Keys in a session: Ctrl-X ends the session and leaves the "
+            "board running.  Ctrl-C stops the program running on the "
+            "board.  Ctrl-D at an empty prompt soft-reboots the board."
         ),
     )
     _add_device_args(parser)
@@ -50,9 +60,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="SECONDS",
         help=(
-            "Run in tail mode: stream output for SECONDS, "
-            "highlight tracebacks, exit non-zero on a detected "
-            "traceback (unless --no-fail-on-traceback)."
+            "Print the board's output for SECONDS, then exit, in "
+            "place of the interactive prompt.  A traceback, safe-mode, "
+            "or hard-fault message ends it early with exit status 1."
         ),
     )
     parser.add_argument(
@@ -61,8 +71,9 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_false",
         default=True,
         help=(
-            "Tail mode only: stream the full window even when a "
-            "traceback or safe-mode banner is detected."
+            "--tail only.  Keep printing for the full SECONDS after a "
+            "traceback and exit 0, to watch a board that crashes and "
+            "restarts."
         ),
     )
     parser.add_argument(
@@ -70,13 +81,13 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("auto", "line", "passthrough"),
         default="auto",
         help=(
-            "Interactive input mode.  `auto` (default) picks `line` on a "
-            "TTY and `passthrough` when stdin is piped, since line mode "
-            "needs interactive input.  `line` interposes a host-side line "
-            "editor with persistent per-device history, cursor edit, and "
-            "Ctrl-R reverse search.  `passthrough` forwards every "
-            "keystroke to the device; use it for raw-REPL framing or "
-            "paste-mode flows."
+            "How the prompt handles typing.  line edits each line on "
+            "this computer, with history, Tab completion, and "
+            ":commands (type :help).  passthrough sends every key to "
+            "the board as it is pressed, which paste mode and "
+            "raw-REPL tools need.  auto (default) picks line in a "
+            "terminal and passthrough when input is piped.  Ignored "
+            "with --tail."
         ),
     )
     return parser

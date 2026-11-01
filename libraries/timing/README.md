@@ -5,7 +5,7 @@ align="left" width="64" style="margin-right: 16px; margin-bottom: 8px;">
 
 **Timers that don't block. Your loop keeps running.**
 
-`time.sleep(1)` stops your whole program for a second, and a button pressed during that second goes unnoticed.  `chumicro-timing` keeps the loop running and tells you when it is time to act: a `Rate` comes due every N milliseconds, and a `Deadline` expires once, N milliseconds after you set it.  It runs on CircuitPython, MicroPython, and CPython, needs no other library, and every other ChuMicro library keeps time with it.
+`time.sleep(1)` stops your whole program for a second.  A button pressed during that second goes unnoticed.  With `chumicro-timing`, your `while True:` loop reads the clock on every pass and acts when a timer comes due.  A `Rate` comes due every N milliseconds.  A `Deadline` expires once, N milliseconds after it starts.  It runs on CircuitPython, MicroPython, and CPython.
 
 <br clear="left">
 
@@ -24,11 +24,11 @@ mpremote mip install github:ChuMicro/ChuMicro-Bundle/chumicro_timing
 pip install chumicro-timing
 ```
 
-For bundle setup, pre-compiled `.mpy` bundles, the experimental channel, and details on PyPI naming, see the [ChuMicro install guide](https://chumicro.com/ChuMicro/guides/install/).
+[Start here](https://chumicro.com/ChuMicro/guides/start-here/) takes a new board from flashing CircuitPython or MicroPython to running your own blink.  [Installing libraries](https://chumicro.com/ChuMicro/guides/install/) covers registering the bundle, the pre-compiled `.mpy` packages, the experimental channel, and why package names use a hyphen on PyPI and an underscore on the board.
 
 ## Quick example
 
-Blink the onboard LED on a CircuitPython board, with a loop that never sleeps:
+Blink the onboard LED on a CircuitPython board, from a loop that never sleeps:
 
 ```python
 import board
@@ -41,18 +41,18 @@ led.direction = digitalio.Direction.OUTPUT
 blink = Rate(500, ticks_ms())       # comes due every 500 ms, counting from now
 
 while True:
-    now = ticks_ms()                # read the clock once per pass
-    if blink.due(now):              # True once every 500 ms, False otherwise
+    now_ms = ticks_ms()             # read the clock once per pass
+    if blink.due(now_ms):           # True once every 500 ms, False otherwise
         led.value = not led.value
 
     # Nothing above waits, so code you add here runs on every pass.
 ```
 
-If you know Arduino, this is BlinkWithoutDelay: `ticks_ms()` is `millis()`, and `Rate` keeps the `previousMillis` bookkeeping for you.
+On MicroPython, create the LED with `led = Pin("LED", Pin.OUT)` from `machine` on a Pi Pico W, or with the LED's GPIO number on an ESP32.  Flip it with `led.value(not led.value())`.  The timing lines stay the same.
 
-On MicroPython, set the LED up with `from machine import Pin` and `led = Pin("LED", Pin.OUT)` on a Pi Pico W (or the LED's GPIO number on an ESP32), and flip it with `led.value(not led.value())`.  The timing lines stay the same.
+`Rate` is Arduino's BlinkWithoutDelay: `ticks_ms()` is `millis()`, and `Rate` keeps the `previousMillis` bookkeeping.
 
-To give up on something after a while instead, use a `Deadline`:
+A `Deadline` gives up on something after a set time:
 
 ```python
 from chumicro_timing import Deadline, ticks_ms
@@ -60,10 +60,10 @@ from chumicro_timing import Deadline, ticks_ms
 give_up = Deadline(5000, ticks_ms())    # expires 5 seconds from now
 
 while True:
-    now = ticks_ms()
-    if give_up.expired(now):
+    now_ms = ticks_ms()
+    if give_up.expired(now_ms):
         print("5 seconds are up")
-        give_up.reset(now)              # start another 5 seconds
+        give_up.reset(now_ms)           # start another 5 seconds
 ```
 
 ## What's included
@@ -72,8 +72,8 @@ while True:
 
 | Symbol | Description |
 |---|---|
-| `Rate(period_ms, now_ms)` | Comes due every `period_ms`: `due(now)` is `True` once per period.  A late check never pushes the schedule back |
-| `Deadline(period_ms, now_ms)` | Expires once, `period_ms` after `now_ms`: `expired(now)`, `remaining(now)`, and `reset(now)` to start it over |
+| `Rate(period_ms, now_ms)` | Comes due every `period_ms`: `due(now_ms)` is `True` once per period.  A late check leaves the next one on time |
+| `Deadline(period_ms, now_ms)` | Expires once, `period_ms` after `now_ms`: `expired(now_ms)`, `remaining(now_ms)`, and `reset(now_ms)` to start it over |
 
 ### Tick functions
 
@@ -85,49 +85,51 @@ A *tick* is a reading of a millisecond counter that rolls back to zero about eve
 | `ticks_diff(end, start)` | Milliseconds from `start` to `end`, correct across the rollover.  Use it in place of `end - start` |
 | `ticks_add(ticks, delta)` | The tick `delta` milliseconds after `ticks`, correct across the rollover.  Use it in place of `ticks + delta` |
 
-### Waits for generator tasks (`chumicro_timing.waits`)
+### Waits for generator tasks
 
-For [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) tasks written as generators that pause until something finishes.  A program with a plain `while True:` loop never needs these.  Import the module explicitly.
+`chumicro_timing.waits` pauses a [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner) generator task until another part of the program signals it.  Import it by name.  A program with no generator tasks never loads it.
 
 | Symbol | Description |
 |---|---|
-| `Signal()` | A flag one part of the program sets and a generator waits on: `set(value)`, `clear()`, with `is_set` and `value` readable directly |
-| `wait_for(signal, deadline_ms=None)` | Pauses a generator until `signal` is set: `yield from wait_for(signal)` |
+| `Signal()` | A flag one part of the program sets and a generator task waits on: `set(value)`, `clear()`, with `is_set` and `value` readable directly |
+| `wait_for(signal, deadline_ms=None)` | Pauses a generator task until `signal` is set: `yield from wait_for(signal)` |
 
 ### Testing
 
 | Symbol | Description |
 |---|---|
-| `FakeTicks(start_ms=0)` | A clock for tests on your laptop that moves only when you tell it to |
+| `FakeTicks(start_ms=0)` | A clock for laptop tests that moves only when the test advances it |
 | `FakeTicks.advance(amount_ms)` | Move the fake clock forward |
 
 ## Where this fits
 
-Needs no other ChuMicro library.  Every ChuMicro library that keeps time builds on it: [`runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner), [`sockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/sockets), [`ntp`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/ntp), [`requests`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests), [`http_server`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server), [`mqtt`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt), [`websockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets).
+Needs no other library.  Every ChuMicro library that keeps time depends on it: [`chumicro-runner`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/runner), [`chumicro-buttons`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/buttons), [`chumicro-wifi`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/wifi), [`chumicro-ntp`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/ntp), [`chumicro-requests`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/requests), [`chumicro-http-server`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/http_server), [`chumicro-mqtt`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/mqtt), and [`chumicro-websockets`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/websockets).
+
+For a real button, [`chumicro-buttons`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/buttons) debounces it and catches a tap the loop was too busy to see.
 
 ## Platform support
 
-You don't need to pick a tick source.  The library picks the best one available on your runtime.  Behavior is identical regardless of which source is used.
+Works on CPython, MicroPython, and CircuitPython.  The library picks its tick source when it loads, taking the first one in this table that the runtime has:
 
 | Source | Runtime |
 |---|---|
 | `supervisor.ticks_ms` | CircuitPython 7+ |
 | `time.ticks_ms` | MicroPython, some CircuitPython builds |
 | `time.monotonic_ns` | CPython, some CircuitPython boards |
-| `time.monotonic` | Final fallback (float seconds → int ms) |
+| `time.monotonic` | The last resort, float seconds converted to whole milliseconds |
 
-The library tries them top-to-bottom and uses the first one your runtime supports.
+Every source gives the same behavior.
 
 <details>
 <summary>Technical detail: tick wraparound</summary>
 
-Every source is folded into the same 2²⁹ ms range (about 6.2 days), so the rollover lands at the same count on every runtime.  `ticks_diff` gives the right answer for two ticks up to about 3.1 days apart, half that range, which covers any timer a board program sets.
+Every source is folded into the same 2²⁹ ms range, about 6.2 days, so the rollover lands at the same count on every runtime.  `ticks_diff` gives the right answer for two ticks up to about 3.1 days apart, half that range, which covers any timer a board program sets.
 
 </details>
 
 ## Testing your code
 
-The `chumicro_timing.testing` module provides `FakeTicks`, a clock your test moves by hand, so timing logic runs on your laptop with no real waiting:
+`FakeTicks` from `chumicro_timing.testing` is a clock the test moves by hand, so timing logic runs on a laptop with no real waiting:
 
 ```python
 from chumicro_timing import Rate
@@ -144,7 +146,7 @@ assert rate.due(fake.ticks_ms()) is True
 
 ## Examples
 
-In reading order, simplest first.  The `circuitpython_` and `micropython_` files need a board; the rest also run on your laptop.
+The `circuitpython_` and `micropython_` files need a board.  The rest also run on a laptop.
 
 | Example | What it shows |
 |---|---|
@@ -156,8 +158,6 @@ In reading order, simplest first.  The `circuitpython_` and `micropython_` files
 | [`debounce.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/timing/examples/debounce.py) | The same debounce on a pretend bouncing button, printing each bounce it ignores |
 | [`periodic_tick.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/timing/examples/periodic_tick.py) | Arduino's BlinkWithoutDelay written by hand, and how its schedule slips a little more each second |
 | [`phase_locked_tick.py`](https://github.com/ChuMicro/ChuMicro/blob/main/libraries/timing/examples/phase_locked_tick.py) | The one-line change that stops the slip, which is what `Rate` does inside |
-
-For buttons in a real project, [`chumicro-buttons`](https://github.com/ChuMicro/ChuMicro/tree/main/libraries/buttons) debounces for you and catches a tap your loop was too busy to see.
 
 ## Contributing
 

@@ -1,20 +1,16 @@
 # API Reference
 
-## `chumicro_timing.ticks`
+`chumicro_timing` exports `ticks_ms`, `ticks_add`, `ticks_diff`, `Rate`, and `Deadline`, each documented below under the module that defines it.  Start with `Rate` for work that repeats every so many milliseconds, or `Deadline` for a timeout, and read the clock for both with `ticks_ms()`.  `Signal` and `wait_for` pause a generator task until a callback fires, and import from `chumicro_timing.waits`.
 
-Wrap-safe millisecond arithmetic.  `ticks_ms()` reads the runtime's own counter, and `ticks_diff` and `ticks_add` compare and advance those readings correctly across a rollover.
+## `chumicro_timing.ticks`
 
 ::: chumicro_timing.ticks
 
 ## `chumicro_timing.deadline`
 
-The value objects re-exported from `chumicro_timing`: `Deadline` (a single armed timeout) and `Rate` (a drift-free periodic cadence).
-
 ::: chumicro_timing.deadline
 
 ## `chumicro_timing.waits`
-
-The completion-wait vocabulary for generator flows: `Signal` connects a callback-style service to a generator task, and `wait_for` suspends the generator until the signal is set or its deadline passes.  Import it explicitly from `chumicro_timing.waits`.
 
 ::: chumicro_timing.waits
 

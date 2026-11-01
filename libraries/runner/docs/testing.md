@@ -1,89 +1,74 @@
 # Testing Helpers
 
-`chumicro_runner.testing` holds three helpers for tests that run on your computer: `CallRecorder` records each call the runner makes to a job, `validate_service` checks that an object has the methods `Runner.add` expects, and `FakePoller` stands in for `select.poll()` so tests can drive `Runner.wait()` without real sockets.  ChuMicro's deploy tools and bundles leave this module off the board, so it costs a device no flash.
+`chumicro_runner.testing` holds three helpers for testing code a `Runner` drives.  `CallRecorder` stands in for a job and records each call the runner makes to it.  `FakePoller` stands in for `select.poll()`, the socket watcher `Runner.wait()` sleeps on.  `validate_service` checks that a service object has the methods `Runner.add` expects.  `pip install chumicro-runner pytest` installs everything the tests on this page import, `chumicro-timing` included.  Project deploys and the board bundles leave the module out.
 
-The `CallRecorder` and `FakePoller` examples build the runner on `FakeTicks` from `chumicro_timing.testing`, a clock that moves only when the test calls `advance()`.
+## The smallest test
 
-## `CallRecorder`
-
-`CallRecorder` is a callable, so it registers anywhere a job function does:
+Save this as `test_blink_schedule.py` and run `pytest test_blink_schedule.py`:
 
 ```python
 from chumicro_runner import Runner
 from chumicro_runner.testing import CallRecorder
 from chumicro_timing.testing import FakeTicks
 
-fake = FakeTicks()
-recorder = CallRecorder()
-runner = Runner(ticks=fake)
-runner.add_periodic(recorder, period_ms=100)
 
-# Not due yet, so nothing fires.
-runner.tick()
-assert len(recorder) == 0
+def test_a_periodic_job_runs_once_per_period():
+    clock = FakeTicks()
+    runner = Runner(ticks=clock)
+    blink = CallRecorder()
+    runner.add_periodic(blink, period_ms=100)
 
-# Advance past the period.
-fake.advance(100)
-runner.tick()
-assert recorder.calls == [100]
+    runner.tick()
+    assert blink.calls == []
+
+    clock.advance(100)
+    runner.tick()
+    assert blink.calls == [100]
 ```
 
-`recorder.calls` is a plain list of the `now_ms` value from each invocation, and `clear()` resets it between phases of a test:
+`Runner(ticks=clock)` reads the time from `FakeTicks`, so the job runs only when the test moves the clock.
+
+## `CallRecorder`
+
+`CallRecorder` is a callable, so it registers anywhere a job function does.
+
+| Call or attribute | What it does |
+|---|---|
+| `calls` | The `now_ms` of each call, in order. |
+| `len(recorder)` | The number of calls. |
+| `clear()` | Forgets the calls so far, between phases of a test. |
+
+A job added with no period runs on every tick:
 
 ```python
-assert recorder.calls[0] == 100
-assert len(recorder) == 1
+from chumicro_runner import Runner
+from chumicro_runner.testing import CallRecorder
+from chumicro_timing.testing import FakeTicks
 
-recorder.clear()
-assert len(recorder) == 0
-```
 
-A job registered without a period runs on every tick:
+def test_a_job_without_a_period_runs_every_tick():
+    runner = Runner(ticks=FakeTicks())
+    recorder = CallRecorder()
+    runner.add(handler=recorder)
 
-```python
-recorder = CallRecorder()
-runner.add(handler=recorder)
-runner.tick()
-assert len(recorder) == 1
-```
+    runner.tick()
+    runner.tick()
+    assert len(recorder) == 2
 
-## `validate_service`
-
-`validate_service(service)` looks at which of the runner's methods and attributes your service defines, and raises `ValueError` naming the one at fault when they do not fit together.  It only looks: it never calls `check`, `handle`, or any other method, so it is safe to run against a service that would talk to hardware.
-
-```python
-from chumicro_runner.testing import validate_service
-
-class Blinker:
-    def check(self, now_ms):
-        return True
-
-    def handle(self, now_ms):
-        pass
-
-validate_service(Blinker())        # passes, nothing raised
-```
-
-The rules it enforces are the ones `Runner` dispatch relies on: `check` and `handle` are both required; `io_socket` and `io_interest` come as a pair; `io_error` needs an `io_socket` to report errors on.  `next_deadline` is optional and stands alone.
-
-```python
-class HalfWired:
-    io_socket = None                # no io_interest to go with it
-
-    def check(self, now_ms):
-        return False
-
-    def handle(self, now_ms):
-        pass
-
-validate_service(HalfWired())
-# ValueError: a service with io_socket must also define io_interest;
-# the runner polls the socket only through io_interest
+    recorder.clear()
+    assert len(recorder) == 0
 ```
 
 ## `FakePoller`
 
-`Runner.wait()` watches network services' sockets through a poller object.  CPython's real `select.poll` needs live file descriptors, which in-memory fake sockets do not have, so pass `poller=FakePoller()` and assert on what the runner asked it to watch.  `register_calls`, `modify_calls`, `unregister_calls`, and `ipoll_calls` record every call; `set_ready(obj, eventmask)` queues a pair for the next `ipoll()` return.
+`Runner.wait()` sleeps until a socket is ready or the next job is due.  It watches the sockets through a poller.  CPython's `select.poll` needs real sockets, so a test passes `poller=FakePoller()` and checks what the runner asked it to watch.
+
+| Call or attribute | What it does |
+|---|---|
+| `register_calls`, `modify_calls`, `unregister_calls` | Each call the runner made, as `(socket, eventmask)` pairs, or just the socket for `unregister`. |
+| `ipoll_calls` | The timeout in milliseconds of each `ipoll()` call, which is how long the runner meant to sleep. |
+| `registered` | The sockets watched right now, as `{id(socket): (socket, eventmask)}`. |
+| `set_ready(socket, eventmask)` | Queues a ready socket for the next `ipoll()` to return. |
 
 ```python
 import select
@@ -91,6 +76,7 @@ import select
 from chumicro_runner import IO_READ, Runner
 from chumicro_runner.testing import FakePoller
 from chumicro_timing.testing import FakeTicks
+
 
 class ReadService:
     def __init__(self, sock):
@@ -105,28 +91,67 @@ class ReadService:
     def handle(self, now_ms):
         pass
 
-poller = FakePoller()
-runner = Runner(ticks=FakeTicks(), poller=poller)
-sock = object()
-runner.add(ReadService(sock), period_ms=100)
 
-runner.wait(0)
+def test_wait_watches_the_service_socket():
+    poller = FakePoller()
+    runner = Runner(ticks=FakeTicks(), poller=poller)
+    sock = object()
+    runner.add(ReadService(sock), period_ms=100)
 
-assert (sock, select.POLLIN) in poller.register_calls
-assert poller.ipoll_calls == [100]      # idled until the next period
+    runner.wait(0)
+
+    assert (sock, select.POLLIN) in poller.register_calls
+    assert poller.ipoll_calls == [100]
 ```
 
-## Using these fakes in your own tests
+The runner registered the socket for reading and slept until the service's next period, 100 ms away.
 
-Your test suite imports them straight from the installed package, the same way this library's own tests do:
+## `validate_service`
+
+`validate_service(service)` reads which runner methods and attributes a service defines, and raises `ValueError` naming the member at fault when they do not fit together.  It calls none of them, so it is safe on a service that would talk to hardware.
+
+It enforces the rules `Runner` relies on:
+
+- `check` and `handle` are both required.
+- `io_socket` and `io_interest` come as a pair.
+- `io_error` needs an `io_socket` to report errors on.
+- `next_deadline` is optional and stands alone.
 
 ```python
-from chumicro_runner.testing import CallRecorder, FakePoller, validate_service
+from chumicro_runner.testing import validate_service
+
+
+class Blinker:
+    def check(self, now_ms):
+        return True
+
+    def handle(self, now_ms):
+        pass
+
+
+class HalfWired:
+    io_socket = None
+
+    def check(self, now_ms):
+        return False
+
+    def handle(self, now_ms):
+        pass
+
+
+def test_validate_service_accepts_and_rejects():
+    validate_service(Blinker())
+
+    try:
+        validate_service(HalfWired())
+        raise AssertionError("expected ValueError")
+    except ValueError as error:
+        assert "io_interest" in str(error)
 ```
 
-ChuMicro libraries that take a clock, socket, or other dependency as an argument ship fakes for it in a `testing` module like this one.
+`HalfWired` has an `io_socket` and no `io_interest`, so the runner would never poll its socket.
 
-## API Reference
+## API reference
 
 ::: chumicro_runner.testing
 

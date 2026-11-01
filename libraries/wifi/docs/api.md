@@ -1,5 +1,7 @@
 # API Reference
 
+`WifiService` is the class to start with: it joins the network named in a `WifiConfig` and rejoins after a drop.  `WifiConfig` holds the network name, password, and retry timing.  `WifiState` names the values `WifiService.state` takes.
+
 ## `chumicro_wifi`
 
 ::: chumicro_wifi
